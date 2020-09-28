@@ -1,11 +1,20 @@
 extern crate rusqlite;
 
 extern crate casts;
+extern crate chrono;
 extern crate clap;
+extern crate futures;
+extern crate indicatif;
+extern crate magic;
+extern crate regex;
+extern crate reqwest;
 extern crate url;
 extern crate xdg;
 
+use std::path::Path;
+
 mod model;
+mod net;
 
 use casts::{blocking_download_feed_rs, parse_feed_rs};
 use clap::Clap;
@@ -22,6 +31,7 @@ struct Opts {
 enum SubCommand {
   Subscribe(Subscribe),
   Dump(Dump),
+  Download(Download),
 }
 
 #[derive(Clap, Debug)]
@@ -33,6 +43,9 @@ struct Subscribe {
 struct Dump {
   feed: String,
 }
+
+#[derive(Clap, Debug)]
+struct Download {}
 
 fn main() {
   let opts: Opts = Opts::parse();
@@ -55,7 +68,7 @@ fn main() {
       };
 
       let add_feed = model::AddFeed {
-        feed: Url::parse(&s.feed).unwrap(),
+        url: Url::parse(&s.feed).unwrap(),
         title,
         title_content_type,
         description,
@@ -63,7 +76,7 @@ fn main() {
       };
 
       let feed_id = model::add_feed(&conn, &add_feed);
-      for entry in feed.entries.into_iter() {
+      for entry in feed.entries.into_iter().rev() {
         let (title, title_content_type) = match entry.title {
           Some(t) => (Some(t.content.clone()), Some(t.content_type.to_string())),
           None => (None, None),
@@ -81,24 +94,58 @@ fn main() {
         };
 
         let add_entry = model::AddEntry {
-          feed_id,
+          feed_id: feed_id as u32,
           title,
           title_content_type,
           summary,
           summary_content_type,
           content_url,
           content_content_type,
+          published: entry.published,
+          updated: entry.updated,
         };
         let _ = model::add_entry(&conn, &add_entry);
       }
 
-      conn.close().expect("could not close db");
+      conn.close().expect("could rm not close db");
     }
     SubCommand::Dump(d) => {
       let result = blocking_download_feed_rs(d.feed).unwrap();
       let feed = parse_feed_rs(&result).unwrap();
 
       println!("{:?}", feed);
+    }
+    SubCommand::Download(_) => {
+      let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
+      let conn = model::open();
+      match model::fetch_latest_entry(&conn) {
+        None => println!("Nothing to download...."),
+        Some(e) => {
+          let feed = model::get_feed(&conn, e.feed_id).unwrap();
+          let mp3_path = xdg_dirs
+            .place_cache_file(
+              Path::new(&e.feed_id.to_string())
+                .join(e.id.to_string())
+                .with_extension("mp3"),
+            )
+            .expect("could not create cache directory");
+          println!(
+            "Dowloading {:} -  {:} to {:}!",
+            feed.title.clone().unwrap_or("n/a".to_string()),
+            e.title.clone().unwrap_or("n/a".to_string()),
+            mp3_path.to_str().unwrap_or("")
+          );
+          e.content_url
+            .clone()
+            .map(|url| net::blocking_stream_to_file(&url, &mp3_path));
+          println!(
+            "Dowloaded {:} -  {:} to {:}!",
+            feed.title.unwrap_or("n/a".to_string()),
+            e.title.unwrap_or("n/a".to_string()),
+            mp3_path.to_str().unwrap_or("")
+          );
+        }
+      };
     }
   }
 }
