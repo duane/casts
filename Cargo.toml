@@ -23,6 +23,7 @@ tokio = "*"
 magic = "*"
 regex = "*"
 indicatif = "*"
+tempfile = "*"
 
 clap = { version = "3.0.0-beta.2", optional = true }
 xdg = { version = "^2.1", optional = true }
@@ -30,7 +31,7 @@ xdg = { version = "^2.1", optional = true }
 [dependencies.rusqlite]
 version = "*"
 optional = true
-features = ["url", "chrono"]
+features = ["url", "chrono", "uuid"]
 
 
 [dependencies.reqwest]
@@ -38,6 +39,10 @@ version = "^0.10.4"
 features = ["blocking", "stream"]
 
 [dependencies.chrono]
+version = "*"
+features = ["serde"]
+
+[dependencies.uuid]
 version = "*"
 features = ["serde"]
 

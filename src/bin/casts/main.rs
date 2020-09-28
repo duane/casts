@@ -8,10 +8,13 @@ extern crate indicatif;
 extern crate magic;
 extern crate regex;
 extern crate reqwest;
+extern crate tempfile;
 extern crate url;
+extern crate uuid;
 extern crate xdg;
 
 use std::path::Path;
+use uuid::Uuid;
 
 mod model;
 mod net;
@@ -68,6 +71,7 @@ fn main() {
       };
 
       let add_feed = model::AddFeed {
+        id: Uuid::new_v4(),
         url: Url::parse(&s.feed).unwrap(),
         title,
         title_content_type,
@@ -75,7 +79,7 @@ fn main() {
         description_content_type,
       };
 
-      let feed_id = model::add_feed(&conn, &add_feed);
+      let _ = model::add_feed(&conn, &add_feed);
       for entry in feed.entries.into_iter().rev() {
         let (title, title_content_type) = match entry.title {
           Some(t) => (Some(t.content.clone()), Some(t.content_type.to_string())),
@@ -94,7 +98,8 @@ fn main() {
         };
 
         let add_entry = model::AddEntry {
-          feed_id: feed_id as u32,
+          id: Uuid::new_v4(),
+          feed_id: add_feed.id.clone(),
           title,
           title_content_type,
           summary,
@@ -121,13 +126,9 @@ fn main() {
       match model::fetch_latest_entry(&conn) {
         None => println!("Nothing to download...."),
         Some(e) => {
-          let feed = model::get_feed(&conn, e.feed_id).unwrap();
+          let feed = model::get_feed(&conn, &e.feed_id).unwrap();
           let mp3_path = xdg_dirs
-            .place_cache_file(
-              Path::new(&e.feed_id.to_string())
-                .join(e.id.to_string())
-                .with_extension("mp3"),
-            )
+            .place_cache_file(Path::new(&e.feed_id.to_string()).with_extension("mp3"))
             .expect("could not create cache directory");
           println!(
             "Dowloading {:} -  {:} to {:}!",

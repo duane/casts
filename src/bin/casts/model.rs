@@ -2,6 +2,7 @@ use chrono::{DateTime, Utc};
 use rusqlite::NO_PARAMS;
 use rusqlite::{params, Connection};
 use url::Url;
+use uuid::Uuid;
 
 pub fn open() -> Connection {
   let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
@@ -15,7 +16,7 @@ pub fn initialize(conn: &Connection) {
   conn
     .execute_batch(
       "CREATE TABLE IF NOT EXISTS feeds (
-      id INTEGER NOT NULL PRIMARY KEY,
+      id CHAR(36) NOT NULL PRIMARY KEY,
       url TEXT NOT NULL UNIQUE,
       title TEXT,
       title_content_type TEXT,
@@ -27,8 +28,8 @@ pub fn initialize(conn: &Connection) {
   conn
     .execute_batch(
       "CREATE TABLE IF NOT EXISTS entries (
-      id INTEGER NOT NULL PRIMARY KEY,
-      feed_id INTEGER NOT NULL,
+      id CHAR(36) NOT NULL PRIMARY KEY,
+      feed_id CHAR(36) NOT NULL,
       title TEXT,
       title_content_type TEXT,
       summary TEXT,
@@ -47,6 +48,7 @@ pub fn initialize(conn: &Connection) {
 }
 
 pub struct AddFeed {
+  pub id: Uuid,
   pub url: Url,
   pub title: Option<String>,
   pub title_content_type: Option<String>,
@@ -55,7 +57,7 @@ pub struct AddFeed {
 }
 
 pub struct Feed {
-  pub id: u32,
+  pub id: Uuid,
   pub url: Url,
   pub title: Option<String>,
   pub title_content_type: Option<String>,
@@ -67,16 +69,18 @@ pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> usize {
   let mut statement = conn
     .prepare(
       "INSERT INTO feeds (
+      id,
       url,
       title,
       title_content_type,
       description,
       description_content_type
-    ) VALUES (?, ?, ?, ?, ?)",
+    ) VALUES (?, ?, ?, ?, ?, ?)",
     )
     .unwrap();
   statement
     .execute(params![
+      add_feed.id,
       add_feed.url,
       add_feed.title,
       add_feed.title_content_type,
@@ -86,7 +90,7 @@ pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> usize {
     .unwrap()
 }
 
-pub fn get_feed(conn: &Connection, feed_id: u32) -> Option<Feed> {
+pub fn get_feed(conn: &Connection, feed_id: &Uuid) -> Option<Feed> {
   let mut statement = conn
     .prepare(
       "SELECT id,
@@ -110,7 +114,8 @@ pub fn get_feed(conn: &Connection, feed_id: u32) -> Option<Feed> {
 }
 
 pub struct AddEntry {
-  pub feed_id: u32,
+  pub id: Uuid,
+  pub feed_id: Uuid,
   pub title: Option<String>,
   pub title_content_type: Option<String>,
   pub summary: Option<String>,
@@ -125,6 +130,7 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
   let mut statement = conn
     .prepare(
       "INSERT INTO entries (
+      id,
     feed_id,
     title,
     title_content_type,
@@ -134,11 +140,12 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
     content_content_type,
     published,
     updated
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);",
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
     )
     .unwrap();
   statement
     .execute(params![
+      add_entry.id,
       add_entry.feed_id,
       add_entry.title,
       add_entry.title_content_type,
@@ -154,8 +161,8 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
 
 #[derive(Debug)]
 pub struct Entry {
-  pub id: u32,
-  pub feed_id: u32,
+  pub id: Uuid,
+  pub feed_id: Uuid,
   pub title: Option<String>,
   pub title_content_type: Option<String>,
   pub summary: Option<String>,
