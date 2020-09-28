@@ -1,13 +1,14 @@
 extern crate rusqlite;
 
 extern crate clap;
-extern crate casts_rs;
+extern crate casts;
 extern crate url;
+extern crate xdg;
 
 mod model;
 
 use clap::Clap;
-use casts_rs::{blocking_download_feed_rs, parse_feed_rs};
+use casts::{blocking_download_feed_rs, parse_feed_rs};
 use url::Url;
 
 #[derive(Clap,Debug)]

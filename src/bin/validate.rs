@@ -1,8 +1,8 @@
-extern crate casts_rs;
+extern crate casts;
 
 use std::env;
 use std::process::exit;
-use casts_rs::{blocking_download_feed_rs, parse_feed_rs};
+use casts::{blocking_download_feed_rs, parse_feed_rs};
 
 fn main() {
   let mut args: Vec<String> = env::args().collect();

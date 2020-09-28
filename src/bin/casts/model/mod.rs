@@ -3,7 +3,10 @@ use url::Url;
 
 
 pub fn open() -> Connection {
-  Connection::open("casts.sqlite").expect("could not open casts.sqlite")
+  let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
+  let db_path = xdg_dirs.place_data_file("casts.sqlite")
+                        .expect("could not create data directory");
+  Connection::open(db_path).expect("could not open casts.sqlite")
 }
 
 pub fn initialize(conn: &Connection) {
