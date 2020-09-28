@@ -1,0 +1,33 @@
+[package]
+name = "casts"
+version = "0.1.0"
+authors = ["Duane R Bailey <duane@duane.cc>"]
+edition = "2018"
+
+[features]
+default = ["command"]
+command = ["rusqlite", "clap", "xdg"]
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[[bin]]
+name = "casts"
+required-features = ["command"]
+
+[dependencies]
+libc = "~0.2.67"
+feed-rs = "~0.2.0"
+url = "2.1.1"
+
+rusqlite = { version = "*", optional = true }
+clap = { version = "3.0.0-beta.2", optional = true }
+xdg = { version = "^2.1", optional = true }
+
+[dependencies.reqwest]
+version = "^0.10.4"
+features = ["blocking"]
+
+
+[[bin]]
+name = "validate"
+path = "src/bin/validate.rs"
