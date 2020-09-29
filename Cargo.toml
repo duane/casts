@@ -31,6 +31,8 @@ xdg = { version = "^2.1", optional = true }
 colored = "*"
 base64 = "*"
 htmlescape = "*"
+rodio = "*"
+notify-rust = "*"
 
 [dependencies.rusqlite]
 version = "*"

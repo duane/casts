@@ -12,6 +12,7 @@ extern crate futures;
 extern crate html2text;
 extern crate htmlescape;
 extern crate magic;
+extern crate notify_rust;
 extern crate regex;
 extern crate reqwest;
 extern crate tempfile;
@@ -23,6 +24,7 @@ use bytesize::ByteSize;
 use chrono::{Duration, Utc};
 use std::io::{stdout, Write};
 
+mod app;
 mod cache;
 mod model;
 mod net;
@@ -67,7 +69,9 @@ struct Download {}
 struct Feeds {}
 
 #[derive(Clap, Debug)]
-struct Poll {}
+struct Poll {
+  feed: Option<String>,
+}
 
 #[derive(Clap, Debug)]
 struct Feed {
@@ -82,62 +86,30 @@ fn main() {
 
   match opts.cmd {
     SubCommand::Subscribe(s) => {
-      let conn = model::open();
-      model::initialize(&conn);
-
       let url = Url::parse(&s.feed).unwrap();
-      let download_result = blocking_download_feed_rs(s.feed.clone()).unwrap();
-      let parsed_feed = parse_feed_rs(&download_result).unwrap();
-      let title = parsed_feed.title.unwrap().content.clone();
-      let description = parsed_feed.description.map(|d| d.content.clone());
-      let add_feed = model::AddFeed {
-        url,
-        title,
-        description,
-      };
-
-      let feed_id = model::add_feed(&conn, &add_feed) as i64;
-      for entry in parsed_feed.entries.into_iter().rev() {
-        let guid = entry.id.clone();
-        let title = entry.title.unwrap().content.clone();
-        let summary = entry.summary.map(|s| s.content.clone());
-        let (content_url, content_type) = match entry.content {
-          Some(c) => {
-            let escaped_href = &c.src.unwrap().href;
-            let unescaped_href = htmlescape::decode_html(escaped_href).unwrap();
-            let url = Url::parse(&unescaped_href).unwrap();
-            let content_type = c.content_type.to_string();
-            (url, content_type)
-          }
-          None => continue,
-        };
-
-        let add_entry = model::AddEntry {
-          feed_id,
-          guid,
-          title,
-          content_url,
-          content_type,
-          summary,
-          published: entry.published,
-          updated: entry.updated,
-        };
-        let _entry_id = model::add_entry(&conn, &add_entry);
-      }
-
-      conn.close().expect("could rm not close db");
+      app::subscribe(&url);
     }
     SubCommand::Dump(d) => {
-      let result = blocking_download_feed_rs(d.feed).unwrap();
+      let url = Url::parse(&d.feed).unwrap();
+      let result = blocking_download_feed_rs(&url).unwrap();
       let feed = parse_feed_rs(&result).unwrap();
 
       println!("{:?}", feed);
     }
-    SubCommand::Poll(_) => {
+    SubCommand::Poll(p) => {
       let conn = model::open();
-      let feeds = model::slurp_feeds(&conn);
+      let feeds = match p.feed {
+        Some(feed_name) => match model::get_feed_by_name(&conn, &feed_name) {
+          Some(feed) => vec![feed],
+          None => {
+            println!("No such feed: {}", feed_name);
+            vec![]
+          }
+        },
+        None => model::slurp_feeds(&conn),
+      };
       for feed in feeds.into_iter() {
-        println!("{}", feed.url);
+        app::poll(&conn, &feed);
       }
     }
     SubCommand::Fresh(_) => {

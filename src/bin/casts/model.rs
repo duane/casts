@@ -68,14 +68,6 @@ pub struct AddFeed {
   pub description: Option<String>,
 }
 
-#[derive(Debug)]
-pub struct Feed {
-  pub id: i64,
-  pub url: Url,
-  pub title: String,
-  pub description: Option<String>,
-}
-
 pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> i64 {
   let mut statement = conn
     .prepare(
@@ -90,6 +82,35 @@ pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> i64 {
     .execute(params![add_feed.url, add_feed.title, add_feed.description])
     .unwrap();
   conn.last_insert_rowid()
+}
+
+#[derive(Debug)]
+pub struct UpdateFeedMetadata {
+  pub id: i64,
+  pub title: String,
+  pub description: Option<String>,
+}
+
+pub fn update_feed(conn: &Connection, update_feed_metadata: &UpdateFeedMetadata) -> bool {
+  let mut statement = conn
+    .prepare("UPDATE feeds SET title = ?, description = ? WHERE id = ?;")
+    .unwrap();
+  statement
+    .execute(params![
+      update_feed_metadata.title,
+      update_feed_metadata.description,
+      update_feed_metadata.id
+    ])
+    .unwrap()
+    == 1
+}
+
+#[derive(Debug)]
+pub struct Feed {
+  pub id: i64,
+  pub url: Url,
+  pub title: String,
+  pub description: Option<String>,
 }
 
 pub fn get_feed_by_id(conn: &Connection, feed_id: i64) -> Option<Feed> {
@@ -240,6 +261,42 @@ pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
     .unwrap()
     .map(|t| t.unwrap())
     .collect()
+}
+
+pub fn find_entry_by_guid(conn: &Connection, feed_id: i64, guid: &String) -> Option<Entry> {
+  let mut statement = conn
+    .prepare(
+      "SELECT id,
+              feed_id,
+              guid,
+              title,
+              content_url,
+              content_type,
+              summary,
+              published,
+              updated
+       FROM entries
+       WHERE guid = ? and feed_id = ?;",
+    )
+    .unwrap();
+  let row = statement
+    .query_map(params![guid, feed_id], |row| {
+      Ok(Entry {
+        id: row.get(0).unwrap(),
+        feed_id: row.get(1).unwrap(),
+        guid: row.get(2).unwrap(),
+        title: row.get(3).unwrap(),
+        content_url: row.get(4).unwrap(),
+        content_type: row.get(5).unwrap(),
+        summary: row.get(6).unwrap(),
+        published: row.get(7).unwrap(),
+        updated: row.get(8).unwrap(),
+      })
+    })
+    .unwrap()
+    .map(|x| x.unwrap())
+    .next();
+  row
 }
 
 pub fn slurp_entries_since(conn: &Connection, date: &DateTime<Utc>) -> Vec<Entry> {

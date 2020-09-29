@@ -10,6 +10,7 @@ use feed_rs::parser;
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::ptr;
+use url::Url;
 
 #[repr(C)]
 pub struct Image {
@@ -304,8 +305,8 @@ impl fmt::Display for ParseCastsError {
   }
 }
 
-pub fn blocking_download_feed_rs(url: String) -> Result<String, DownloadError> {
-  Ok(reqwest::blocking::get(&url)?.text()?)
+pub fn blocking_download_feed_rs(url: &Url) -> Result<String, DownloadError> {
+  Ok(reqwest::blocking::get(&url.to_string())?.text()?)
 }
 
 pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
