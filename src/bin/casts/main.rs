@@ -1,10 +1,16 @@
+#![warn(missing_docs)]
+
 extern crate rusqlite;
 
+extern crate base64;
+extern crate bytesize;
 extern crate casts;
 extern crate chrono;
 extern crate clap;
+extern crate colored;
 extern crate futures;
-extern crate indicatif;
+extern crate html2text;
+extern crate htmlescape;
 extern crate magic;
 extern crate regex;
 extern crate reqwest;
@@ -13,11 +19,14 @@ extern crate url;
 extern crate uuid;
 extern crate xdg;
 
-use std::path::Path;
-use uuid::Uuid;
+use bytesize::ByteSize;
+use chrono::{Duration, Utc};
+use std::io::{stdout, Write};
 
+mod cache;
 mod model;
 mod net;
+mod view;
 
 use casts::{blocking_download_feed_rs, parse_feed_rs};
 use clap::Clap;
@@ -35,6 +44,10 @@ enum SubCommand {
   Subscribe(Subscribe),
   Dump(Dump),
   Download(Download),
+  Feeds(Feeds),
+  Feed(Feed),
+  Fresh(Fresh),
+  Poll(Poll),
 }
 
 #[derive(Clap, Debug)]
@@ -50,6 +63,20 @@ struct Dump {
 #[derive(Clap, Debug)]
 struct Download {}
 
+#[derive(Clap, Debug)]
+struct Feeds {}
+
+#[derive(Clap, Debug)]
+struct Poll {}
+
+#[derive(Clap, Debug)]
+struct Feed {
+  arg: String,
+}
+
+#[derive(Clap, Debug)]
+struct Fresh {}
+
 fn main() {
   let opts: Opts = Opts::parse();
 
@@ -58,58 +85,44 @@ fn main() {
       let conn = model::open();
       model::initialize(&conn);
 
-      let result = blocking_download_feed_rs(s.feed.clone()).unwrap();
-      let feed = parse_feed_rs(&result).unwrap();
-
-      let (title, title_content_type) = match feed.title {
-        Some(t) => (Some(t.content.clone()), Some(t.content_type.to_string())),
-        None => (None, None),
-      };
-      let (description, description_content_type) = match feed.description {
-        Some(d) => (Some(d.content.clone()), Some(d.content_type.to_string())),
-        None => (None, None),
-      };
-
+      let url = Url::parse(&s.feed).unwrap();
+      let download_result = blocking_download_feed_rs(s.feed.clone()).unwrap();
+      let parsed_feed = parse_feed_rs(&download_result).unwrap();
+      let title = parsed_feed.title.unwrap().content.clone();
+      let description = parsed_feed.description.map(|d| d.content.clone());
       let add_feed = model::AddFeed {
-        id: Uuid::new_v4(),
-        url: Url::parse(&s.feed).unwrap(),
+        url,
         title,
-        title_content_type,
         description,
-        description_content_type,
       };
 
-      let _ = model::add_feed(&conn, &add_feed);
-      for entry in feed.entries.into_iter().rev() {
-        let (title, title_content_type) = match entry.title {
-          Some(t) => (Some(t.content.clone()), Some(t.content_type.to_string())),
-          None => (None, None),
-        };
-        let (summary, summary_content_type) = match entry.summary {
-          Some(s) => (Some(s.content.clone()), Some(s.content_type.to_string())),
-          None => (None, None),
-        };
-        let (content_url, content_content_type) = match entry.content {
-          Some(c) => (
-            c.src.map(|l| Url::parse(&l.href).unwrap()),
-            Some(c.content_type.to_string()),
-          ),
-          None => (None, None),
+      let feed_id = model::add_feed(&conn, &add_feed) as i64;
+      for entry in parsed_feed.entries.into_iter().rev() {
+        let guid = entry.id.clone();
+        let title = entry.title.unwrap().content.clone();
+        let summary = entry.summary.map(|s| s.content.clone());
+        let (content_url, content_type) = match entry.content {
+          Some(c) => {
+            let escaped_href = &c.src.unwrap().href;
+            let unescaped_href = htmlescape::decode_html(escaped_href).unwrap();
+            let url = Url::parse(&unescaped_href).unwrap();
+            let content_type = c.content_type.to_string();
+            (url, content_type)
+          }
+          None => continue,
         };
 
         let add_entry = model::AddEntry {
-          id: Uuid::new_v4(),
-          feed_id: add_feed.id.clone(),
+          feed_id,
+          guid,
           title,
-          title_content_type,
-          summary,
-          summary_content_type,
           content_url,
-          content_content_type,
+          content_type,
+          summary,
           published: entry.published,
           updated: entry.updated,
         };
-        let _ = model::add_entry(&conn, &add_entry);
+        let _entry_id = model::add_entry(&conn, &add_entry);
       }
 
       conn.close().expect("could rm not close db");
@@ -120,33 +133,63 @@ fn main() {
 
       println!("{:?}", feed);
     }
-    SubCommand::Download(_) => {
-      let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
+    SubCommand::Poll(_) => {
       let conn = model::open();
-      match model::fetch_latest_entry(&conn) {
-        None => println!("Nothing to download...."),
-        Some(e) => {
-          let feed = model::get_feed(&conn, &e.feed_id).unwrap();
-          let mp3_path = xdg_dirs
-            .place_cache_file(Path::new(&e.feed_id.to_string()).with_extension("mp3"))
-            .expect("could not create cache directory");
-          println!(
-            "Dowloading {:} -  {:} to {:}!",
-            feed.title.clone().unwrap_or("n/a".to_string()),
-            e.title.clone().unwrap_or("n/a".to_string()),
-            mp3_path.to_str().unwrap_or("")
+      let feeds = model::slurp_feeds(&conn);
+      for feed in feeds.into_iter() {
+        println!("{}", feed.url);
+      }
+    }
+    SubCommand::Fresh(_) => {
+      let conn = model::open();
+      let entries = model::slurp_entries_since(
+        &conn,
+        &Utc::now().checked_sub_signed(Duration::weeks(1)).unwrap(),
+      );
+      for entry in entries.into_iter() {
+        let feed = model::get_feed_by_id(&conn, entry.feed_id).unwrap();
+        view::show_feed_and_entry(&feed, &entry, false);
+      }
+    }
+    SubCommand::Download(_) => {
+      let conn = model::open();
+      let entries = model::slurp_entries_since(
+        &conn,
+        &Utc::now().checked_sub_signed(Duration::weeks(1)).unwrap(),
+      );
+      for entry in entries.into_iter() {
+        let feed = model::get_feed_by_id(&conn, entry.feed_id).unwrap();
+        if cache::should_download(&feed, &entry) {
+          let feed = model::get_feed_by_id(&conn, entry.feed_id).unwrap();
+          let content_url: Url = entry.content_url.clone();
+          print!(
+            "Downloading {} - {}...",
+            &feed.title.clone(),
+            &entry.guid.clone()
           );
-          e.content_url
-            .clone()
-            .map(|url| net::blocking_stream_to_file(&url, &mp3_path));
-          println!(
-            "Dowloaded {:} -  {:} to {:}!",
-            feed.title.unwrap_or("n/a".to_string()),
-            e.title.unwrap_or("n/a".to_string()),
-            mp3_path.to_str().unwrap_or("")
-          );
+          stdout().flush().unwrap();
+          let size =
+            net::blocking_stream_to_file(&content_url, &cache::cache_location(&feed, &entry));
+          println!("done, {:}", ByteSize::b(size as u64).to_string());
+        } else {
+          println!("Skipping {:}, already downloaded.", &entry.guid);
         }
-      };
+      }
+    }
+    SubCommand::Feeds(_) => {
+      let conn = model::open();
+
+      let feeds = model::slurp_feeds(&conn);
+      for feed in feeds {
+        view::show_feed(&feed, false);
+      }
+    }
+    SubCommand::Feed(l) => {
+      let conn = model::open();
+
+      // Direct titles
+      let feed = model::get_feed_by_name(&conn, &l.arg).unwrap();
+      view::show_feed(&feed, true);
     }
   }
 }

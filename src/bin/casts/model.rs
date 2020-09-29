@@ -16,90 +16,90 @@ pub fn initialize(conn: &Connection) {
   conn
     .execute_batch(
       "CREATE TABLE IF NOT EXISTS feeds (
-      id CHAR(36) NOT NULL PRIMARY KEY,
+      id INTEGER PRIMARY KEY,
       url TEXT NOT NULL UNIQUE,
-      title TEXT,
-      title_content_type TEXT,
-      description TEXT,
-      description_content_type TEXT
+      title TEXT NOT NULL,
+      description TEXT
     );",
     )
     .expect("could not intialize sqlite feeds table");
   conn
     .execute_batch(
       "CREATE TABLE IF NOT EXISTS entries (
-      id CHAR(36) NOT NULL PRIMARY KEY,
-      feed_id CHAR(36) NOT NULL,
-      title TEXT,
-      title_content_type TEXT,
+      id INTEGER PRIMARY KEY,
+      feed_id INTEGER NOT NULL,
+      guid CHAR(128) NOT NULL,
+      title TEXT NOT NULL,
+      content_url TEXT NOT NULL,
+      content_type TEXT NOT NULL,
+
       summary TEXT,
-      summary_content_type TEXT,
-      content_url TEXT,
-      content_content_type TEXT,
       published DATETIME,
       updated DATETIME,
+
       FOREIGN KEY (feed_id) REFERENCES feeds(id)
     );",
     )
     .expect("could not intialize sqlite feeds table");
   conn
-    .execute_batch("CREATE INDEX IF NOT EXISTS entries_published ON entries (published);")
+    .execute_batch(
+      "CREATE INDEX IF NOT EXISTS entries_published
+       ON entries (published);",
+    )
+    .expect("could not add entries_published index");
+  conn
+    .execute_batch(
+      "CREATE INDEX IF NOT EXISTS feed_titles
+      ON feeds (title);",
+    )
+    .expect("could not add feed_titles index");
+  conn
+    .execute_batch(
+      "CREATE UNIQUE INDEX IF NOT EXISTS feed_titles
+      ON entries (feed_id, title);",
+    )
     .expect("could not intialize sqlite feeds table");
 }
 
+#[derive(Debug)]
 pub struct AddFeed {
-  pub id: Uuid,
   pub url: Url,
-  pub title: Option<String>,
-  pub title_content_type: Option<String>,
+  pub title: String,
   pub description: Option<String>,
-  pub description_content_type: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct Feed {
-  pub id: Uuid,
+  pub id: i64,
   pub url: Url,
-  pub title: Option<String>,
-  pub title_content_type: Option<String>,
+  pub title: String,
   pub description: Option<String>,
-  pub description_content_type: Option<String>,
 }
 
-pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> usize {
+pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> i64 {
   let mut statement = conn
     .prepare(
       "INSERT INTO feeds (
-      id,
       url,
       title,
-      title_content_type,
-      description,
-      description_content_type
-    ) VALUES (?, ?, ?, ?, ?, ?)",
+      description
+    ) VALUES (?, ?, ?)",
     )
     .unwrap();
   statement
-    .execute(params![
-      add_feed.id,
-      add_feed.url,
-      add_feed.title,
-      add_feed.title_content_type,
-      add_feed.description,
-      add_feed.description_content_type,
-    ])
-    .unwrap()
+    .execute(params![add_feed.url, add_feed.title, add_feed.description])
+    .unwrap();
+  conn.last_insert_rowid()
 }
 
-pub fn get_feed(conn: &Connection, feed_id: &Uuid) -> Option<Feed> {
+pub fn get_feed_by_id(conn: &Connection, feed_id: i64) -> Option<Feed> {
   let mut statement = conn
     .prepare(
       "SELECT id,
-      url,
-    title,
-    title_content_type,
-    description,
-    description_content_type
-    FROM feeds WHERE id = ?;",
+              url,
+              title,
+              description
+       FROM feeds WHERE id = ?;",
     )
     .unwrap();
   let mut rows = statement.query(params![feed_id]).unwrap();
@@ -107,21 +107,60 @@ pub fn get_feed(conn: &Connection, feed_id: &Uuid) -> Option<Feed> {
     id: row.get(0).unwrap(),
     url: row.get(1).unwrap(),
     title: row.get(2).unwrap(),
-    title_content_type: row.get(3).unwrap(),
-    description: row.get(4).unwrap(),
-    description_content_type: row.get(5).unwrap(),
+    description: row.get(3).unwrap(),
   })
 }
 
+pub fn get_feed_by_name(conn: &Connection, title: &str) -> Option<Feed> {
+  let mut statement = conn
+    .prepare(
+      "SELECT id,
+              url,
+              title,
+              description
+       FROM feeds WHERE title = ?;",
+    )
+    .unwrap();
+  let mut rows = statement.query(params![title]).unwrap();
+  rows.next().unwrap().map(|row| Feed {
+    id: row.get(0).unwrap(),
+    url: row.get(1).unwrap(),
+    title: row.get(2).unwrap(),
+    description: row.get(3).unwrap(),
+  })
+}
+
+pub fn slurp_feeds(conn: &Connection) -> Vec<Feed> {
+  let mut statement = conn
+    .prepare(
+      "SELECT id,
+              url,
+              title,
+              description
+       FROM feeds",
+    )
+    .unwrap();
+  statement
+    .query_map(NO_PARAMS, |row| {
+      Ok(Feed {
+        id: row.get(0).unwrap(),
+        url: row.get(1).unwrap(),
+        title: row.get(2).unwrap(),
+        description: row.get(3).unwrap(),
+      })
+    })
+    .unwrap()
+    .map(|r| r.unwrap())
+    .collect()
+}
+
 pub struct AddEntry {
-  pub id: Uuid,
-  pub feed_id: Uuid,
-  pub title: Option<String>,
-  pub title_content_type: Option<String>,
+  pub feed_id: i64,
+  pub guid: String,
+  pub title: String,
+  pub content_url: Url,
+  pub content_type: String,
   pub summary: Option<String>,
-  pub summary_content_type: Option<String>,
-  pub content_url: Option<Url>,
-  pub content_content_type: Option<String>,
   pub published: Option<DateTime<Utc>>,
   pub updated: Option<DateTime<Utc>>,
 }
@@ -130,29 +169,25 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
   let mut statement = conn
     .prepare(
       "INSERT INTO entries (
-      id,
-    feed_id,
-    title,
-    title_content_type,
-    summary,
-    summary_content_type,
-    content_url,
-    content_content_type,
-    published,
-    updated
-  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);",
+         feed_id,
+         guid,
+         title,
+         content_url,
+         content_type,
+         summary,
+         published,
+         updated
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?);",
     )
     .unwrap();
   statement
     .execute(params![
-      add_entry.id,
       add_entry.feed_id,
+      add_entry.guid,
       add_entry.title,
-      add_entry.title_content_type,
-      add_entry.summary,
-      add_entry.summary_content_type,
       add_entry.content_url,
-      add_entry.content_content_type,
+      add_entry.content_type,
+      add_entry.summary,
       add_entry.published,
       add_entry.updated
     ])
@@ -161,44 +196,84 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
 
 #[derive(Debug)]
 pub struct Entry {
-  pub id: Uuid,
-  pub feed_id: Uuid,
-  pub title: Option<String>,
-  pub title_content_type: Option<String>,
+  pub id: i64,
+  pub feed_id: i64,
+  pub guid: String,
+  pub title: String,
+  pub content_url: Url,
+  pub content_type: String,
+
   pub summary: Option<String>,
-  pub summary_content_type: Option<String>,
-  pub content_url: Option<Url>,
-  pub content_content_type: Option<String>,
   pub published: Option<DateTime<Utc>>,
   pub updated: Option<DateTime<Utc>>,
 }
 
-pub fn fetch_latest_entry(conn: &Connection) -> Option<Entry> {
+pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
   let mut statement = conn
     .prepare(
-      "SELECT id, feed_id,
-    title,
-    title_content_type,
-    summary,
-    summary_content_type,
-    content_url,
-    content_content_type,
-    published,
-    updated
-    FROM entries ORDER BY published DESC LIMIT 1;",
+      "SELECT id,
+              feed_id,
+              guid,
+              title,
+              content_url,
+              content_type,
+              summary,
+              published,
+              updated
+       FROM entries WHERE feed_id = ?;",
     )
     .unwrap();
-  let mut rows = statement.query(NO_PARAMS).unwrap();
-  rows.next().unwrap().map(|row| Entry {
-    id: row.get(0).unwrap(),
-    feed_id: row.get(1).unwrap(),
-    title: row.get(2).unwrap(),
-    title_content_type: row.get(3).unwrap(),
-    summary: row.get(4).unwrap(),
-    summary_content_type: row.get(5).unwrap(),
-    content_url: row.get(6).unwrap(),
-    content_content_type: row.get(7).unwrap(),
-    published: row.get(8).unwrap(),
-    updated: row.get(9).unwrap(),
-  })
+  statement
+    .query_map(params![feed_id], |row| {
+      Ok(Entry {
+        id: row.get(0).unwrap(),
+        feed_id: row.get(1).unwrap(),
+        guid: row.get(2).unwrap(),
+        title: row.get(3).unwrap(),
+        content_url: row.get(4).unwrap(),
+        content_type: row.get(5).unwrap(),
+        summary: row.get(6).unwrap(),
+        published: row.get(7).unwrap(),
+        updated: row.get(8).unwrap(),
+      })
+    })
+    .unwrap()
+    .map(|t| t.unwrap())
+    .collect()
+}
+
+pub fn slurp_entries_since(conn: &Connection, date: &DateTime<Utc>) -> Vec<Entry> {
+  let mut statement = conn
+    .prepare(
+      "SELECT id,
+              feed_id,
+              guid,
+              title,
+              content_url,
+              content_type,
+              summary,
+              published,
+              updated
+       FROM entries
+       WHERE published >= ? 
+       ORDER BY published DESC;",
+    )
+    .unwrap();
+  statement
+    .query_map(params![date], |row| {
+      Ok(Entry {
+        id: row.get(0).unwrap(),
+        feed_id: row.get(1).unwrap(),
+        guid: row.get(2).unwrap(),
+        title: row.get(3).unwrap(),
+        content_url: row.get(4).unwrap(),
+        content_type: row.get(5).unwrap(),
+        summary: row.get(6).unwrap(),
+        published: row.get(7).unwrap(),
+        updated: row.get(8).unwrap(),
+      })
+    })
+    .unwrap()
+    .map(|x| x.unwrap())
+    .collect()
 }
