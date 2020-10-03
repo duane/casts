@@ -1,8 +1,9 @@
+#![deny(missing_docs)]
+
 use chrono::{DateTime, Utc};
 use rusqlite::NO_PARAMS;
 use rusqlite::{params, Connection};
 use url::Url;
-use uuid::Uuid;
 
 pub fn open() -> Connection {
   let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
@@ -229,7 +230,7 @@ pub struct Entry {
   pub updated: Option<DateTime<Utc>>,
 }
 
-pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
+/* pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
   let mut statement = conn
     .prepare(
       "SELECT id,
@@ -261,7 +262,7 @@ pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
     .unwrap()
     .map(|t| t.unwrap())
     .collect()
-}
+} */
 
 pub fn find_entry_by_guid(conn: &Connection, feed_id: i64, guid: &String) -> Option<Entry> {
   let mut statement = conn

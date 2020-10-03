@@ -1,3 +1,7 @@
+#![deny(missing_docs)]
+
+//! A tool to validate a feed is a podcast feed.
+
 extern crate casts;
 
 use casts::{blocking_download_feed_rs, parse_feed_rs};

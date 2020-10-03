@@ -1,7 +1,6 @@
 use crate::model;
 use crate::view;
 use notify_rust::Notification;
-use notify_rust::Timeout;
 use rusqlite::Connection;
 use url::Url;
 
@@ -183,6 +182,7 @@ pub fn poll(conn: &Connection, feed: &model::Feed) {
   println!("Polling {}....", feed.url.as_ref());
   let download_result = blocking_download_feed_rs(&feed.url).unwrap();
   let parsed_feed = parse_feed_rs(&download_result).unwrap();
+  update_feed(&conn, feed, &parsed_feed);
 
   for entry in parsed_feed.entries.into_iter().rev() {
     match model::find_entry_by_guid(&conn, feed.id, &entry.id) {

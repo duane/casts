@@ -1,3 +1,10 @@
+#![deny(missing_docs)]
+#![deny(missing_doc_code_examples)]
+
+//! Utility functions for downloading and parsing feeds.
+//!
+//! This library is intended to be consumed both from rust and from c.
+
 extern crate feed_rs;
 extern crate libc;
 extern crate reqwest;
@@ -12,13 +19,25 @@ use std::fmt;
 use std::ptr;
 use url::Url;
 
+/// Representing an Image as seen from a feed.
 #[repr(C)]
 pub struct Image {
+  /// The URI where the image may be found.
   pub uri: *const libc::c_char,
+
+  /// The Title of the image.
   pub title: *const libc::c_char,
+
+  /// The Link representing the image.
   pub link: *const Link,
+
+  /// The width of the image in pixels.
   pub width: *const u32,
+
+  /// The height of the image in pixels.
   pub height: *const u32,
+
+  /// A description of the image.
   pub description: *const libc::c_char,
 }
 
@@ -73,13 +92,25 @@ impl Drop for Image {
   }
 }
 
+/// Representing a Link object as seen from a podcast feed.
 #[repr(C)]
 pub struct Link {
+  /// The URL of the link.
   pub href: *const libc::c_char,
+
+  /// The rel of the link.
   pub rel: *const libc::c_char,
+
+  /// The media type of the the linked-to content.
   pub media_type: *const libc::c_char,
+
+  /// The language linked to by href.
   pub href_lang: *const libc::c_char,
+
+  /// The title of the link.
   pub title: *const libc::c_char,
+
+  /// The length of the content in bytes.
   pub length: *const u32,
 }
 
@@ -134,11 +165,19 @@ impl Drop for Link {
   }
 }
 
+/// Representing content as exposed by feeds-rs
 #[repr(C)]
 pub struct Content {
+  /// The body of the content.
   pub body: *const libc::c_char,
+
+  /// The content type of the content.
   pub content_type: *const libc::c_char,
+
+  /// The length of the content in bytes.
   pub length: *const u32,
+
+  /// A link where the content may be found.
   pub src: *const Link,
 }
 
@@ -181,12 +220,19 @@ impl Drop for Content {
   }
 }
 
+/// An entry in the podcast.
 #[repr(C)]
 pub struct Entry {
+  /// a GUID assigned by feeds-rs if not specified by the feed.
   pub id: *const libc::c_char,
+  /// The title of the entry.
   pub title: *const libc::c_char,
+  /// The link of the entry.
   pub link: *const libc::c_char,
+  /// The summary of the entry (as text/html).
   pub summary: *const libc::c_char,
+
+  /// The content of the entry.
   pub content: *const Content,
 }
 
@@ -231,12 +277,23 @@ impl Drop for Entry {
   }
 }
 
+/// A feed according to feeds-rs.
 #[repr(C)]
 pub struct Feed {
+
+  /// A title for the feed (optional).
   pub title: *const libc::c_char,
+
+  /// A description for the feed (optional).
   pub description: *const libc::c_char,
+
+  /// An image to display with the feed (optional).
   pub logo: *const Image,
+
+  /// Entries for the feed.
   pub entries: *const Entry,
+
+  /// Total number of parsed entries.
   pub entries_count: u32,
 }
 
@@ -256,11 +313,19 @@ impl Drop for Feed {
   }
 }
 
+/// An error that prevented a successful download.
 #[derive(Debug)]
 pub enum DownloadError {
+  /// There was a problem with the URL.
   UrlError,
+
+  /// There was a redirect response.
   RedirectError,
+
+  /// There was an unexpected status code response to the error.
   StatusError(u16),
+
+  /// There was a timeout.
   TimeoutError,
 }
 
@@ -290,9 +355,13 @@ impl std::convert::From<reqwest::Error> for DownloadError {
   }
 }
 
+/// A parse error.
 #[derive(Debug)]
 pub enum ParseCastsError {
+  /// There was an error with the form of the feed.
   ParseFeedError(parser::ParseFeedError),
+
+  /// There was an error interpreting the feed as a podcast.
   NotAnAudioCastFeed(String),
 }
 
@@ -305,10 +374,13 @@ impl fmt::Display for ParseCastsError {
   }
 }
 
+
+/// Block the thread until the feed has been downloaded, or there is an error.
 pub fn blocking_download_feed_rs(url: &Url) -> Result<String, DownloadError> {
   Ok(reqwest::blocking::get(&url.to_string())?.text()?)
 }
 
+/// Parse a string containing a podcast feed.
 pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
   let parsed_rust_feed = match parser::parse(buffer.as_bytes()) {
     Ok(rust_feed) => rust_feed,
@@ -323,6 +395,10 @@ pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
 }
 
 #[no_mangle]
+/// Parse a string containing a podcast feed.
+///
+/// The buffer should be allocated by the calling stack.
+/// The caller is responsible for freeing the returned `Feed` with `free_feed`.
 pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const Feed {
   let slice = unsafe { CStr::from_ptr(buffer) };
   let str_slice: &str = slice.to_str().unwrap();
@@ -359,6 +435,7 @@ pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const Feed {
   }))
 }
 
+/// Call when done with a `Feed` to free its allocated memory.
 #[no_mangle]
 pub extern "C" fn free_feed(feed: *const Feed) {
   unsafe {

@@ -1,4 +1,7 @@
-#![warn(missing_docs)]
+#![deny(missing_docs)]
+#![deny(missing_doc_code_examples)]
+
+//! casts is a tool to manage and listen to podcasts from the command line.
 
 extern crate rusqlite;
 
