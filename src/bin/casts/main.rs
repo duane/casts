@@ -38,7 +38,7 @@ use clap::Clap;
 use url::Url;
 
 #[derive(Clap, Debug)]
-#[clap(version = "1.0", author = "Duane R Bailey <duane@duane.cc>")]
+#[clap(version = "0.1", author = "Duane R Bailey <duane@duane.cc>")]
 struct Opts {
   #[clap(subcommand)]
   cmd: SubCommand,

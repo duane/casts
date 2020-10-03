@@ -4,15 +4,10 @@ version = "0.1.0"
 authors = ["Duane R Bailey <duane@duane.cc>"]
 edition = "2018"
 
-[features]
-default = ["command"]
-command = ["rusqlite", "clap", "xdg"]
-
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [[bin]]
 name = "casts"
-required-features = ["command"]
 
 [dependencies]
 libc = "~0.2.67"
@@ -26,17 +21,17 @@ indicatif = "*"
 tempfile = "*"
 bytesize = "*"
 html2text = "*"
-clap = { version = "3.0.0-beta.2", optional = true }
-xdg = { version = "^2.1", optional = true }
+xdg = "*"
 colored = "*"
 base64 = "*"
 htmlescape = "*"
 rodio = "*"
 notify-rust = "*"
-
+cpal = "*"
+clap = "*"
+anyhow="*"
 [dependencies.rusqlite]
 version = "*"
-optional = true
 features = ["url", "chrono", "uuid"]
 
 
