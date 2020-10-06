@@ -1,29 +1,50 @@
 extern crate anyhow;
+extern crate clap;
 extern crate cpal;
 
+use clap::{App, Arg, SubCommand};
 use cpal::traits::{DeviceTrait, HostTrait};
+use rodio::Sink;
+use std::fs::File;
+use std::io::BufReader;
 
-fn main() -> Result<(), anyhow::Error> {
-  println!("Supported hosts:\n  {:?}", cpal::ALL_HOSTS);
-  let available_hosts = cpal::available_hosts();
-  println!("Available hosts:\n  {:?}", available_hosts);
+fn main() {
+  let matches = App::new("play")
+    .version("0.1")
+    .author("Duane R Bailey <duane@duane.cc>")
+    .subcommand(SubCommand::with_name("list-devices"))
+    .subcommand(SubCommand::with_name("play").arg(Arg::with_name("FILE").required(true)))
+    .get_matches();
 
-  for host_id in available_hosts {
-    println!("{}", host_id.name());
-    let host = cpal::host_from_id(host_id)?;
-
-    let default_in = host.default_input_device().map(|e| e.name().unwrap());
-    let default_out = host.default_output_device().map(|e| e.name().unwrap());
-    println!("  Default Input Device:\n    {:?}", default_in);
-    println!("  Default Output Device:\n    {:?}", default_out);
-
-    
-    let devices = host.devices()?;
-    println!("  Devices: ");
-    for (device_index, device) in devices.enumerate() {
-      println!("  {}. \"{}\"", device_index + 1, device.name()?);
+  if let Some(_) = matches.subcommand_matches("list-devices") {
+    for host_id in cpal::available_hosts() {
+      let host = match cpal::host_from_id(host_id) {
+        Ok(h) => h,
+        Err(_) => continue,
+      };
+      let devices = match host.devices() {
+        Ok(d) => d,
+        Err(_) => continue,
+      };
+      for device in devices.into_iter() {
+        if let Ok(name) = device.name() {
+          println!("DEVICE - {}", name);
+        }
+      }
+      if let Some(default_device) = rodio::default_output_device() {
+        if let Ok(name) = default_device.name() {
+          println!("DEFAULT DEVICE - {}", name);
+        }
+      }
     }
-  }
+  } else if let Some(matches) = matches.subcommand_matches("play") {
+    let device = rodio::default_output_device().unwrap();
 
-  Ok(())
+    let sink = Sink::new(&device);
+    let file = File::open(&matches.value_of("FILE").unwrap()).unwrap();
+    let source = rodio::Decoder::new(BufReader::new(file)).unwrap();
+    sink.append(source);
+
+    sink.sleep_until_end();
+  }
 }
