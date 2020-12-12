@@ -4,6 +4,8 @@ use chrono::{DateTime, Utc};
 use rusqlite::NO_PARAMS;
 use rusqlite::{params, Connection};
 use url::Url;
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::Writer;
 
 pub fn open() -> Connection {
   let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
@@ -112,6 +114,48 @@ pub struct Feed {
   pub url: Url,
   pub title: String,
   pub description: Option<String>,
+}
+
+impl Feed {
+  /// Write an atom feed to the given writer representing the feed.
+  pub fn render_to_atom<W: std::io::Write>(&self, writer: W, iter: &mut dyn Iterator<Item = &Entry>) -> anyhow::Result<()> {
+    let mut writer = Writer::new(writer);
+
+    let rss_elem_name = b"rss";
+    let rss_elem_name_len = rss_elem_name.len();
+    let mut rss_elem = BytesStart::owned(rss_elem_name.to_vec(), rss_elem_name_len);
+    rss_elem.push_attribute(("xmlns:dc", "http://purl.org/dc/elements/1.1/"));
+    rss_elem.push_attribute(("xmlns:itunes", "http://www.itunes.com/dtds/podcast-1.0.dtd"));
+    rss_elem.push_attribute(("version", "2.0"));
+
+    writer.write_event(Event::Decl(BytesDecl::new(b"1.0", Some(b"UTF-8"), None)))?;
+    writer.write_event(Event::Start(rss_elem))?;
+    writer.write_event(Event::Start(BytesStart::owned_name("channel")))?;
+    writer.write_event(Event::Start(BytesStart::owned_name("title")))?;
+    writer.write_event(Event::Text(BytesText::from_plain(self.title.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
+/*
+    writer.write_event(Event::Start(BytesStart::owned_name("link")))?;
+    writer.write_event(Event::Text(BytesText::from_plain(self.url.clone().into_string().into_bytes().as_slice())))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"link")))?;
+*/
+    match self.description {
+      Some(ref desc) => {
+        writer.write_event(Event::Start(BytesStart::owned_name("description")))?;
+        writer.write_event(Event::Text(BytesText::from_plain(desc.clone().into_bytes().as_slice())))?;
+        writer.write_event(Event::End(BytesEnd::borrowed(b"description")))?;    
+      },
+      _ => ()
+    };
+
+    for entry in iter {
+      entry.render_to_atom(&mut writer)?;
+    }
+
+    writer.write_event(Event::End(BytesEnd::borrowed(b"channel")))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"rss")))?;
+    Ok(())
+  }
 }
 
 pub fn get_feed_by_id(conn: &Connection, feed_id: i64) -> Option<Feed> {
@@ -229,8 +273,47 @@ pub struct Entry {
   pub published: Option<DateTime<Utc>>,
   pub updated: Option<DateTime<Utc>>,
 }
+impl Entry {
+  fn render_to_atom<W: std::io::Write>(&self, writer: &mut Writer<W>) -> anyhow::Result<()> {
+    writer.write_event(Event::Start(BytesStart::owned_name("item")))?;
 
-/* pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
+    writer.write_event(Event::Start(BytesStart::owned_name("guid")))?;
+    writer.write_event(Event::Text(BytesText::from_plain(self.guid.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"guid")))?;
+
+    writer.write_event(Event::Start(BytesStart::owned_name("title")))?;
+    writer.write_event(Event::Text(BytesText::from_plain(self.title.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
+  
+    match self.summary {
+      None => (),
+      Some(ref summary) => {
+        writer.write_event(Event::Start(BytesStart::owned_name("description")))?;
+        writer.write_event(Event::Text(BytesText::from_plain(summary.clone().into_bytes().as_slice())))?;
+        writer.write_event(Event::End(BytesEnd::borrowed(b"description")))?;
+      }
+    }
+
+    match self.published {
+      None => (),
+      Some(ref published) => {
+        writer.write_event(Event::Start(BytesStart::owned_name("pubDate")))?;
+        writer.write_event(Event::Text(BytesText::from_plain(published.to_rfc3339().clone().into_bytes().as_slice())))?;
+        writer.write_event(Event::End(BytesEnd::borrowed(b"pubDate")))?;
+      }
+    }
+
+    let mut enclosure_elem = BytesStart::owned_name("enclosure");
+    enclosure_elem.push_attribute(("url", self.content_url.clone().to_string().as_str()));
+    writer.write_event(Event::Start(enclosure_elem))?;
+    writer.write_event(Event::End(BytesEnd::borrowed(b"enclosure")))?;
+
+    writer.write_event(Event::End(BytesEnd::borrowed(b"item")))?;
+    Ok(())
+  }
+}
+
+pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
   let mut statement = conn
     .prepare(
       "SELECT id,
@@ -242,7 +325,8 @@ pub struct Entry {
               summary,
               published,
               updated
-       FROM entries WHERE feed_id = ?;",
+       FROM entries
+       WHERE feed_id = ?;",
     )
     .unwrap();
   statement
@@ -260,9 +344,9 @@ pub struct Entry {
       })
     })
     .unwrap()
-    .map(|t| t.unwrap())
+    .map(|x| x.unwrap())
     .collect()
-} */
+}
 
 pub fn find_entry_by_guid(conn: &Connection, feed_id: i64, guid: &String) -> Option<Entry> {
   let mut statement = conn

@@ -1,8 +1,22 @@
+use std::convert::Infallible;
 use crate::model;
 use crate::view;
 use notify_rust::Notification;
 use rusqlite::Connection;
 use url::Url;
+use std::io::stdout;
+use hyper::{Body, Request, Response, Server};
+use hyper::service::{make_service_fn, service_fn};
+use std::net::SocketAddr;
+
+
+async fn handle_feed(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
+  let mut builder = Response::builder()
+        .header("Content-Type", "text/xml")
+        .status(hyper::StatusCode::OK);
+
+  builder.body(String::from("<xml/>"))
+}
 
 use casts::{blocking_download_feed_rs, parse_feed_rs};
 
@@ -14,12 +28,29 @@ fn convert_link_to_url(link: &RustLink) -> Url {
   Url::parse(&unescaped_href).unwrap()
 }
 
-pub fn subscribe(url: &Url) {
+pub async fn serve() {
+  let addr = SocketAddr::from(([127,0,0,1], 3295));
+  let make_service = make_service_fn(|_conn| async {
+    Ok::<_, Infallible>(service_fn(handle_feed))
+  });
+  let server = Server::bind(&addr);
+  println!("starting on {:?}", addr);
+
+  if let Err(e) = server.serve(make_service).await {
+    eprintln!("server error: {}", e);
+  };
+}
+
+pub fn render(feed: &model::Feed, entries: &mut Vec<model::Entry>) {
+  feed.render_to_atom(stdout(), &mut entries.iter());
+}
+
+pub fn subscribe(url: &Url) -> anyhow::Result<()> {
   let conn = model::open();
   model::initialize(&conn);
 
-  let download_result = blocking_download_feed_rs(url).unwrap();
-  let parsed_feed = parse_feed_rs(&download_result).unwrap();
+  let download_result = blocking_download_feed_rs(url)?;
+  let parsed_feed = parse_feed_rs(&download_result)?;
   let title = parsed_feed.title.unwrap().content.clone();
   let description = parsed_feed.description.map(|d| d.content.clone());
   let add_feed = model::AddFeed {
@@ -37,7 +68,7 @@ pub fn subscribe(url: &Url) {
       Some(c) => {
         let escaped_href = &c.src.unwrap().href;
         let unescaped_href = htmlescape::decode_html(escaped_href).unwrap();
-        let url = Url::parse(&unescaped_href).unwrap();
+        let url = Url::parse(&unescaped_href)?;
         let content_type = c.content_type.to_string();
         (url, content_type)
       }
@@ -57,7 +88,7 @@ pub fn subscribe(url: &Url) {
     let _entry_id = model::add_entry(&conn, &add_entry);
   }
 
-  conn.close().expect("could rm not close db");
+  Ok(conn.close().expect("could rm not close db"))
 }
 
 pub fn notify_change(typ: &str, id: &String, field: &str, old: &String, new: &String) {

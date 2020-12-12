@@ -10,6 +10,7 @@ edition = "2018"
 name = "casts"
 
 [dependencies]
+quick-xml = "*"
 libc = "~0.2.67"
 feed-rs = "~0.4.0"
 url = "2.1.1"
@@ -29,7 +30,9 @@ rodio = "*"
 notify-rust = "*"
 cpal = "*"
 clap = "*"
-anyhow="*"
+anyhow = "*"
+hyper = "*"
+
 [dependencies.rusqlite]
 version = "*"
 features = ["url", "chrono", "uuid"]

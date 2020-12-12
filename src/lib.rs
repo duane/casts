@@ -5,8 +5,10 @@
 //!
 //! This library is intended to be consumed both from rust and from c.
 
+extern crate anyhow;
 extern crate feed_rs;
 extern crate libc;
+extern crate quick_xml;
 extern crate reqwest;
 
 use feed_rs::model::{
@@ -14,6 +16,7 @@ use feed_rs::model::{
   Link as RustLink,
 };
 use feed_rs::parser;
+use std::error::Error;
 use std::ffi::{CStr, CString};
 use std::fmt;
 use std::ptr;
@@ -280,7 +283,6 @@ impl Drop for Entry {
 /// A feed according to feeds-rs.
 #[repr(C)]
 pub struct Feed {
-
   /// A title for the feed (optional).
   pub title: *const libc::c_char,
 
@@ -350,10 +352,13 @@ impl std::convert::From<reqwest::Error> for DownloadError {
       return DownloadError::StatusError(err.status().unwrap().as_u16());
     } else if err.is_timeout() {
       return DownloadError::TimeoutError;
+    } else {
+      panic!(format!("{}", err));
     }
-    unreachable!()
   }
 }
+
+impl Error for DownloadError {}
 
 /// A parse error.
 #[derive(Debug)]
@@ -365,6 +370,8 @@ pub enum ParseCastsError {
   NotAnAudioCastFeed(String),
 }
 
+impl Error for ParseCastsError {}
+
 impl fmt::Display for ParseCastsError {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     match self {
@@ -373,7 +380,6 @@ impl fmt::Display for ParseCastsError {
     }
   }
 }
-
 
 /// Block the thread until the feed has been downloaded, or there is an error.
 pub fn blocking_download_feed_rs(url: &Url) -> Result<String, DownloadError> {

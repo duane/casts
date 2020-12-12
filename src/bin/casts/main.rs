@@ -5,6 +5,8 @@
 
 extern crate rusqlite;
 
+extern crate anyhow;
+extern crate quick_xml;
 extern crate base64;
 extern crate bytesize;
 extern crate casts;
@@ -22,10 +24,12 @@ extern crate tempfile;
 extern crate url;
 extern crate uuid;
 extern crate xdg;
+extern crate hyper;
 
 use bytesize::ByteSize;
 use chrono::{Duration, Utc};
 use std::io::{stdout, Write};
+use tokio::runtime::Runtime;
 
 mod app;
 mod cache;
@@ -44,13 +48,31 @@ fn main() {
     .subcommand(SubCommand::with_name("subscribe").arg(Arg::with_name("INPUT").required(true)))
     .subcommand(SubCommand::with_name("dump").arg(Arg::with_name("INPUT").required(true)))
     .subcommand(SubCommand::with_name("poll").arg(Arg::with_name("FEED").required(false)))
+    .subcommand(SubCommand::with_name("render").arg(Arg::with_name("FEED").required(false)))
+    .subcommand(SubCommand::with_name("serve"))
     .subcommand(SubCommand::with_name("download"))
     .subcommand(SubCommand::with_name("feeds"))
     .subcommand(SubCommand::with_name("fresh"))
     .get_matches();
   if let Some(matches) = matches.subcommand_matches("subscribe") {
     let url = Url::parse(&matches.value_of("INPUT").unwrap()).unwrap();
-    app::subscribe(&url);
+    app::subscribe(&url).unwrap();
+  } else if let Some(matches) = matches.subcommand_matches("serve") {
+    Runtime::new()
+    .expect("Failed to create Tokio runtime")
+    .block_on(app::serve())
+  } else if let Some(matches) = matches.subcommand_matches("render") {
+    let conn = model::open();
+    match matches.value_of("FEED") {
+      Some(feed_name) => match model::get_feed_by_name(&conn, &feed_name) {
+        Some(ref feed) => {
+          let mut entries = model::slurp_entries(&conn, feed.id);
+          app::render(feed, &mut entries)
+        },
+        None => (),
+      },
+      None => (),
+    };
   } else if let Some(matches) = matches.subcommand_matches("dump") {
     let url = Url::parse(&matches.value_of("INPUT").unwrap()).unwrap();
     let result = blocking_download_feed_rs(&url).unwrap();
@@ -59,19 +81,19 @@ fn main() {
     println!("{:?}", feed);
   } else if let Some(matches) = matches.subcommand_matches("poll") {
     let conn = model::open();
-      let feeds = match matches.value_of("FEED") {
-        Some(feed_name) => match model::get_feed_by_name(&conn, &feed_name) {
-          Some(feed) => vec![feed],
-          None => {
-            println!("No such feed: {}", feed_name);
-            vec![]
-          }
-        },
-        None => model::slurp_feeds(&conn),
-      };
-      for feed in feeds.into_iter() {
-        app::poll(&conn, &feed);
-      }
+    let feeds = match matches.value_of("FEED") {
+      Some(feed_name) => match model::get_feed_by_name(&conn, &feed_name) {
+        Some(feed) => vec![feed],
+        None => {
+          println!("No such feed: {}", feed_name);
+          vec![]
+        }
+      },
+      None => model::slurp_feeds(&conn),
+    };
+    for feed in feeds.into_iter() {
+      app::poll(&conn, &feed);
+    }
   } else if let Some(_) = matches.subcommand_matches("fresh") {
     let conn = model::open();
     let entries = model::slurp_entries_since(
