@@ -9,6 +9,9 @@ edition = "2018"
 [[bin]]
 name = "casts"
 
+[[bin]]
+name = "daemon"
+
 [dependencies]
 quick-xml = "*"
 libc = "~0.2.67"
@@ -32,6 +35,8 @@ cpal = "*"
 clap = "*"
 anyhow = "*"
 hyper = "*"
+actix = "*"
+actix-rt = "1.1"
 
 [dependencies.rusqlite]
 version = "*"
