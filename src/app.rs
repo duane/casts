@@ -1,50 +1,20 @@
-use std::convert::Infallible;
 use crate::model;
-use crate::view;
-use notify_rust::Notification;
 use rusqlite::Connection;
-use url::Url;
 use std::io::stdout;
-use hyper::{Body, Request, Response, Server};
-use hyper::service::{make_service_fn, service_fn};
-use std::net::SocketAddr;
+use url::Url;
 
+use crate::{blocking_download_feed_rs, parse_feed_rs};
 
-async fn handle_feed(_req: Request<Body>) -> Result<Response<Body>, Infallible> {
-  let mut builder = Response::builder()
-        .header("Content-Type", "text/xml")
-        .status(hyper::StatusCode::OK);
+use feed_rs::model::{Entry as RustEntry, Feed as RustFeed};
+use crate::feeds::convert_link_to_url;
+use log::info;
 
-  builder.body(String::from("<xml/>"))
-}
-
-use casts::{blocking_download_feed_rs, parse_feed_rs};
-
-use feed_rs::model::{Entry as RustEntry, Feed as RustFeed, Link as RustLink};
-
-fn convert_link_to_url(link: &RustLink) -> Url {
-  let escaped_href = &link.href;
-  let unescaped_href = htmlescape::decode_html(escaped_href).unwrap();
-  Url::parse(&unescaped_href).unwrap()
-}
-
-pub async fn serve() {
-  let addr = SocketAddr::from(([127,0,0,1], 3295));
-  let make_service = make_service_fn(|_conn| async {
-    Ok::<_, Infallible>(service_fn(handle_feed))
-  });
-  let server = Server::bind(&addr);
-  println!("starting on {:?}", addr);
-
-  if let Err(e) = server.serve(make_service).await {
-    eprintln!("server error: {}", e);
-  };
-}
-
+/// Render a feed to atom.
 pub fn render(feed: &model::Feed, entries: &mut Vec<model::Entry>) {
-  feed.render_to_atom(stdout(), &mut entries.iter());
+  feed.render_to_atom(stdout(), &mut entries.iter()).unwrap();
 }
 
+/// Add a feed to the database.
 pub fn subscribe(url: &Url) -> anyhow::Result<()> {
   let conn = model::open();
   model::initialize(&conn);
@@ -91,14 +61,16 @@ pub fn subscribe(url: &Url) -> anyhow::Result<()> {
   Ok(conn.close().expect("could rm not close db"))
 }
 
+/// Log a detected change in the feed processing.
 pub fn notify_change(typ: &str, id: &String, field: &str, old: &String, new: &String) {
-  println!("Found change in feed:");
-  println!("Item changed: {} {}", typ, id);
-  println!("Field changed: {}", field);
-  println!("Old value: {}", old);
-  println!("New value: {}", new);
+  info!("Found change in feed:");
+  info!("Item changed: {} {}", typ, id);
+  info!("Field changed: {}", field);
+  info!("Old value: {}", old);
+  info!("New value: {}", new);
 }
 
+/// Update the persisted, cached feed with the more recent one.
 pub fn update_feed(conn: &Connection, persisted: &model::Feed, recent: &RustFeed) {
   let title = recent.title.as_ref().unwrap().content.clone();
   let description = recent.description.as_ref().map(|d| d.content.clone());
@@ -141,7 +113,8 @@ pub fn update_feed(conn: &Connection, persisted: &model::Feed, recent: &RustFeed
   }
 }
 
-pub fn update_feed_item(_conn: &Connection, persisted: &model::Entry, recent: &RustEntry) {
+/// Update the entry to a feed.
+pub fn update_feed_item_if_changed(_conn: &Connection, persisted: &model::Entry, recent: &RustEntry) {
   let title = recent.title.as_ref().unwrap().content.clone();
 
   let (content_url, content_type) = match recent.content.as_ref() {
@@ -209,6 +182,7 @@ pub fn update_feed_item(_conn: &Connection, persisted: &model::Entry, recent: &R
   }
 }
 
+/// Look for updates to the existing feed.
 pub fn poll(conn: &Connection, feed: &model::Feed) {
   println!("Polling {}....", feed.url.as_ref());
   let download_result = blocking_download_feed_rs(&feed.url).unwrap();
@@ -217,7 +191,7 @@ pub fn poll(conn: &Connection, feed: &model::Feed) {
 
   for entry in parsed_feed.entries.into_iter().rev() {
     match model::find_entry_by_guid(&conn, feed.id, &entry.id) {
-      Some(persisted) => update_feed_item(conn, &persisted, &entry), /*println!("Already know entry {}, skipping....", persisted.guid)*/
+      Some(persisted) => update_feed_item_if_changed(conn, &persisted, &entry),
       None => {
         println!("Unknown episode {}, adding...", entry.id);
         let title = entry.title.as_ref().unwrap().content.clone();
@@ -244,12 +218,7 @@ pub fn poll(conn: &Connection, feed: &model::Feed) {
           updated: updated.map(|d| d.clone()),
         };
         model::add_entry(&conn, &add_entry);
-        let persisted_entry = model::find_entry_by_guid(&conn, feed.id, &entry.id).unwrap();
-        Notification::new()
-          .summary("New episode")
-          .body(&view::entry_summary(&persisted_entry))
-          .show()
-          .unwrap();
+        let _persisted_entry = model::find_entry_by_guid(&conn, feed.id, &entry.id).unwrap();
       }
     }
   }

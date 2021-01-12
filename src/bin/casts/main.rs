@@ -6,7 +6,6 @@
 extern crate rusqlite;
 
 extern crate anyhow;
-extern crate quick_xml;
 extern crate base64;
 extern crate bytesize;
 extern crate casts;
@@ -16,28 +15,21 @@ extern crate colored;
 extern crate futures;
 extern crate html2text;
 extern crate htmlescape;
+extern crate hyper;
 extern crate magic;
-extern crate notify_rust;
+extern crate quick_xml;
 extern crate regex;
 extern crate reqwest;
 extern crate tempfile;
 extern crate url;
 extern crate uuid;
 extern crate xdg;
-extern crate hyper;
 
 use bytesize::ByteSize;
 use chrono::{Duration, Utc};
 use std::io::{stdout, Write};
-use tokio::runtime::Runtime;
 
-mod app;
-mod cache;
-mod model;
-mod net;
-mod view;
-
-use casts::{blocking_download_feed_rs, parse_feed_rs};
+use casts::{app, blocking_download_feed_rs, cache, model, net, parse_feed_rs, view};
 use clap::{App, Arg, SubCommand};
 use url::Url;
 
@@ -49,7 +41,6 @@ fn main() {
     .subcommand(SubCommand::with_name("dump").arg(Arg::with_name("INPUT").required(true)))
     .subcommand(SubCommand::with_name("poll").arg(Arg::with_name("FEED").required(false)))
     .subcommand(SubCommand::with_name("render").arg(Arg::with_name("FEED").required(false)))
-    .subcommand(SubCommand::with_name("serve"))
     .subcommand(SubCommand::with_name("download"))
     .subcommand(SubCommand::with_name("feeds"))
     .subcommand(SubCommand::with_name("fresh"))
@@ -57,10 +48,6 @@ fn main() {
   if let Some(matches) = matches.subcommand_matches("subscribe") {
     let url = Url::parse(&matches.value_of("INPUT").unwrap()).unwrap();
     app::subscribe(&url).unwrap();
-  } else if let Some(matches) = matches.subcommand_matches("serve") {
-    Runtime::new()
-    .expect("Failed to create Tokio runtime")
-    .block_on(app::serve())
   } else if let Some(matches) = matches.subcommand_matches("render") {
     let conn = model::open();
     match matches.value_of("FEED") {
@@ -68,7 +55,7 @@ fn main() {
         Some(ref feed) => {
           let mut entries = model::slurp_entries(&conn, feed.id);
           app::render(feed, &mut entries)
-        },
+        }
         None => (),
       },
       None => (),

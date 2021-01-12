@@ -5,6 +5,30 @@
 //!
 //! This library is intended to be consumed both from rust and from c.
 
+/// App logic
+pub mod app;
+
+/// Cache logic
+pub mod cache;
+
+/// Persistence definition
+pub mod model;
+
+/// Downloading and streaming
+pub mod net;
+
+/// Rendering data for human consumption
+pub mod view;
+
+/// Actors used to manage state over time.
+pub mod actors;
+
+/// Feed handling & utilities.
+pub mod feeds;
+
+/// Events for the event bus.
+pub mod events;
+
 extern crate anyhow;
 extern crate feed_rs;
 extern crate libc;

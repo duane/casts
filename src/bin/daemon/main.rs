@@ -1,70 +1,51 @@
-extern crate rusqlite;
 extern crate anyhow;
-extern crate quick_xml;
 extern crate base64;
 extern crate bytesize;
 extern crate casts;
 extern crate chrono;
 extern crate clap;
 extern crate colored;
+extern crate env_logger;
 extern crate futures;
 extern crate html2text;
 extern crate htmlescape;
-extern crate magic;
-extern crate notify_rust;
+extern crate hyper;
+extern crate log;
+extern crate quick_xml;
 extern crate regex;
 extern crate reqwest;
+extern crate rusqlite;
 extern crate tempfile;
 extern crate url;
 extern crate uuid;
 extern crate xdg;
-extern crate hyper;
 
-use chrono::{DateTime, Duration, Utc};
-use std::thread::sleep;
+use std::time::Duration;
 
 use actix::prelude::*;
+use casts::actors::feed_poller::FeedPoller;
+use casts::actors::event_bus::{EventBus, Subscribe};
+use casts::actors::event_logger::EventLogger;
 
-#[derive(Message)]
-#[rtype(result = "()")]
-struct PollFeeds();
+
+use tokio::sync::broadcast;
+use std::collections::HashMap;
 
 
-impl Handler<PollFeeds> for Clock {
-    type Result = ();
+fn main() {
+  let system = System::new("casts");
+  env_logger::init();
 
-    fn handle(&mut self, _msg: PollFeeds, _ctx: &mut Context<Self>) -> Self::Result {
-        let ping_duration: Duration = Duration::seconds(1);
+  let event_bus_actor: EventBus = Default::default();
+  let event_bus = event_bus_actor.start();
+  
+  let event_logger = EventLogger{}.start();
+  event_bus.try_send(Subscribe(event_logger.recipient().clone())).unwrap();
 
-        loop {
-            let elapsed = Utc::now().signed_duration_since(self.scheduled_clock_trigger);
-            self.scheduled_clock_trigger = self.scheduled_clock_trigger.checked_add_signed(ping_duration.checked_sub(&elapsed).unwrap()).unwrap();
-            println!("Triggered; next trigger @ {:?}", self.scheduled_clock_trigger);
-            sleep(self.scheduled_clock_trigger.signed_duration_since(Utc::now()).to_std().unwrap());
-        }
-    }
-}
+  FeedPoller {
+    period: Duration::new(60, 0),
+    event_bus
+  }.start();
 
-struct Clock {
-    pub scheduled_clock_trigger: DateTime<Utc>
-}
-
-impl Actor for Clock {
-    type Context = Context<Self>;
-}
-
-#[actix_rt::main] 
-async fn main() {
-    // start new actor
-    let addr = Clock { scheduled_clock_trigger: Utc::now() }.start();
-
-    // send message and get future for result
-    let res = addr.send(PollFeeds()).await;
-    res.unwrap();
-
-    // handle() returns tokio handle
-    //println!("RESULT: {}", res.unwrap() == 20);
-
-    // stop system and exit
-    System::current().stop();
+  system.run().unwrap();
 }

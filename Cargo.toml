@@ -18,7 +18,6 @@ libc = "~0.2.67"
 feed-rs = "~0.4.0"
 url = "2.1.1"
 futures = "*"
-tokio = "*"
 magic = "*"
 regex = "*"
 indicatif = "*"
@@ -30,13 +29,19 @@ colored = "*"
 base64 = "*"
 htmlescape = "*"
 rodio = "*"
-notify-rust = "*"
 cpal = "*"
 clap = "*"
 anyhow = "*"
 hyper = "*"
 actix = "*"
 actix-rt = "1.1"
+env_logger = "*"
+log = "*"
+
+
+[dependencies.tokio]
+version = "~1.0.1"
+features = ["rt", "rt-multi-thread", "sync"]
 
 [dependencies.rusqlite]
 version = "*"

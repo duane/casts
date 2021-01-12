@@ -7,6 +7,7 @@ use std::path::Path;
 use tempfile::NamedTempFile;
 use url::Url;
 
+/// Download the file asynchronously.
 pub async fn stream_to_file(url: &Url, file: &Path) -> reqwest::Result<usize> {
   let mut out_file = NamedTempFile::new().unwrap();
   let response = reqwest::get(&url.to_string()).await?;
@@ -27,6 +28,7 @@ pub async fn stream_to_file(url: &Url, file: &Path) -> reqwest::Result<usize> {
   Ok(total_size)
 }
 
+/// Block until the file is completely downloaded.
 pub fn blocking_stream_to_file(url: &Url, file: &Path) -> usize {
   Runtime::new()
     .expect("Failed to create Tokio runtime")

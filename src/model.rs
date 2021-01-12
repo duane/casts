@@ -1,12 +1,13 @@
 #![deny(missing_docs)]
 
 use chrono::{DateTime, Utc};
+use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
+use quick_xml::Writer;
 use rusqlite::NO_PARAMS;
 use rusqlite::{params, Connection};
 use url::Url;
-use quick_xml::events::{BytesDecl, BytesEnd, BytesStart, BytesText, Event};
-use quick_xml::Writer;
 
+/// Open a new connection to the backing databse.
 pub fn open() -> Connection {
   let xdg_dirs = xdg::BaseDirectories::with_prefix("casts").unwrap();
   let db_path = xdg_dirs
@@ -15,6 +16,7 @@ pub fn open() -> Connection {
   Connection::open(db_path).expect("could not open casts.sqlite")
 }
 
+/// Create the schema.
 pub fn initialize(conn: &Connection) {
   conn
     .execute_batch(
@@ -64,13 +66,20 @@ pub fn initialize(conn: &Connection) {
     .expect("could not intialize sqlite feeds table");
 }
 
+/// AddFeed command
 #[derive(Debug)]
 pub struct AddFeed {
+  /// URL of the feed
   pub url: Url,
+
+  /// Title of the feed.
   pub title: String,
+
+  /// Description of the feed (likely text/html)
   pub description: Option<String>,
 }
 
+/// Execute the AddFeed command.
 pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> i64 {
   let mut statement = conn
     .prepare(
@@ -87,13 +96,20 @@ pub fn add_feed(conn: &Connection, add_feed: &AddFeed) -> i64 {
   conn.last_insert_rowid()
 }
 
+/// UpdateFeedMetadata command.
 #[derive(Debug)]
 pub struct UpdateFeedMetadata {
+  /// ID of the entry to update.
   pub id: i64,
+
+  /// Title of the entry.
   pub title: String,
+
+  /// Optional, likely text/html description of the entry.
   pub description: Option<String>,
 }
 
+/// Execute the UpdateFeedMetadata command.
 pub fn update_feed(conn: &Connection, update_feed_metadata: &UpdateFeedMetadata) -> bool {
   let mut statement = conn
     .prepare("UPDATE feeds SET title = ?, description = ? WHERE id = ?;")
@@ -108,17 +124,29 @@ pub fn update_feed(conn: &Connection, update_feed_metadata: &UpdateFeedMetadata)
     == 1
 }
 
+/// Feed model
 #[derive(Debug)]
 pub struct Feed {
+  /// ID assigned by the database.
   pub id: i64,
+
+  /// URL of the feed
   pub url: Url,
+
+  /// Title fo the feed.
   pub title: String,
+
+  /// Description of the feed.
   pub description: Option<String>,
 }
 
 impl Feed {
   /// Write an atom feed to the given writer representing the feed.
-  pub fn render_to_atom<W: std::io::Write>(&self, writer: W, iter: &mut dyn Iterator<Item = &Entry>) -> anyhow::Result<()> {
+  pub fn render_to_atom<W: std::io::Write>(
+    &self,
+    writer: W,
+    iter: &mut dyn Iterator<Item = &Entry>,
+  ) -> anyhow::Result<()> {
     let mut writer = Writer::new(writer);
 
     let rss_elem_name = b"rss";
@@ -132,20 +160,24 @@ impl Feed {
     writer.write_event(Event::Start(rss_elem))?;
     writer.write_event(Event::Start(BytesStart::owned_name("channel")))?;
     writer.write_event(Event::Start(BytesStart::owned_name("title")))?;
-    writer.write_event(Event::Text(BytesText::from_plain(self.title.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::Text(BytesText::from_plain(
+      self.title.clone().into_bytes().as_slice(),
+    )))?;
     writer.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
-/*
-    writer.write_event(Event::Start(BytesStart::owned_name("link")))?;
-    writer.write_event(Event::Text(BytesText::from_plain(self.url.clone().into_string().into_bytes().as_slice())))?;
-    writer.write_event(Event::End(BytesEnd::borrowed(b"link")))?;
-*/
+    /*
+        writer.write_event(Event::Start(BytesStart::owned_name("link")))?;
+        writer.write_event(Event::Text(BytesText::from_plain(self.url.clone().into_string().into_bytes().as_slice())))?;
+        writer.write_event(Event::End(BytesEnd::borrowed(b"link")))?;
+    */
     match self.description {
       Some(ref desc) => {
         writer.write_event(Event::Start(BytesStart::owned_name("description")))?;
-        writer.write_event(Event::Text(BytesText::from_plain(desc.clone().into_bytes().as_slice())))?;
-        writer.write_event(Event::End(BytesEnd::borrowed(b"description")))?;    
-      },
-      _ => ()
+        writer.write_event(Event::Text(BytesText::from_plain(
+          desc.clone().into_bytes().as_slice(),
+        )))?;
+        writer.write_event(Event::End(BytesEnd::borrowed(b"description")))?;
+      }
+      _ => (),
     };
 
     for entry in iter {
@@ -158,6 +190,7 @@ impl Feed {
   }
 }
 
+/// Retrieve the feed by primary key.
 pub fn get_feed_by_id(conn: &Connection, feed_id: i64) -> Option<Feed> {
   let mut statement = conn
     .prepare(
@@ -177,6 +210,7 @@ pub fn get_feed_by_id(conn: &Connection, feed_id: i64) -> Option<Feed> {
   })
 }
 
+/// Read the feed with the given, exact name into memory.
 pub fn get_feed_by_name(conn: &Connection, title: &str) -> Option<Feed> {
   let mut statement = conn
     .prepare(
@@ -196,6 +230,7 @@ pub fn get_feed_by_name(conn: &Connection, title: &str) -> Option<Feed> {
   })
 }
 
+/// Read all feeds into memory.
 pub fn slurp_feeds(conn: &Connection) -> Vec<Feed> {
   let mut statement = conn
     .prepare(
@@ -220,17 +255,34 @@ pub fn slurp_feeds(conn: &Connection) -> Vec<Feed> {
     .collect()
 }
 
+/// AddEntry command.
 pub struct AddEntry {
+  /// The primary key of the feed.
   pub feed_id: i64,
+
+  /// The guid of the entry.
   pub guid: String,
+
+  /// The title of the entry.
   pub title: String,
+
+  /// The url of the content (likely audio).
   pub content_url: Url,
+
+  /// The content type of the content (unreliable).
   pub content_type: String,
+
+  /// The summary of the content.
   pub summary: Option<String>,
+
+  /// The published date.
   pub published: Option<DateTime<Utc>>,
+
+  /// The last-modified date.
   pub updated: Option<DateTime<Utc>>,
 }
 
+/// Execute the AddEntry command.
 pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
   let mut statement = conn
     .prepare(
@@ -260,17 +312,34 @@ pub fn add_entry(conn: &Connection, add_entry: &AddEntry) -> usize {
     .unwrap()
 }
 
+/// The Feed Entry model.
 #[derive(Debug)]
 pub struct Entry {
+  /// The id of the entry row.
   pub id: i64,
+
+  /// The id of the parent feed row.
   pub feed_id: i64,
+
+  /// The GUID of the entry.
   pub guid: String,
+
+  /// Title of the entry.
   pub title: String,
+
+  /// URL of the content (audio) of the feed entry.
   pub content_url: Url,
+
+  /// Content type of the feed entry (unreliable).
   pub content_type: String,
 
+  /// Summary of the entrie's contents.
   pub summary: Option<String>,
+
+  /// Published date (mostly reliable)
   pub published: Option<DateTime<Utc>>,
+
+  /// Last updated date (must)
   pub updated: Option<DateTime<Utc>>,
 }
 impl Entry {
@@ -278,18 +347,24 @@ impl Entry {
     writer.write_event(Event::Start(BytesStart::owned_name("item")))?;
 
     writer.write_event(Event::Start(BytesStart::owned_name("guid")))?;
-    writer.write_event(Event::Text(BytesText::from_plain(self.guid.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::Text(BytesText::from_plain(
+      self.guid.clone().into_bytes().as_slice(),
+    )))?;
     writer.write_event(Event::End(BytesEnd::borrowed(b"guid")))?;
 
     writer.write_event(Event::Start(BytesStart::owned_name("title")))?;
-    writer.write_event(Event::Text(BytesText::from_plain(self.title.clone().into_bytes().as_slice())))?;
+    writer.write_event(Event::Text(BytesText::from_plain(
+      self.title.clone().into_bytes().as_slice(),
+    )))?;
     writer.write_event(Event::End(BytesEnd::borrowed(b"title")))?;
-  
+
     match self.summary {
       None => (),
       Some(ref summary) => {
         writer.write_event(Event::Start(BytesStart::owned_name("description")))?;
-        writer.write_event(Event::Text(BytesText::from_plain(summary.clone().into_bytes().as_slice())))?;
+        writer.write_event(Event::Text(BytesText::from_plain(
+          summary.clone().into_bytes().as_slice(),
+        )))?;
         writer.write_event(Event::End(BytesEnd::borrowed(b"description")))?;
       }
     }
@@ -298,7 +373,9 @@ impl Entry {
       None => (),
       Some(ref published) => {
         writer.write_event(Event::Start(BytesStart::owned_name("pubDate")))?;
-        writer.write_event(Event::Text(BytesText::from_plain(published.to_rfc3339().clone().into_bytes().as_slice())))?;
+        writer.write_event(Event::Text(BytesText::from_plain(
+          published.to_rfc3339().clone().into_bytes().as_slice(),
+        )))?;
         writer.write_event(Event::End(BytesEnd::borrowed(b"pubDate")))?;
       }
     }
@@ -313,6 +390,7 @@ impl Entry {
   }
 }
 
+/// Read all entires into memory that belong to feed indicated by `feed_id`.
 pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
   let mut statement = conn
     .prepare(
@@ -348,6 +426,7 @@ pub fn slurp_entries(conn: &Connection, feed_id: i64) -> Vec<Entry> {
     .collect()
 }
 
+/// Read an entry into memory by guid.
 pub fn find_entry_by_guid(conn: &Connection, feed_id: i64, guid: &String) -> Option<Entry> {
   let mut statement = conn
     .prepare(
@@ -384,6 +463,7 @@ pub fn find_entry_by_guid(conn: &Connection, feed_id: i64, guid: &String) -> Opt
   row
 }
 
+/// Read all entries published since given date time into memory.
 pub fn slurp_entries_since(conn: &Connection, date: &DateTime<Utc>) -> Vec<Entry> {
   let mut statement = conn
     .prepare(
