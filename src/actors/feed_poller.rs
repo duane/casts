@@ -32,7 +32,7 @@ impl Handler<ClockTrigger> for FeedPoller {
   fn handle(&mut self, _msg: ClockTrigger, _ctx: &mut Context<Self>) -> Self::Result {
     let event_bus_recipient = Box::new(self.event_bus.clone().recipient());
     Box::pin(async move {
-      let mut event_bus = event_bus_recipient;
+      let event_bus = event_bus_recipient;
       let conn = crate::model::open();
       join_all(crate::model::slurp_feeds(&conn).iter().map(|feed| {
         poll(&conn, (*event_bus).clone(), feed).map(|result| {
@@ -112,7 +112,7 @@ pub async fn poll(conn: &Connection, event_bus: Recipient<Commit>, feed: &crate:
           published,
           updated
         };
-        event_bus.try_send(Commit(event)).unwrap();
+        event_bus.send(Commit(event)).await.unwrap().unwrap();
         crate::model::add_entry(&conn, &add_entry);
         let _persisted_entry = crate::model::find_entry_by_guid(&conn, feed.id, &entry.id).unwrap();
       }

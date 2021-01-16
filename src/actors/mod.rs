@@ -6,3 +6,6 @@ pub mod event_bus;
 
 /// Logger for all events.
 pub mod event_logger;
+
+/// Episode downloader
+pub mod episode_downloader;

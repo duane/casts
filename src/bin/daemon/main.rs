@@ -26,11 +26,7 @@ use actix::prelude::*;
 use casts::actors::feed_poller::FeedPoller;
 use casts::actors::event_bus::{EventBus, Subscribe};
 use casts::actors::event_logger::EventLogger;
-
-
-use tokio::sync::broadcast;
-use std::collections::HashMap;
-
+use casts::actors::episode_downloader::EpisodeDownloader;
 
 fn main() {
   let system = System::new("casts");
@@ -41,6 +37,10 @@ fn main() {
   
   let event_logger = EventLogger{}.start();
   event_bus.try_send(Subscribe(event_logger.recipient().clone())).unwrap();
+
+  let episode_downloader: EpisodeDownloader = Default::default();
+  let episode_downloader_addr = episode_downloader.start();
+  event_bus.try_send(Subscribe(episode_downloader_addr.recipient().clone())).unwrap();
 
   FeedPoller {
     period: Duration::new(60, 0),
