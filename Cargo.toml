@@ -15,9 +15,9 @@ name = "daemon"
 [dependencies]
 quick-xml = "*"
 libc = "~0.2.67"
-feed-rs = "~0.4.0"
+feed-rs = { git = "https://github.com/feed-rs/feed-rs/"}
 url = "2.1.1"
-futures = "*"
+futures = "^0.3.8"
 magic = "*"
 regex = "*"
 indicatif = "*"
@@ -47,9 +47,8 @@ features = ["rt", "rt-multi-thread", "sync"]
 version = "*"
 features = ["url", "chrono", "uuid"]
 
-
 [dependencies.reqwest]
-version = "^0.10.4"
+version = "^0.11.0"
 features = ["blocking", "stream"]
 
 [dependencies.chrono]

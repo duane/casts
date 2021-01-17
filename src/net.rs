@@ -1,11 +1,13 @@
 use std::fs::rename;
 use tokio::runtime::Runtime;
 
-use futures::StreamExt;
+use futures::{Future, StreamExt};
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
+use futures::future::Map;
 use url::Url;
+use std::time::Duration;
 
 /// Download the file asynchronously.
 pub async fn stream_to_file(url: &Url, file: &Path) -> reqwest::Result<usize> {
@@ -27,6 +29,17 @@ pub async fn stream_to_file(url: &Url, file: &Path) -> reqwest::Result<usize> {
 
   Ok(total_size)
 }
+/*
+/// Download the file asynchronously.
+pub fn stream_to_file_best(url: url::Url, file: PathBuf) -> Map<(), ()> {
+  let client = Client::builder()
+    .pool_idle_timeout(Duration::from_secs(30))
+    .build_http();
+  let mut request = Request::builder()
+    .uri(url.as_str().parse().unwrap())
+    .header("User-Agent", "my-awesome-agent/1.0");
+  
+}*/
 
 /// Block until the file is completely downloaded.
 pub fn blocking_stream_to_file(url: &Url, file: &Path) -> usize {
