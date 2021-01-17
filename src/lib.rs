@@ -29,6 +29,12 @@ pub mod feeds;
 /// Events for the event bus.
 pub mod events;
 
+/// A useful object for tracking downloads.
+pub mod download_object;
+
+/// Utilities.
+pub mod util;
+
 extern crate anyhow;
 extern crate feed_rs;
 extern crate libc;

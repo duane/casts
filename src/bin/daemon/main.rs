@@ -23,29 +23,37 @@ extern crate xdg;
 use std::time::Duration;
 
 use actix::prelude::*;
-use casts::actors::feed_poller::FeedPoller;
-use casts::actors::event_bus::{EventBus, Subscribe};
+use casts::actors::{event_bus::{EventBus, Subscribe}, feed_poller::FeedPoller};
 use casts::actors::event_logger::EventLogger;
 use casts::actors::episode_downloader::EpisodeDownloader;
 
-fn main() {
-  let system = System::new("casts");
-  env_logger::init();
+async fn whatever(local_tasks: &tokio::task::LocalSet) {
+  let system_fut = actix_rt::System::run_in_tokio("main", local_tasks);
 
-  let event_bus_actor: EventBus = Default::default();
-  let event_bus = event_bus_actor.start();
-  
+  let event_bus: EventBus = Default::default();
+  let event_bus_addr = event_bus.start();
+
   let event_logger = EventLogger{}.start();
-  event_bus.try_send(Subscribe(event_logger.recipient().clone())).unwrap();
+  event_bus_addr.try_send(Subscribe(event_logger.recipient().clone())).unwrap();
 
   let episode_downloader: EpisodeDownloader = Default::default();
   let episode_downloader_addr = episode_downloader.start();
-  event_bus.try_send(Subscribe(episode_downloader_addr.recipient().clone())).unwrap();
+  event_bus_addr.try_send(Subscribe(episode_downloader_addr.recipient().clone())).unwrap();
 
-  FeedPoller {
+  FeedPoller{
     period: Duration::new(60, 0),
-    event_bus
+    event_bus: event_bus_addr
   }.start();
 
-  system.run().unwrap();
+  system_fut.await.unwrap();
+}
+
+fn main() {
+  env_logger::init();
+
+  let mut tok_runtime = tokio::runtime::Runtime::new().unwrap();
+  let local_tasks = tokio::task::LocalSet::new();
+
+
+  local_tasks.block_on(&mut tok_runtime, whatever(&local_tasks))
 }

@@ -33,15 +33,15 @@ cpal = "*"
 clap = "*"
 anyhow = "*"
 hyper = "*"
-actix = "*"
-actix-rt = "1.1"
+actix = { git = "https://github.com/actix/actix" }
+actix-rt = { git = "https://github.com/actix/actix-net" }
 env_logger = "*"
 log = "*"
 
 
 [dependencies.tokio]
 version = "~1.0.1"
-features = ["rt", "rt-multi-thread", "sync"]
+features = ["rt", "rt-multi-thread", "sync", "macros", "time"]
 
 [dependencies.rusqlite]
 version = "*"
