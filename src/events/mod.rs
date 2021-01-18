@@ -19,8 +19,8 @@ pub enum FeedAggregateEvent {
     /// The url where the feed may be found.
     url: String,
     
-    /// A summary of the feed.
-    summary: Option<String>,
+    /// A description of the feed.
+    description: Option<String>,
     
     /// When the feed was updated.
     updated_at: Option<DateTime<Utc>>,
@@ -39,15 +39,15 @@ pub enum FeedAggregateEvent {
 
     /// The unique identifier of the entry.
     guid: String,
-
-    /// The title of the entry.
-    title: String,
     
     /// The url where the entry content may be found.
     url: String,
+
+    /// The title of the entry.
+    title: Option<String>,
     
-    /// A description of the entry.
-    description: Option<String>,
+    /// A summary of the entry.
+    summary: Option<String>,
 
     /// When the feed was updated (according to the feed).
     updated_at: Option<DateTime<Utc>>,
@@ -68,7 +68,7 @@ pub enum FeedAggregateEvent {
     guid: String,
     
     /// The new title of the entry.
-    title: String
+    title: Option<String>
   },
   
   /// An entry's url has been updated.
@@ -86,19 +86,19 @@ pub enum FeedAggregateEvent {
     url: String,
   },
 
-  /// An entry's description has been updated.
-  EntryDescriptionUpdated {
+  /// An entry's summary has been updated.
+  EntrySummaryUpdated {
     /// The id of the aggregate to which this entry applies.
     id: Uuid,
 
-    /// The feed id of the entry whose description has been updated.
+    /// The feed id of the entry whose summary has been updated.
     feed_id: String,
 
-    /// The guid of the entry whose description has been updated
+    /// The guid of the entry whose summary has been updated
     guid: String,
 
-    /// The new description of the entry.
-    description: Option<String>,
+    /// The new summary of the entry.
+    summary: Option<String>,
   },
   
   /// A previously observed entry has disappeared.

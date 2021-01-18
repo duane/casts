@@ -8,6 +8,8 @@
 /// Downloading and streaming
 pub mod net;
 
+/// actors
+pub mod actors;
 
 /// Feed handling & utilities.
 pub mod feeds;
@@ -38,6 +40,10 @@ extern crate feed_rs;
 extern crate libc;
 extern crate quick_xml;
 extern crate reqwest;
+
+extern crate async_trait;
+use log::info;
+
 
 use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
@@ -416,6 +422,7 @@ pub fn blocking_download_feed_rs(url: &Url) -> Result<String, DownloadError> {
 
 /// Parse a string containing a podcast feed.
 pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
+  println!("buffer: {}", buffer);
   let parsed_rust_feed = match parser::parse(buffer.as_bytes()) {
     Ok(rust_feed) => rust_feed,
     Err(error) => return Err(ParseCastsError::ParseFeedError(error)),

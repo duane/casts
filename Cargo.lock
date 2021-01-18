@@ -270,6 +270,7 @@ dependencies = [
  "actix",
  "actix-rt 2.0.0-beta.2 (git+https://github.com/actix/actix-net)",
  "anyhow",
+ "async-trait",
  "base64",
  "bytesize",
  "chrono",
@@ -705,13 +706,14 @@ dependencies = [
 [[package]]
 name = "event_source"
 version = "0.1.0"
-source = "git+ssh://git@git.sr.ht/~duane/event_source#213c4a04bf75060d6964288b16e95afa734ff733"
 dependencies = [
+ "async-trait",
  "bytes",
  "chashmap",
  "chrono",
  "either",
  "pretty_env_logger",
+ "rusqlite",
  "serde",
  "serde_derive",
  "serde_json",
@@ -1312,6 +1314,7 @@ version = "0.20.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "64d31059f22935e6c31830db5249ba2b7ecd54fd73a9909286f0a67aa55c2fbd"
 dependencies = [
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -2266,6 +2269,7 @@ dependencies = [
  "hashlink",
  "libsqlite3-sys",
  "memchr",
+ "serde_json",
  "smallvec 1.6.1",
  "url",
  "uuid",

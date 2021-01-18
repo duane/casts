@@ -3,7 +3,6 @@ use event_source::aggregate::Aggregate;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
-use log::warn;
 
 /// The feed aggregate, representing the total result of events in-memory.
 #[derive(Default, Serialize, Clone, Debug)]
@@ -30,8 +29,8 @@ pub struct Feed {
   /// The url where the feed may be found.
   pub url: String,
 
-  /// The summary of the feed.
-  pub summary: Option<String>,
+  /// The description of the feed.
+  pub description: Option<String>,
   
   /// When the feed was last updated.
   pub updated_at: Option<DateTime<Utc>>,
@@ -49,14 +48,14 @@ pub struct Entry {
   /// The self-identified guid of the feed entry.
   pub guid: String,
 
-  /// The title of the feed entry.
-  pub title: String,
-
   /// The url where the entry content may be found.
   pub url: String,
 
-  /// A description of the entry content.
-  pub description: Option<String>,
+  /// The title of the feed entry.
+  pub title: Option<String>,
+
+  /// A summary of the entry content.
+  pub summary: Option<String>,
 
   /// When the entry was last updated.
   pub updated_at: Option<DateTime<Utc>>,
@@ -91,7 +90,7 @@ impl Aggregate for FeedAggregate {
         ref feed_id,
         ref title,
         ref url,
-        ref summary,
+        ref description,
         ref updated_at,
         ref published_at,
       } => {
@@ -102,7 +101,7 @@ impl Aggregate for FeedAggregate {
               feed_id: feed_id.to_owned(),
               title: title.to_owned(),
               url: url.to_owned(),
-              summary: summary.to_owned(),
+              description: description.to_owned(),
               updated_at: updated_at.to_owned(),
               published_at: published_at.to_owned(),
               entries: Default::default(),
@@ -118,7 +117,7 @@ impl Aggregate for FeedAggregate {
         ref guid,
         ref title,
         ref url,
-        ref description,
+        ref summary,
         ref updated_at,
         ref published_at,
       } => {
@@ -130,7 +129,7 @@ impl Aggregate for FeedAggregate {
               guid: guid.to_owned(),
               title: title.to_owned(),
               url: url.to_owned(),
-              description: description.to_owned(),
+              summary: summary.to_owned(),
               updated_at: updated_at.to_owned(),
               published_at: published_at.to_owned(),
             };
@@ -148,15 +147,15 @@ impl Aggregate for FeedAggregate {
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.title = title.to_owned();
       },
-      &FeedAggregateEvent::EntryDescriptionUpdated {
+      &FeedAggregateEvent::EntrySummaryUpdated {
         ref id,
         ref feed_id,
         ref guid,
-        ref description,
+        ref summary,
       } => {
         let feed = applied.feeds.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
-        entry.description = description.to_owned();
+        entry.summary = summary.to_owned();
       },
       &FeedAggregateEvent::EntryUrlUpdated {
         ref id,
@@ -217,7 +216,7 @@ mod tests {
       feed_id: feed_id.clone(),
       title: String::from("Examplecast"),
       url: String::from("http://example.com/examplecast.xml"),
-      summary: None,
+      description: None,
       updated_at: None,
       published_at: None,
     };

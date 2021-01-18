@@ -31,10 +31,12 @@ actix = { git = "https://github.com/actix/actix" }
 actix-rt = { git = "https://github.com/actix/actix-net" }
 env_logger = "*"
 log = "*"
-event_source = { git = "ssh://git@git.sr.ht/~duane/event_source" }
+event_source = { path = "../event_source", features = ["sqlite"] }
 serde = "*"
 serde_json = "*"
 serde_derive = "*"
+async-trait = "*"
+
 
 [dependencies.tokio]
 version = "~1.0.1"
