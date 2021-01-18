@@ -5,29 +5,19 @@
 //!
 //! This library is intended to be consumed both from rust and from c.
 
-/// App logic
-pub mod app;
-
-/// Cache logic
-pub mod cache;
-
-/// Persistence definition
-pub mod model;
-
 /// Downloading and streaming
 pub mod net;
 
-/// Rendering data for human consumption
-pub mod view;
-
-/// Actors used to manage state over time.
-pub mod actors;
 
 /// Feed handling & utilities.
 pub mod feeds;
 
-/// Events for the event bus.
+/// Event sourcing definitions.
+pub mod aggregate;
+/// events
 pub mod events;
+/// commands
+pub mod commands;
 
 /// A useful object for tracking downloads.
 pub mod download_object;
@@ -36,8 +26,13 @@ pub mod download_object;
 pub mod util;
 
 /// console driver
-pub mod console;
+//pub mod console;
 
+extern crate serde;
+extern crate serde_json;
+#[macro_use]
+extern crate serde_derive;
+extern crate event_source;
 extern crate anyhow;
 extern crate feed_rs;
 extern crate libc;

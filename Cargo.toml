@@ -6,12 +6,6 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[[bin]]
-name = "casts"
-
-[[bin]]
-name = "daemon"
-
 [dependencies]
 quick-xml = "*"
 libc = "~0.2.67"
@@ -37,7 +31,10 @@ actix = { git = "https://github.com/actix/actix" }
 actix-rt = { git = "https://github.com/actix/actix-net" }
 env_logger = "*"
 log = "*"
-
+event_source = { git = "ssh://git@git.sr.ht/~duane/event_source" }
+serde = "*"
+serde_json = "*"
+serde_derive = "*"
 
 [dependencies.tokio]
 version = "~1.0.1"
@@ -58,8 +55,3 @@ features = ["serde"]
 [dependencies.uuid]
 version = "*"
 features = ["serde"]
-
-
-[[bin]]
-name = "validate"
-path = "src/bin/validate.rs"
