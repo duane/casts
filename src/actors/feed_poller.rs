@@ -3,7 +3,7 @@ use std::time::Duration;
 use actix::prelude::*;
 use rusqlite::Connection;
 
-use log::{error, info};
+use log::{error, info, debug};
 use anyhow::Result;
 use futures::future::join_all;
 use futures::FutureExt;
@@ -77,7 +77,7 @@ pub async fn poll(conn: &Connection, event_bus: Recipient<Commit>, feed: &crate:
     match crate::model::find_entry_by_guid(&conn, feed.id, &entry.id) {
       Some(persisted) => crate::app::update_feed_item_if_changed(conn, &persisted, &entry),
       None => {
-        info!("Unknown episode {}, adding...", entry.id);
+        debug!("Unknown episode {}, adding...", entry.id);
         let title = entry.title.as_ref().unwrap().content.clone();
 
         let (content_url, content_type) = match entry.content.as_ref() {

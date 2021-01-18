@@ -31,7 +31,7 @@ impl Handler<BusMessage> for EpisodeDownloader {
             let path = crate::cache::create_cache_location(feed_id.to_string().as_str(), guid.as_str());
             let effective_date = published.unwrap();
             
-            if Utc::now().signed_duration_since(effective_date) > Duration::weeks(1) {
+            if Utc::now().signed_duration_since(effective_date) < Duration::weeks(1) {
               let download_object = FeedEntryDownloadObject{
                 feed_id,
                 guid,

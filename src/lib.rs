@@ -35,6 +35,9 @@ pub mod download_object;
 /// Utilities.
 pub mod util;
 
+/// console driver
+pub mod console;
+
 extern crate anyhow;
 extern crate feed_rs;
 extern crate libc;
