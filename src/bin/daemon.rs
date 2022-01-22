@@ -11,6 +11,7 @@ extern crate serde_json;
 extern crate uuid;
 
 use anyhow::Result;
+use casts::events::FeedAggregateEvent;
 use event_source::commit::Commit;
 use event_source::dispatch::DispatchDelegate;
 use hyper::http::request;
@@ -80,8 +81,42 @@ async fn cron_task() -> Result<()> {
       for feed in &feeds {
         let body = fetch_feed(&feed.url).await?;
         let remote_feed = parse_doc(&feed.url, body.as_slice())?;
-        let diff = feed.diff(&remote_feed);
-        println!("{:?}", diff);
+        for mutation in feed.diff(&remote_feed) {
+          match mutation {
+            FeedMutation::AddedEntry(entry) => {
+              let href = entry.media.unwrap().url.unwrap().to_string();
+              let event = FeedAggregateEvent::EntryObserved{
+                id: uuid::Uuid::new_v4(),
+
+                /// The feed in which the entry was observed.
+                feed_id: feed.url.to_string(),
+
+                /// The unique identifier of the entry.
+                guid: entry.id.to_owned(),
+
+                /// The url where the entry content may be found.
+                url: href,
+
+                /// The title of the entry.
+                title: entry.title,
+
+                /// A summary of the entry.
+                summary: entry.summary,
+
+                /// When the feed was updated (according to the feed).
+                updated_at: None,
+
+                /// When the feed was published (according to the feed).
+                published_at: None,
+              };
+              println!("{:?}", event);
+            }
+            FeedMutation::ReplacedTitle(title) => {}
+            FeedMutation::ReplacedDescription(desc  ) => {}
+            FeedMutation::ReplacedLogo(logo) => {}
+            _ => panic!()
+          }
+        }
       }
     }
   })

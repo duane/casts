@@ -1,10 +1,11 @@
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use url::Url;
+use std::time::Duration;
 
 use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
-  Link as RustLink,
+  Link as RustLink, MediaContent,
 };
 use feed_rs::parser;
 
@@ -99,7 +100,7 @@ pub struct Entry {
   pub summary: Option<String>,
 
   /// The content of the entry.
-  pub content: Option<Content>,
+  pub media: Option<Media>,
 }
 
 impl Entry {
@@ -121,8 +122,8 @@ impl Entry {
       mutations.push(EntryMutation::ReplacedSummary(other.summary.to_owned()));
     }
 
-    if self.content != other.content {
-      mutations.push(EntryMutation::ReplacedContent(other.content.to_owned()));
+    if self.media != other.media {
+      mutations.push(EntryMutation::ReplacedContent(other.media.to_owned()));
     }
 
     mutations
@@ -149,6 +150,22 @@ pub struct Image {
 
   /// A description of the image.
   pub description: Option<String>,
+}
+
+/// An audio blob
+#[derive(Clone, PartialEq, Eq, Debug)]
+pub struct Media {
+  /// the url of the blob
+  pub url: Option<Url>,
+
+  /// the content type of the blob
+  pub content_type: Option<String>,
+  
+  /// the duration of the blob
+  pub duration: Option<Duration>,
+
+  /// the size of the blob
+  pub size: Option<u64>,
 }
 
 #[derive(Clone, PartialEq, Eq, Debug)]
@@ -224,7 +241,7 @@ pub enum EntryMutation {
   ReplacedSummary(Option<String>),
 
   /// Indicates differing content.
-  ReplacedContent(Option<Content>),
+  ReplacedContent(Option<Media>),
 }
 
 // conversion
@@ -248,7 +265,7 @@ impl From<RustEntry> for Entry {
       title: entry.title.map(|text|text.content),
       link: entry.links.first().map(|link| Link::from(link.to_owned())),
       summary: entry.summary.map(|text| text.content),
-      content: entry.content.map(Content::from)
+      media: entry.media.first().map(|m|m.content.first().unwrap().to_owned()).map(Media::from)
     }
   }
 }
@@ -286,6 +303,17 @@ impl From<RustContent> for Content {
       content_type: content.content_type.to_string(),
       length: content.length,
       src: content.src.map(Link::from)
+    }
+  }
+}
+
+impl From<MediaContent> for Media {
+  fn from(content: MediaContent) -> Media {
+    Media {
+      url: content.url,
+      content_type: content.content_type.map(|ct|ct.to_string()),
+      duration: content.duration,
+      size: content.size,
     }
   }
 }
