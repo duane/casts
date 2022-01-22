@@ -189,6 +189,7 @@ pub struct Content {
   pub src: Option<Link>,
 }
 
+#[derive(Debug)]
 /// Feed delta: a struct representing changes to a feed.
 pub enum FeedMutation {
   /// Indicates a differing feed title.
@@ -210,6 +211,7 @@ pub enum FeedMutation {
   ModifiedEntry(Entry, Vec<EntryMutation>),
 }
 
+#[derive(Debug)]
 /// A single change to an entry.
 pub enum EntryMutation {
   /// Indicates a differing entry title.

@@ -79,8 +79,9 @@ async fn cron_task() -> Result<()> {
       interval.tick().await;
       for feed in &feeds {
         let body = fetch_feed(&feed.url).await?;
-        let feed = parse_doc(&feed.url, body.as_slice())?;
-        println!("{:?}", feed);
+        let remote_feed = parse_doc(&feed.url, body.as_slice())?;
+        let diff = feed.diff(&remote_feed);
+        println!("{:?}", diff);
       }
     }
   })
