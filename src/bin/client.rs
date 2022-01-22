@@ -10,6 +10,7 @@ extern crate reqwest;
 extern crate uuid;
 
 use event_source::client::*;
+use event_source::store::Store;
 use event_source::store::sqlite::SqliteStore;
 use casts::{aggregate::FeedAggregate, commands::FeedAggregateCommand};
 use std::env;
@@ -58,11 +59,11 @@ async fn main() {
 
   let dispatcher = InMemoryDispatcher::new();
 
-  let sqlite_store =
+  let mut sqlite_store =
     SqliteStore::with_new_connection_at_path(Path::new(&String::from("./event_store.sqlite")));
   sqlite_store.initialize();
   let mut client = ClientBuilder::default()
-    .with_store(sqlite_store)
+    .with_store(Box::new(sqlite_store))
     .with_dispatch_delegate(dispatcher)
     .finish()
     .unwrap();
@@ -89,7 +90,7 @@ async fn main() {
           let result = futures::executor::block_on(
             client.issue_command_async(&aggregate, &command.clone(), &command)
           ).unwrap();
-          println!("{:#?}", result.deserialize());
+          println!("{:#?}", result);
         }
       },
     }

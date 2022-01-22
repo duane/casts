@@ -26,7 +26,7 @@ pub enum FeedAggregateCommand {
 }
 
 /// The error associated with running commands against a feed aggregate.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum FeedAggregateError {
   /// A feed with this id already exists associated with the aggregate.
   DuplicateFeedError,
@@ -59,6 +59,16 @@ impl Display for FeedAggregateError {
 impl Command for FeedAggregateCommand {
   type Aggregate = FeedAggregate;
   type Error = FeedAggregateError;
+
+  fn id(&self) -> &Uuid {
+    match self {
+      &FeedAggregateCommand::AddFeed{
+        id: ref inner_id,
+        feed_id: _,
+        url: _,
+      } => inner_id
+    }
+  }
 
   fn apply(
     &self,

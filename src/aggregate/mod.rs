@@ -1,5 +1,6 @@
 use super::events::FeedAggregateEvent;
 use event_source::aggregate::Aggregate;
+use event_source::client::applicable::EventApplicable;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 use std::collections::HashMap;
@@ -72,8 +73,6 @@ impl FeedAggregate {
 }
 
 impl Aggregate for FeedAggregate {
-  type Event = FeedAggregateEvent;
-
   fn with_id(uuid: Uuid) -> FeedAggregate {
     FeedAggregate {
       id: uuid,
@@ -81,6 +80,18 @@ impl Aggregate for FeedAggregate {
       feeds: HashMap::new(),
     }
   }
+
+  fn version(&self) -> i64 {
+    self.version
+  }
+
+  fn id(&self) -> Uuid {
+    self.id
+  }
+}
+
+impl EventApplicable for FeedAggregate {
+  type Event = FeedAggregateEvent;
 
   fn apply(&self, event: &FeedAggregateEvent) -> FeedAggregate {
     let mut applied = self.clone();
@@ -177,14 +188,6 @@ impl Aggregate for FeedAggregate {
     }
     applied.version += 1;
     applied
-  }
-
-  fn version(&self) -> i64 {
-    self.version
-  }
-
-  fn id(&self) -> Uuid {
-    self.id
   }
 }
 

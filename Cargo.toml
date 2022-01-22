@@ -8,9 +8,9 @@ edition = "2018"
 
 [dependencies]
 quick-xml = "*"
-libc = "~0.2.67"
+libc = "*"
 feed-rs = { git = "https://github.com/feed-rs/feed-rs/"}
-url = "2.1.1"
+url = "*"
 futures = "^0.3.8"
 magic = "*"
 regex = "*"
@@ -39,7 +39,7 @@ async-trait = "*"
 
 
 [dependencies.tokio]
-version = "~1.0.1"
+version = "*"
 features = ["rt", "rt-multi-thread", "sync", "macros", "time"]
 
 [dependencies.rusqlite]
@@ -47,7 +47,7 @@ version = "*"
 features = ["url", "chrono", "uuid"]
 
 [dependencies.reqwest]
-version = "^0.11.0"
+version = "*"
 features = ["blocking", "stream"]
 
 [dependencies.chrono]
