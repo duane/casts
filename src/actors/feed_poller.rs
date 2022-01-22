@@ -7,8 +7,8 @@ use actix::prelude::*;
 // use anyhow::Result;
 // use futures::future::join_all;
 // use futures::FutureExt;
-use tokio::sync::broadcast::Receiver;
 use event_source::commit::Commit;
+use tokio::sync::broadcast::Receiver;
 // use uuid::Uuid;
 use log::warn;
 
@@ -29,7 +29,7 @@ pub struct FeedPoller {
   pub period: Duration,
 
   /// The incoming events
-  receiver: Receiver<Commit>
+  receiver: Receiver<Commit>,
 }
 
 impl Handler<ClockTrigger> for FeedPoller {
@@ -42,8 +42,6 @@ impl Handler<ClockTrigger> for FeedPoller {
     })
   }
 }
-
-
 
 impl Actor for FeedPoller {
   type Context = Context<Self>;

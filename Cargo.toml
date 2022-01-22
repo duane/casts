@@ -11,7 +11,6 @@ quick-xml = "*"
 libc = "*"
 feed-rs = { git = "https://github.com/feed-rs/feed-rs/"}
 url = "*"
-futures = "^0.3.8"
 magic = "*"
 regex = "*"
 indicatif = "*"
@@ -37,6 +36,9 @@ serde_json = "*"
 serde_derive = "*"
 async-trait = "*"
 
+
+[dependencies.futures]
+version = "0.3"
 
 [dependencies.tokio]
 version = "*"

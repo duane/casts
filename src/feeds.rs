@@ -1,4 +1,4 @@
-use feed_rs::model::{Link as RustLink};
+use feed_rs::model::Link as RustLink;
 use url::Url;
 
 /// Convert an RSS/Atom link to a URL.

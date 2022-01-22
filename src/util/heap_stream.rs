@@ -1,10 +1,10 @@
-use futures::Stream;
 use futures::task::Context;
 use futures::task::Poll;
-use std::{collections::BinaryHeap, task::Waker};
+use futures::Stream;
+use log::debug;
 use std::pin::Pin;
 use std::sync::{Arc, Mutex};
-use log::debug;
+use std::{collections::BinaryHeap, task::Waker};
 
 /// A structure to provide a heap-backed stream.
 #[derive(Debug)]
@@ -14,16 +14,16 @@ pub struct HeapStream<T: Ord> {
 
 impl<T: Ord> Clone for HeapStream<T> {
   fn clone(&self) -> Self {
-    HeapStream{
-      state: self.state.clone()
+    HeapStream {
+      state: self.state.clone(),
     }
   }
 }
 
 impl<T: Ord> Default for HeapStream<T> {
   fn default() -> Self {
-    HeapStream{
-      state: Arc::new(Mutex::new(Default::default()))
+    HeapStream {
+      state: Arc::new(Mutex::new(Default::default())),
     }
   }
 }
@@ -35,12 +35,12 @@ struct HeapStreamState<T: Ord> {
   heap: BinaryHeap<T>,
 
   /// The waker used to communicate the heap has been updated.
-  waker: Option<Waker>
+  waker: Option<Waker>,
 }
 
 impl<T: Ord> Default for HeapStreamState<T> {
   fn default() -> Self {
-    HeapStreamState{
+    HeapStreamState {
       heap: BinaryHeap::new(),
       waker: None,
     }
@@ -56,7 +56,7 @@ impl<T: Ord> Stream for HeapStream<T> {
       Some(obj) => {
         debug!("ready");
         Poll::Ready(Some(obj))
-      },
+      }
       None => {
         debug!("pending");
         state.waker = Some(cx.waker().clone());

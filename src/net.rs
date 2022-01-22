@@ -58,7 +58,7 @@ pub fn stream_to_file_best(url: url::Url, file: PathBuf) -> Map<(), ()> {
   let mut request = Request::builder()
     .uri(url.as_str().parse().unwrap())
     .header("User-Agent", "my-awesome-agent/1.0");
-  
+
 }*/
 
 /// Block until the file is completely downloaded.

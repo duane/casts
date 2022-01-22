@@ -1,9 +1,9 @@
 use super::events::FeedAggregateEvent;
+use chrono::{DateTime, Utc};
 use event_source::aggregate::Aggregate;
 use event_source::client::applicable::EventApplicable;
-use uuid::Uuid;
-use chrono::{DateTime, Utc};
 use std::collections::HashMap;
+use uuid::Uuid;
 
 /// The feed aggregate, representing the total result of events in-memory.
 #[derive(Default, Serialize, Clone, Debug)]
@@ -32,7 +32,7 @@ pub struct Feed {
 
   /// The description of the feed.
   pub description: Option<String>,
-  
+
   /// When the feed was last updated.
   pub updated_at: Option<DateTime<Utc>>,
 
@@ -118,10 +118,9 @@ impl EventApplicable for FeedAggregate {
               entries: Default::default(),
             };
             applied.feeds.insert(feed_id.to_owned(), new_feed);
-          },
+          }
         };
-        
-      },
+      }
       &FeedAggregateEvent::EntryObserved {
         id: _,
         ref feed_id,
@@ -136,7 +135,7 @@ impl EventApplicable for FeedAggregate {
         match feed.entries.get(guid) {
           Some(_) => unreachable!(),
           None => {
-            let entry = Entry{
+            let entry = Entry {
               guid: guid.to_owned(),
               title: title.to_owned(),
               url: url.to_owned(),
@@ -147,17 +146,17 @@ impl EventApplicable for FeedAggregate {
             feed.entries.insert(guid.to_owned(), entry);
           }
         }
-      },
+      }
       &FeedAggregateEvent::EntryTitleUpdated {
         id: _,
         ref feed_id,
         ref guid,
-        ref title
+        ref title,
       } => {
         let feed = applied.feeds.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.title = title.to_owned();
-      },
+      }
       &FeedAggregateEvent::EntrySummaryUpdated {
         id: _,
         ref feed_id,
@@ -167,7 +166,7 @@ impl EventApplicable for FeedAggregate {
         let feed = applied.feeds.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.summary = summary.to_owned();
-      },
+      }
       &FeedAggregateEvent::EntryUrlUpdated {
         id: _,
         ref feed_id,
@@ -177,14 +176,14 @@ impl EventApplicable for FeedAggregate {
         let feed = applied.feeds.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.url = url.to_owned();
-      },
+      }
       &FeedAggregateEvent::EntryDisappeared {
         id: _,
         ref feed_id,
         ref guid,
       } => {
         applied.feeds.get_mut(feed_id).unwrap().entries.remove(guid);
-      },
+      }
     }
     applied.version += 1;
     applied
@@ -214,7 +213,7 @@ mod tests {
   fn adds_item() {
     let aggregate = FeedAggregate::new();
     let feed_id = Uuid::new_v4().to_string();
-    let event = FeedAggregateEvent::Added{
+    let event = FeedAggregateEvent::Added {
       id: aggregate.id,
       feed_id: feed_id.clone(),
       title: String::from("Examplecast"),
@@ -226,6 +225,9 @@ mod tests {
     let aggregate_after_application = aggregate.apply(&event);
     assert_eq!(aggregate_after_application.feeds.len(), 1);
     assert_eq!(aggregate_after_application.version(), 1);
-    assert_eq!(aggregate_after_application.feeds[feed_id.as_str()].title, String::from("Examplecast"));
+    assert_eq!(
+      aggregate_after_application.feeds[feed_id.as_str()].title,
+      String::from("Examplecast")
+    );
   }
 }

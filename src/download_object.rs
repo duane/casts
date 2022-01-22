@@ -1,12 +1,12 @@
-use url::Url;
+use crate::util::download_queue::DownloadTraitObject;
 use chrono::{DateTime, Utc};
 use std::cmp::Ordering;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use crate::util::download_queue::DownloadTraitObject;
+use url::Url;
 
 /// The actual state useful to describe an episode download.
-#[derive(Debug,Eq,Clone)]
+#[derive(Debug, Eq, Clone)]
 pub struct FeedEntryDownloadObject {
   /// The id of the feed to which this episode belongs. Used to identify the download in callbacks later.
   pub feed_id: i64,
@@ -26,7 +26,7 @@ pub struct FeedEntryDownloadObject {
 
 impl PartialEq for FeedEntryDownloadObject {
   fn eq(&self, other: &Self) -> bool {
-      self.feed_id == other.feed_id && self.guid == other.guid
+    self.feed_id == other.feed_id && self.guid == other.guid
   }
 }
 

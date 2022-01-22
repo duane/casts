@@ -1,0 +1,100 @@
+extern crate anyhow;
+extern crate event_source;
+extern crate feed_rs;
+extern crate futures;
+extern crate libc;
+extern crate quick_xml;
+extern crate reqwest;
+extern crate serde;
+extern crate serde_derive;
+extern crate serde_json;
+extern crate uuid;
+
+use anyhow::Result;
+use event_source::commit::Commit;
+use event_source::dispatch::DispatchDelegate;
+use hyper::http::request;
+use tokio::sync::broadcast::{channel, Receiver, Sender};
+// use tokio::task;
+// use std::error::Error;
+
+use futures::channel::oneshot;
+
+use std::thread;
+use std::time::{Duration, Instant};
+use tokio::task;
+use tokio::time::interval;
+
+use casts::model::*;
+
+use url::Url;
+
+struct InMemoryDispatcher {
+  sender: Sender<Commit>,
+}
+
+impl InMemoryDispatcher {
+  fn new() -> Self {
+    let (sender, _receiver) = channel(16);
+    InMemoryDispatcher { sender }
+  }
+
+  fn subscribe(&self) -> Receiver<Commit> {
+    self.sender.subscribe()
+  }
+}
+
+impl DispatchDelegate for InMemoryDispatcher {
+  fn dispatch(&mut self, commit: &Commit) -> Result<(), String> {
+    match self.sender.send(commit.to_owned()) {
+      Ok(_) => Ok(()),
+      Err(err) => Err(err.to_string()),
+    }
+  }
+}
+
+async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
+  let response = reqwest::get(url.as_str()).await?;
+  let body = response.text().await?;
+  Ok(body.as_bytes().into())
+}
+
+// async fn poll_feed(url: &Url, existing_feed: &Feed) -> Result<Feed> {
+// let contemporary_feed = fetch_feed(url).await?;
+// let diff = contemporary_feed.diff(existing_feed);
+// }
+
+// The task to kick off feed polling.
+async fn cron_task() -> Result<()> {
+  task::spawn(async {
+    let mut interval = interval(Duration::from_secs(2000));
+    let feeds = vec!["https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml".to_string()];
+    loop {
+      interval.tick().await;
+      for feed in &feeds {
+        let url = Url::parse(feed)?;
+        let body = fetch_feed(&url).await?;
+        let feed = parse_doc(body.as_slice())?;
+        println!("{:?}", feed);
+      }
+    }
+  })
+  .await?
+}
+
+/*
+  let's do some talking here
+
+  discrete processes that need to communicate:
+  1. cron: continually loops through subscribed feeds and polls them for new events. If there are new events, this process commits them as well.
+  2. Mirror: re-serve the feed from the process on given host, port, etc.
+  3. input poller: waits for commands and executes them, delivering some result, continually. Not necessary if commands are given outside lifetime of process.
+
+  1 must influence 2.
+  3 must influence 1.
+*/
+
+#[tokio::main]
+async fn main() -> Result<()> {
+  cron_task().await
+}

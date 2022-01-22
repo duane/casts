@@ -16,26 +16,28 @@ pub mod feeds;
 
 /// Event sourcing definitions.
 pub mod aggregate;
-/// events
-pub mod events;
 /// commands
 pub mod commands;
+/// events
+pub mod events;
 
 /// A useful object for tracking downloads.
 pub mod download_object;
+
+/// The domain model for working with feeds.
+pub mod model;
 
 /// Utilities.
 pub mod util;
 
 /// console driver
 //pub mod console;
-
 extern crate serde;
 extern crate serde_json;
 #[macro_use]
 extern crate serde_derive;
-extern crate event_source;
 extern crate anyhow;
+extern crate event_source;
 extern crate feed_rs;
 extern crate libc;
 extern crate quick_xml;
@@ -43,7 +45,6 @@ extern crate reqwest;
 
 extern crate async_trait;
 // use log::info;
-
 
 use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,

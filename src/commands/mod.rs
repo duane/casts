@@ -2,11 +2,11 @@
 
 use super::aggregate::FeedAggregate;
 use super::events::FeedAggregateEvent;
+use async_trait::async_trait;
 use event_source::command::Command;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use uuid::Uuid;
-use async_trait::async_trait;
 // use log::info;
 
 /// The commands available for the aggregate.
@@ -22,7 +22,7 @@ pub enum FeedAggregateCommand {
 
     /// The url where the feed is located.
     url: String,
-  }
+  },
 }
 
 /// The error associated with running commands against a feed aggregate.
@@ -33,7 +33,6 @@ pub enum FeedAggregateError {
 
   /// The feed is not well-formed.
   BadFeedError,
-
 }
 
 impl Error for FeedAggregateError {
@@ -62,11 +61,11 @@ impl Command for FeedAggregateCommand {
 
   fn id(&self) -> &Uuid {
     match self {
-      &FeedAggregateCommand::AddFeed{
+      &FeedAggregateCommand::AddFeed {
         id: ref inner_id,
         feed_id: _,
         url: _,
-      } => inner_id
+      } => inner_id,
     }
   }
 
@@ -75,12 +74,14 @@ impl Command for FeedAggregateCommand {
     aggregate: &FeedAggregate,
   ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
     match self {
-      &FeedAggregateCommand::AddFeed { id: _, ref feed_id, url: _} => {
-        match aggregate.feeds.get(feed_id) {
-          Some(_feed_id) => Err(FeedAggregateError::DuplicateFeedError),
-          _ => Ok(vec![]),
-        }
-      }
+      &FeedAggregateCommand::AddFeed {
+        id: _,
+        ref feed_id,
+        url: _,
+      } => match aggregate.feeds.get(feed_id) {
+        Some(_feed_id) => Err(FeedAggregateError::DuplicateFeedError),
+        _ => Ok(vec![]),
+      },
     }
   }
 
@@ -89,7 +90,11 @@ impl Command for FeedAggregateCommand {
     aggregate: &FeedAggregate,
   ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
     match self {
-      &FeedAggregateCommand::AddFeed { ref id, ref feed_id, ref url} => {
+      &FeedAggregateCommand::AddFeed {
+        ref id,
+        ref feed_id,
+        ref url,
+      } => {
         if let Some(_) = aggregate.feeds.get(feed_id) {
           return Err(FeedAggregateError::DuplicateFeedError);
         }
@@ -99,31 +104,25 @@ impl Command for FeedAggregateCommand {
         if parsed_feed.title.is_none() {
           return Err(FeedAggregateError::BadFeedError);
         }
-        let mut events = vec![
-          FeedAggregateEvent::Added{
-            id: id.to_owned(),
-            feed_id: feed_id.to_owned(),
-            url: url.to_owned(),
-            title: parsed_feed.title.unwrap().content,
-            description: parsed_feed.description.map(|t|t.content),
-            updated_at: parsed_feed.updated,
-            published_at: parsed_feed.published
-          }
-        ];
+        let mut events = vec![FeedAggregateEvent::Added {
+          id: id.to_owned(),
+          feed_id: feed_id.to_owned(),
+          url: url.to_owned(),
+          title: parsed_feed.title.unwrap().content,
+          description: parsed_feed.description.map(|t| t.content),
+          updated_at: parsed_feed.updated,
+          published_at: parsed_feed.published,
+        }];
         for entry in parsed_feed.entries.iter() {
           let url = match entry.content {
-            Some(ref content) => {
-              match content.src {
-                Some(ref href) => {
-                  href.href.clone()
-                },
-                None => continue,
-              }
+            Some(ref content) => match content.src {
+              Some(ref href) => href.href.clone(),
+              None => continue,
             },
             None => continue, // any entry without a url doesn't make sense in a podcast context.
           };
-          let title = entry.title.clone().map(|t|t.content);
-          let summary = entry.summary.clone().map(|t|t.content);
+          let title = entry.title.clone().map(|t| t.content);
+          let summary = entry.summary.clone().map(|t| t.content);
           events.push(FeedAggregateEvent::EntryObserved {
             id: id.to_owned(),
             feed_id: feed_id.to_owned(),
