@@ -1,4 +1,4 @@
-use crate::aggregate::Feed;
+// use crate::aggregate::Feed;
 
 use super::aggregate::FeedAggregate;
 use super::events::FeedAggregateEvent;
@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use uuid::Uuid;
 use async_trait::async_trait;
-use log::info;
+// use log::info;
 
 /// The commands available for the aggregate.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -75,9 +75,9 @@ impl Command for FeedAggregateCommand {
     aggregate: &FeedAggregate,
   ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
     match self {
-      &FeedAggregateCommand::AddFeed { ref id, ref feed_id, ref url} => {
+      &FeedAggregateCommand::AddFeed { id: _, ref feed_id, url: _} => {
         match aggregate.feeds.get(feed_id) {
-          Some(feed_id) => Err(FeedAggregateError::DuplicateFeedError),
+          Some(_feed_id) => Err(FeedAggregateError::DuplicateFeedError),
           _ => Ok(vec![]),
         }
       }

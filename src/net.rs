@@ -1,13 +1,11 @@
 use std::fs::rename;
 use tokio::runtime::Runtime;
 
-use futures::{Future, StreamExt};
+use futures::StreamExt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use tempfile::NamedTempFile;
-use futures::future::Map;
 use url::Url;
-use std::time::Duration;
 
 /// Download the file asynchronously.
 pub async fn stream_to_file(url: &Url, file: &Path) -> reqwest::Result<usize> {

@@ -1,15 +1,15 @@
 use std::time::Duration;
 
 use actix::prelude::*;
-use rusqlite::Connection;
+// use rusqlite::Connection;
 
-use log::{error, info, debug};
-use anyhow::Result;
-use futures::future::join_all;
-use futures::FutureExt;
+// use log::{error, info, debug};
+// use anyhow::Result;
+// use futures::future::join_all;
+// use futures::FutureExt;
 use tokio::sync::broadcast::Receiver;
 use event_source::commit::Commit;
-use uuid::Uuid;
+// use uuid::Uuid;
 use log::warn;
 
 /// This message is used to trigger scheduled polling intervals.
@@ -17,9 +17,9 @@ use log::warn;
 #[rtype(result = "anyhow::Result<()>")]
 struct ClockTrigger();
 
-struct FeedPollingAggregate {
-  feeds: Vec<(Uuid, String)>
-}
+// struct FeedPollingAggregate {
+//   feeds: Vec<(Uuid, String)>
+// }
 
 /// The FeedPoller actor.
 ///

@@ -42,7 +42,7 @@ extern crate quick_xml;
 extern crate reqwest;
 
 extern crate async_trait;
-use log::info;
+// use log::info;
 
 
 use feed_rs::model::{
@@ -387,7 +387,7 @@ impl std::convert::From<reqwest::Error> for DownloadError {
     } else if err.is_timeout() {
       return DownloadError::TimeoutError;
     } else {
-      panic!(format!("{}", err));
+      panic!("{}", err);
     }
   }
 }

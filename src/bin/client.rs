@@ -21,8 +21,8 @@ use event_source::dispatch::DispatchDelegate;
 
 use std::io::{stdin, stdout, Write};
 use tokio::sync::broadcast::{Sender, Receiver, channel};
-use tokio::task;
-use std::error::Error;
+// use tokio::task;
+// use std::error::Error;
 
 struct InMemoryDispatcher {
   sender: Sender<Commit>
@@ -61,7 +61,7 @@ async fn main() {
 
   let mut sqlite_store =
     SqliteStore::with_new_connection_at_path(Path::new(&String::from("./event_store.sqlite")));
-  sqlite_store.initialize();
+  sqlite_store.initialize().unwrap();
   let mut client = ClientBuilder::default()
     .with_store(Box::new(sqlite_store))
     .with_dispatch_delegate(dispatcher)
@@ -78,7 +78,7 @@ async fn main() {
 
     match stdin.read_line(&mut buf) {
       Ok(0) => break,
-      Err(err) => panic!(err),
+      Err(err) => panic!("{}", err),
       _ => {
         if buf.starts_with("subscribe ") {
           let uri = buf.strip_prefix("subscribe ").unwrap().trim();

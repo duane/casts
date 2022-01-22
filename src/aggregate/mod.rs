@@ -97,7 +97,7 @@ impl EventApplicable for FeedAggregate {
     let mut applied = self.clone();
     match event {
       &FeedAggregateEvent::Added {
-        ref id,
+        id: _,
         ref feed_id,
         ref title,
         ref url,
@@ -149,7 +149,7 @@ impl EventApplicable for FeedAggregate {
         }
       },
       &FeedAggregateEvent::EntryTitleUpdated {
-        ref id,
+        id: _,
         ref feed_id,
         ref guid,
         ref title
@@ -159,7 +159,7 @@ impl EventApplicable for FeedAggregate {
         entry.title = title.to_owned();
       },
       &FeedAggregateEvent::EntrySummaryUpdated {
-        ref id,
+        id: _,
         ref feed_id,
         ref guid,
         ref summary,
@@ -169,7 +169,7 @@ impl EventApplicable for FeedAggregate {
         entry.summary = summary.to_owned();
       },
       &FeedAggregateEvent::EntryUrlUpdated {
-        ref id,
+        id: _,
         ref feed_id,
         ref guid,
         ref url,
@@ -179,7 +179,7 @@ impl EventApplicable for FeedAggregate {
         entry.url = url.to_owned();
       },
       &FeedAggregateEvent::EntryDisappeared {
-        ref id,
+        id: _,
         ref feed_id,
         ref guid,
       } => {
