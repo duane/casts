@@ -12,47 +12,13 @@ extern crate uuid;
 
 use anyhow::Result;
 use casts::events::FeedAggregateEvent;
-use event_source::commit::Commit;
-use event_source::dispatch::DispatchDelegate;
-use hyper::http::request;
-use tokio::sync::broadcast::{channel, Receiver, Sender};
-// use tokio::task;
-// use std::error::Error;
-
-use futures::channel::oneshot;
-
-use std::thread;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tokio::task;
 use tokio::time::interval;
 
 use casts::model::*;
 
 use url::Url;
-
-struct InMemoryDispatcher {
-  sender: Sender<Commit>,
-}
-
-impl InMemoryDispatcher {
-  fn new() -> Self {
-    let (sender, _receiver) = channel(16);
-    InMemoryDispatcher { sender }
-  }
-
-  fn subscribe(&self) -> Receiver<Commit> {
-    self.sender.subscribe()
-  }
-}
-
-impl DispatchDelegate for InMemoryDispatcher {
-  fn dispatch(&mut self, commit: &Commit) -> Result<(), String> {
-    match self.sender.send(commit.to_owned()) {
-      Ok(_) => Ok(()),
-      Err(err) => Err(err.to_string()),
-    }
-  }
-}
 
 async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
   let response = reqwest::get(url.as_str()).await?;
@@ -111,9 +77,9 @@ async fn cron_task() -> Result<()> {
               };
               println!("{:?}", event);
             }
-            FeedMutation::ReplacedTitle(title) => {}
-            FeedMutation::ReplacedDescription(desc  ) => {}
-            FeedMutation::ReplacedLogo(logo) => {}
+            FeedMutation::ReplacedTitle(_) => {}
+            FeedMutation::ReplacedDescription(_) => {}
+            FeedMutation::ReplacedLogo(_) => {}
             _ => panic!()
           }
         }
