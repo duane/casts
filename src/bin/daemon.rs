@@ -68,13 +68,18 @@ async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
 async fn cron_task() -> Result<()> {
   task::spawn(async {
     let mut interval = interval(Duration::from_secs(2000));
-    let feeds = vec!["https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml".to_string()];
+    let feeds = vec![Feed{
+      url: Url::parse("https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml")?,
+      title: Default::default(),
+      description: Default::default(),
+      logo: Default::default(),
+      entries: Default::default(),
+    }];
     loop {
       interval.tick().await;
       for feed in &feeds {
-        let url = Url::parse(feed)?;
-        let body = fetch_feed(&url).await?;
-        let feed = parse_doc(body.as_slice())?;
+        let body = fetch_feed(&feed.url).await?;
+        let feed = parse_doc(&feed.url, body.as_slice())?;
         println!("{:?}", feed);
       }
     }

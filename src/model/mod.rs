@@ -1,5 +1,6 @@
 use anyhow::Result;
 use std::collections::{HashMap, HashSet};
+use url::Url;
 
 use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
@@ -12,6 +13,9 @@ use feed_rs::parser;
 #[derive(Clone, Debug)]
 /// A feed according to feeds-rs.
 pub struct Feed {
+  /// The definitive url of the feed
+  pub url: Url,
+
   /// A title for the feed (optional).
   pub title: String,
 
@@ -88,14 +92,14 @@ pub struct Entry {
   /// a GUID assigned by feeds-rs if not specified by the feed.
   pub id: String,
   /// The title of the entry.
-  pub title: String,
+  pub title: Option<String>,
   /// The link of the entry.
-  pub link: Link,
+  pub link: Option<Link>,
   /// The summary of the entry (as text/html).
-  pub summary: String,
+  pub summary: Option<String>,
 
   /// The content of the entry.
-  pub content: Content,
+  pub content: Option<Content>,
 }
 
 impl Entry {
@@ -173,16 +177,16 @@ pub struct Link {
 /// A description of how to interpret the content of the entry.
 pub struct Content {
   /// The body of the content.
-  pub body: String,
+  pub body: Option<String>,
 
   /// The content type of the content.
   pub content_type: String,
 
   /// The length of the content in bytes.
-  pub length: u32,
+  pub length: Option<u64>,
 
   /// A link where the content may be found.
-  pub src: Link,
+  pub src: Option<Link>,
 }
 
 /// Feed delta: a struct representing changes to a feed.
@@ -209,27 +213,40 @@ pub enum FeedMutation {
 /// A single change to an entry.
 pub enum EntryMutation {
   /// Indicates a differing entry title.
-  ReplacedTitle(String),
+  ReplacedTitle(Option<String>),
 
   /// Indicates a differing entry link.
-  ReplacedLink(Link),
+  ReplacedLink(Option<Link>),
 
   /// Indicates a differing summary.
-  ReplacedSummary(String),
+  ReplacedSummary(Option<String>),
 
   /// Indicates differing content.
-  ReplacedContent(Content),
+  ReplacedContent(Option<Content>),
 }
 
 // conversion
 
-impl From<RustFeed> for Feed {
-  fn from(feed: RustFeed) -> Feed {
+impl Feed {
+  fn from_url_and_feed(url: Url, feed: RustFeed) -> Feed {
     Feed {
+      url: url,
       title: feed.title.map(|text| text.content).unwrap_or_default(),
       description: feed.description.map(|d| d.content),
       logo: feed.logo.map(Image::from),
-      entries: vec![],
+      entries: feed.entries.into_iter().map(Entry::from).collect(),
+    }
+  }
+}
+
+impl From<RustEntry> for Entry {
+  fn from(entry: RustEntry) -> Entry {
+    Entry{
+      id: entry.id,
+      title: entry.title.map(|text|text.content),
+      link: entry.links.first().map(|link| Link::from(link.to_owned())),
+      summary: entry.summary.map(|text| text.content),
+      content: entry.content.map(Content::from)
     }
   }
 }
@@ -260,7 +277,18 @@ impl From<RustLink> for Link {
   }
 }
 
+impl From<RustContent> for Content {
+  fn from(content: RustContent) -> Content {
+    Content {
+      body: content.body,
+      content_type: content.content_type.to_string(),
+      length: content.length,
+      src: content.src.map(Link::from)
+    }
+  }
+}
+
 /// Parse the document from a vector of bytes.
-pub fn parse_doc(doc: &[u8]) -> Result<Feed> {
-  Ok(parser::parse(doc)?.into())
+pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
+  Ok(Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?.into()))
 }
