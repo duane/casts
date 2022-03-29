@@ -7,34 +7,72 @@ edition = "2018"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-quick-xml = "*"
-libc = "*"
-feed-rs = { git = "https://github.com/feed-rs/feed-rs/"}
-url = "*"
+## file type detection
 magic = "*"
-regex = "*"
+
+## progress indicator for cli
 indicatif = "*"
+
+## tempfile management for downloads
 tempfile = "*"
+
+## human readable size information
 bytesize = "*"
+
+## basic html -> text rendering for cli
 html2text = "*"
-xdg = "*"
-colored = "*"
-base64 = "*"
 htmlescape = "*"
+
+## ???
+xdg = "*"
+
+## console colors for cli
+colored = "*"
+
+## audio
+
 rodio = "*"
 cpal = "*"
 clap = "*"
+
+## error management
 anyhow = "*"
+
+## http
 hyper = "*"
+
+## actors
 actix = { git = "https://github.com/actix/actix" }
 actix-rt = { git = "https://github.com/actix/actix-net" }
-env_logger = "*"
-log = "*"
+
+## feeds
+feed-rs = { git = "https://github.com/feed-rs/feed-rs/"}
+quick-xml = "*"
+
+## event management
 event_source = { path = "../event_source", features = ["sqlite"] }
+
+## serialization
+
 serde = "*"
 serde_json = "*"
 serde_derive = "*"
 async-trait = "*"
+
+## graphql
+
+juniper = "*"
+juniper_hyper = "*"
+
+## lib bridging
+libc = "*"
+
+## util - misc
+base64 = "*"
+env_logger = "*"
+regex = "*"
+url = "*"
+log = "*"
 
 
 [dependencies.futures]
