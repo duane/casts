@@ -34,10 +34,9 @@ async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
   Ok(body.as_bytes().into())
 }
 
-// async fn poll_feed(url: &Url, existing_feed: &Feed) -> Result<Feed> {
-// let contemporary_feed = fetch_feed(url).await?;
-// let diff = contemporary_feed.diff(existing_feed);
-// }
+fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
+  Ok(immutable_feed::parse_doc(url, doc)?.into())
+}
 
 // The task to kick off feed polling.
 async fn cron_task() -> Result<()> {

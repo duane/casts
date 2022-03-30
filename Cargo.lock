@@ -247,6 +247,7 @@ dependencies = [
  "html2text",
  "htmlescape",
  "hyper",
+ "immutable-feed",
  "indicatif",
  "juniper",
  "juniper_hyper",
@@ -1027,6 +1028,18 @@ dependencies = [
  "matches",
  "unicode-bidi",
  "unicode-normalization",
+]
+
+[[package]]
+name = "immutable-feed"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "feed-rs",
+ "quick-xml",
+ "reqwest",
+ "url",
 ]
 
 [[package]]

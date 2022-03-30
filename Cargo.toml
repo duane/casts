@@ -52,6 +52,10 @@ quick-xml = "*"
 ## event management
 event_source = { path = "../event_source", features = ["sqlite"] }
 
+## cast feed shit
+
+immutable-feed = { path = "../immutable-feed" }
+
 ## serialization
 
 serde = "*"

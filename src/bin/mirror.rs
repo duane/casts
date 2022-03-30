@@ -11,7 +11,9 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate uuid;
+extern crate chrono;
 
+use chrono::{DateTime, Utc};
 
 use std::{convert::Infallible, sync::Arc};
 use anyhow::Result;
@@ -39,19 +41,87 @@ use juniper::{
   FieldError, RootNode, 
 };
 
+/// graphql state
 #[derive(Clone, Copy, Debug)]
-struct Context;
+pub struct Context;
 impl juniper::Context for Context {}
 
+// graphql model
+
+
+/// The feed itself.
 #[derive(Clone, Debug)]
-struct Feed {
-  url: Url,
+pub struct Feed {
+  /// The id of the feed
+  pub feed_id: String,
+
+  /// The title of the feed.
+  pub title: String,
+
+  /// The url where the feed may be found.
+  pub url: Url,
+
+  /// The description of the feed.
+  pub description: Option<String>,
+
+  /// When the feed was last updated.
+  pub updated_at: Option<DateTime<Utc>>,
+
+  /// When the feed was first published.
+  pub published_at: Option<DateTime<Utc>>,
+
+  // // The entries associated with the feed.
+  // pub entries: HashMap<String, Entry>,
 }
+
+/// An entry associated with the feed.
+// #[derive(Default, Serialize, Clone, Debug)]
+// pub struct Entry {
+//   /// The self-identified guid of the feed entry.
+//   pub guid: String,
+
+//   /// The url where the entry content may be found.
+//   pub url: Url,
+
+//   /// The title of the feed entry.
+//   pub title: Option<String>,
+
+//   /// A summary of the entry content.
+//   pub summary: Option<String>,
+
+//   /// When the entry was last updated.
+//   pub updated_at: Option<DateTime<Utc>>,
+
+//   /// When the entry was first published.
+//   pub published_at: Option<DateTime<Utc>>,
+// }
 
 #[graphql_object(context = Context)]
 impl Feed {
+  /// The identifier uniquely representing the feed.
+  fn id(&self) -> String {
+    self.feed_id.clone()
+  }
+
+  /// Title of the feed
+  fn title(&self) -> String {
+    self.title.clone()
+  }
+
   fn url(&self) -> Url {
     self.url.clone()
+  }
+
+  fn description(&self) -> Option<String> {
+    self.description.clone()
+  }
+
+  fn updated_at(&self) -> Option<DateTime<Utc>> {
+    self.updated_at
+  }
+
+  fn published_at(&self) -> Option<DateTime<Utc>> {
+    self.published_at
   }
 }
 
@@ -61,10 +131,12 @@ struct Query;
 
 #[graphql_object(context = Context)]
 impl Query {
+  async fn preview_feed(url: Url) -> Option<Feed> {
+    None
+  }
+
   async fn feeds() -> Vec<Feed> {
-    vec![Feed {
-      url: Url::parse("https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml").unwrap(),
-    }]
+    vec![]
   }
 }
 

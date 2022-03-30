@@ -9,6 +9,8 @@ use feed_rs::model::{
 };
 use feed_rs::parser;
 
+use std::convert::From;
+
 /// The feed model.
 
 #[derive(Clone, Debug)]
@@ -29,6 +31,8 @@ pub struct Feed {
   /// Entries for the feed.
   pub entries: Vec<Entry>,
 }
+
+// Methods
 
 impl Feed {
   /// Diff two feeds.
@@ -84,6 +88,13 @@ impl Feed {
       };
     }
     mutations
+  }
+}
+
+// Conversions
+impl From<immutable_feed::Feed> for Feed {
+  fn from(feed: immutable_feed::Feed) -> Feed {
+    Feed { url: feed.url, title: feed.title, description: feed.description, logo: None, entries: vec![] }
   }
 }
 
@@ -316,9 +327,4 @@ impl From<MediaContent> for Media {
       size: content.size,
     }
   }
-}
-
-/// Parse the document from a vector of bytes.
-pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
-  Ok(Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?.into()))
 }
