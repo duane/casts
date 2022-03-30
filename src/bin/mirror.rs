@@ -243,7 +243,7 @@ fn schema() -> Arc<Schema> {
   )
 }
 
-async fn mirror_task(_feeds: Vec<Feed>) -> Result<()> {
+async fn mirror_task() -> Result<()> {
   let addr = ([127, 0, 0, 1], 3000).into();
   let root_node = schema();
 
@@ -294,6 +294,9 @@ async fn main() -> Result<()> {
 
   let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
   let feeds: Vec<Feed> = aggregate.feeds.values().into_iter().map(|e|e.to_owned().into()).collect();
+  for feed in feeds {
+    println!("feed url: {:?}", feed.url);
+  }
   
-  mirror_task(feeds).await
+  mirror_task().await
 }
