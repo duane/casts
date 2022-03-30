@@ -3,7 +3,7 @@
  *  - GQL serving from event source aggregate.
  *  - Caching of most recent aggregate version.
  *  - Caching of aggregates per-version.
- *  - Async updates via pipe: update most recent version.
+ *  - Async updates via pipe: update most recent version.2
  */
 
 extern crate juniper;
@@ -21,6 +21,12 @@ extern crate serde_json;
 extern crate uuid;
 extern crate chrono;
 
+use std::path::Path;
+use event_source::client::ClientBuilder;
+use event_source::dispatch::DispatchDelegate;
+
+use uuid::Uuid;
+use casts::aggregate::FeedAggregate;
 
 use chrono::{DateTime, Utc};
 
@@ -34,6 +40,38 @@ use tokio::time::interval;
 use casts::model::*;
 
 use url::Url;
+
+use tokio::sync::broadcast::{channel, Receiver, Sender};
+
+use event_source::commit::Commit;
+use event_source::store::Store;
+use event_source::store::sqlite::SqliteStore;
+
+// EventSource shit
+
+struct InMemoryDispatcher {
+  sender: Sender<Commit>,
+}
+
+impl InMemoryDispatcher {
+  fn new() -> Self {
+    let (sender, _receiver) = channel(16);
+    InMemoryDispatcher { sender }
+  }
+
+  fn subscribe(&self) -> Receiver<Commit> {
+    self.sender.subscribe()
+  }
+}
+
+impl DispatchDelegate for InMemoryDispatcher {
+  fn dispatch(&mut self, commit: &Commit) -> Result<(), String> {
+    match self.sender.send(commit.to_owned()) {
+      Ok(_) => Ok(()),
+      Err(err) => Err(err.to_string()),
+    }
+  }
+}
 
 // hyper shit
 
@@ -238,5 +276,20 @@ async fn mirror_task() -> Result<()> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+  let uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+
+  let dispatcher = InMemoryDispatcher::new();
+
+  let mut sqlite_store =
+    SqliteStore::with_new_connection_at_path(Path::new(&String::from("./event_store.sqlite")));
+  sqlite_store.initialize().unwrap();
+  let mut client = ClientBuilder::default()
+    .with_store(Box::new(sqlite_store))
+    .with_dispatch_delegate(dispatcher)
+    .finish()
+    .unwrap();
+
+  let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
+
   mirror_task().await
 }
