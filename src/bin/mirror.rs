@@ -13,6 +13,7 @@ extern crate serde_json;
 extern crate uuid;
 extern crate chrono;
 
+
 use chrono::{DateTime, Utc};
 
 use std::{convert::Infallible, sync::Arc};
@@ -52,9 +53,6 @@ impl juniper::Context for Context {}
 /// The feed itself.
 #[derive(Clone, Debug)]
 pub struct Feed {
-  /// The id of the feed
-  pub feed_id: String,
-
   /// The title of the feed.
   pub title: String,
 
@@ -98,11 +96,6 @@ pub struct Feed {
 
 #[graphql_object(context = Context)]
 impl Feed {
-  /// The identifier uniquely representing the feed.
-  fn id(&self) -> String {
-    self.feed_id.clone()
-  }
-
   /// Title of the feed
   fn title(&self) -> String {
     self.title.clone()
@@ -126,13 +119,29 @@ impl Feed {
 }
 
 
+/// Use I/O to retrieve the feed object from the given url.
+async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
+  let response = reqwest::get(url.as_str()).await?;
+  let body = response.text().await?;
+  Ok(body.as_bytes().into())
+}
+
 #[derive(Clone, Copy, Debug)]
 struct Query;
 
 #[graphql_object(context = Context)]
 impl Query {
   async fn preview_feed(url: Url) -> Option<Feed> {
-    None
+    let body = fetch_feed(&url).await.unwrap();
+    let immutable_feed: immutable_feed::Feed = immutable_feed::parse_doc(&url, &body).unwrap();
+    let feed = Feed {
+      url: immutable_feed.url,
+      title: immutable_feed.title,
+      description: immutable_feed.description,
+      updated_at: None,
+      published_at: None,
+    };
+    Some(feed)
   }
 
   async fn feeds() -> Vec<Feed> {
