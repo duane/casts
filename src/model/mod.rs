@@ -1,4 +1,3 @@
-use anyhow::Result;
 use std::collections::{HashMap, HashSet};
 use url::Url;
 use std::time::Duration;
@@ -7,7 +6,6 @@ use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
   Link as RustLink, MediaContent,
 };
-use feed_rs::parser;
 
 use std::convert::From;
 
@@ -94,7 +92,7 @@ impl Feed {
 // Conversions
 impl From<immutable_feed::Feed> for Feed {
   fn from(feed: immutable_feed::Feed) -> Feed {
-    Feed { url: feed.url, title: feed.title, description: feed.description, logo: None, entries: vec![] }
+  Feed { url: feed.url, title: feed.title, description: feed.description, logo: None, entries: vec![] }
   }
 }
 
@@ -258,7 +256,9 @@ pub enum EntryMutation {
 // conversion
 
 impl Feed {
-  fn from_url_and_feed(url: Url, feed: RustFeed) -> Feed {
+  /// parse a feed from a url and parsed feed body.
+  /// it is unclear why both body and url are necessary.
+  pub fn from_url_and_feed(url: Url, feed: RustFeed) -> Feed {
     Feed {
       url: url,
       title: feed.title.map(|text| text.content).unwrap_or_default(),

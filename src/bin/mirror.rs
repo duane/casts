@@ -32,16 +32,10 @@ use chrono::{DateTime, Utc};
 
 use std::{convert::Infallible, sync::Arc};
 use anyhow::Result;
-use casts::events::FeedAggregateEvent;
-use std::time::Duration;
-use tokio::task;
-use tokio::time::interval;
-
-use casts::model::*;
 
 use url::Url;
 
-use tokio::sync::broadcast::{channel, Receiver, Sender};
+use tokio::sync::broadcast::{channel, Sender};
 
 use event_source::commit::Commit;
 use event_source::store::Store;
@@ -57,10 +51,6 @@ impl InMemoryDispatcher {
   fn new() -> Self {
     let (sender, _receiver) = channel(16);
     InMemoryDispatcher { sender }
-  }
-
-  fn subscribe(&self) -> Receiver<Commit> {
-    self.sender.subscribe()
   }
 }
 
@@ -84,8 +74,8 @@ use hyper::{
 // graphql shit
 
 use juniper::{
-  graphql_object, graphql_subscription, http::GraphQLRequest, DefaultScalarValue, EmptyMutation, EmptySubscription,
-  FieldError, RootNode, 
+  graphql_object, EmptyMutation, EmptySubscription,
+  RootNode, 
 };
 
 /// graphql state
@@ -144,6 +134,20 @@ impl Feed {
     vec![]
   }
 }
+
+impl From<casts::aggregate::Feed> for Feed {
+  fn from(feed: casts::aggregate::Feed) -> Feed {
+    let title: String = feed.title;
+    Feed{
+      title: title,
+      url: Url::parse(&feed.url).unwrap(),
+      description: None,
+      updated_at: None,
+      published_at: None,
+    }
+  }
+}
+
 
 // ENTRY
 
@@ -239,8 +243,7 @@ fn schema() -> Arc<Schema> {
   )
 }
 
-
-async fn mirror_task() -> Result<()> {
+async fn mirror_task(_feeds: Vec<Feed>) -> Result<()> {
   let addr = ([127, 0, 0, 1], 3000).into();
   let root_node = schema();
 
@@ -290,6 +293,7 @@ async fn main() -> Result<()> {
     .unwrap();
 
   let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
-
-  mirror_task().await
+  let feeds: Vec<Feed> = aggregate.feeds.values().into_iter().map(|e|e.to_owned().into()).collect();
+  
+  mirror_task(feeds).await
 }

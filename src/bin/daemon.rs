@@ -20,14 +20,6 @@ use casts::model::*;
 
 use url::Url;
 
-async fn read_feeds() -> Result<Vec<Feed>> {
-  Ok(vec![])
-}
-
-async fn issue_command() -> Result<()> {
-  Ok(())
-}
-
 async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {
   let response = reqwest::get(url.as_str()).await?;
   let body = response.text().await?;

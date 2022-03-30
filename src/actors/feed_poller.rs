@@ -7,8 +7,8 @@ use actix::prelude::*;
 // use anyhow::Result;
 // use futures::future::join_all;
 // use futures::FutureExt;
-use event_source::commit::Commit;
-use tokio::sync::broadcast::Receiver;
+// use event_source::commit::Commit;
+// use tokio::sync::broadcast::Receiver;
 // use uuid::Uuid;
 use log::warn;
 
@@ -28,8 +28,8 @@ pub struct FeedPoller {
   /// The duration over which feeds should be polled.
   pub period: Duration,
 
-  /// The incoming events
-  receiver: Receiver<Commit>,
+  //// The incoming events
+  // receiver: Receiver<Commit>,
 }
 
 impl Handler<ClockTrigger> for FeedPoller {

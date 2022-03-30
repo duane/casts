@@ -20,7 +20,7 @@ use std::path::Path;
 use uuid::Uuid;
 
 use std::io::{stdin, stdout, Write};
-use tokio::sync::broadcast::{channel, Receiver, Sender};
+use tokio::sync::broadcast::{channel, Sender};
 // use tokio::task;
 // use std::error::Error;
 
@@ -34,9 +34,9 @@ impl InMemoryDispatcher {
     InMemoryDispatcher { sender }
   }
 
-  fn subscribe(&self) -> Receiver<Commit> {
-    self.sender.subscribe()
-  }
+  // fn subscribe(&self) -> Receiver<Commit> {
+  //   self.sender.subscribe()
+  // }
 }
 
 impl DispatchDelegate for InMemoryDispatcher {

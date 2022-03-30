@@ -6,7 +6,7 @@ use log::info;
 use std::fmt;
 use std::path::Path;
 use std::pin::Pin;
-use tokio::task::LocalSet;
+//// use tokio::task::LocalSet;
 use url::Url;
 
 /// A trait representing an object-to-file download.
@@ -25,10 +25,10 @@ pub struct DownloadQueue<T: DownloadTraitObject> {
   heap_stream: HeapStream<T>,
 
   /// The set of worker tasks currently in-flight.
-  workers: FuturesUnordered<Pin<Box<dyn Future<Output = ()>>>>,
+  pub workers: FuturesUnordered<Pin<Box<dyn Future<Output = ()>>>>,
 
-  /// local set
-  local_workers: LocalSet,
+  //// local set
+  // local_workers: LocalSet,
 }
 
 impl<T: DownloadTraitObject> Default for DownloadQueue<T> {
@@ -36,7 +36,7 @@ impl<T: DownloadTraitObject> Default for DownloadQueue<T> {
     DownloadQueue {
       heap_stream: Default::default(),
       workers: Default::default(),
-      local_workers: LocalSet::new(),
+      // local_workers: LocalSet::new(),
     }
   }
 }
