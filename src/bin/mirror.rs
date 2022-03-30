@@ -1,3 +1,11 @@
+/**
+ * TODO:
+ *  - GQL serving from event source aggregate.
+ *  - Caching of most recent aggregate version.
+ *  - Caching of aggregates per-version.
+ *  - Async updates via pipe: update most recent version.
+ */
+
 extern crate juniper;
 
 extern crate anyhow;
@@ -49,7 +57,6 @@ impl juniper::Context for Context {}
 
 // graphql model
 
-
 /// The feed itself.
 #[derive(Clone, Debug)]
 pub struct Feed {
@@ -71,28 +78,6 @@ pub struct Feed {
   // // The entries associated with the feed.
   // pub entries: HashMap<String, Entry>,
 }
-
-/// An entry associated with the feed.
-// #[derive(Default, Serialize, Clone, Debug)]
-// pub struct Entry {
-//   /// The self-identified guid of the feed entry.
-//   pub guid: String,
-
-//   /// The url where the entry content may be found.
-//   pub url: Url,
-
-//   /// The title of the feed entry.
-//   pub title: Option<String>,
-
-//   /// A summary of the entry content.
-//   pub summary: Option<String>,
-
-//   /// When the entry was last updated.
-//   pub updated_at: Option<DateTime<Utc>>,
-
-//   /// When the entry was first published.
-//   pub published_at: Option<DateTime<Utc>>,
-// }
 
 #[graphql_object(context = Context)]
 impl Feed {
@@ -116,8 +101,63 @@ impl Feed {
   fn published_at(&self) -> Option<DateTime<Utc>> {
     self.published_at
   }
+
+  fn entries(&self) -> Vec<Entry> {
+    vec![]
+  }
 }
 
+// ENTRY
+
+/// An entry associated with the feed.
+#[derive(Clone, Debug)]
+pub struct Entry {
+  /// The self-identified guid of the feed entry.
+  pub guid: String,
+
+  /// The url where the entry content may be found.
+  pub url: Url,
+
+  /// The title of the feed entry.
+  pub title: Option<String>,
+
+  /// A summary of the entry content.
+  pub summary: Option<String>,
+
+  /// When the entry was last updated.
+  pub updated_at: Option<DateTime<Utc>>,
+
+  /// When the entry was first published.
+  pub published_at: Option<DateTime<Utc>>,
+}
+
+
+#[graphql_object(context = Context)]
+impl Entry {
+  fn id(&self) -> String {
+    self.guid.clone()
+  }
+
+  fn url(&self) -> Url {
+    self.url.clone()
+  }
+
+  fn title(&self) -> Option<String> {
+    self.title.clone()
+  }
+
+  fn summary(&self) -> Option<String> {
+    self.summary.clone()
+  }
+
+  fn updated_at(&self) -> Option<DateTime<Utc>> {
+    self.updated_at.clone()
+  }
+
+  fn published_at(&self) -> Option<DateTime<Utc>> {
+    self.published_at.clone()
+  }
+}
 
 /// Use I/O to retrieve the feed object from the given url.
 async fn fetch_feed(url: &Url) -> Result<Vec<u8>> {

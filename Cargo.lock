@@ -1037,6 +1037,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "feed-rs",
+ "htmlescape",
  "quick-xml",
  "reqwest",
  "url",
