@@ -79,8 +79,10 @@ use juniper::{
 };
 
 /// graphql state
-#[derive(Clone, Copy, Debug)]
-pub struct Context;
+#[derive(Clone, Debug)]
+pub struct Context {
+  feeds: Vec<Feed>,
+}
 impl juniper::Context for Context {}
 
 // graphql model
@@ -104,7 +106,7 @@ pub struct Feed {
   pub published_at: Option<DateTime<Utc>>,
 
   // // The entries associated with the feed.
-  // pub entries: HashMap<String, Entry>,
+  pub entries: Vec<Entry>,
 }
 
 #[graphql_object(context = Context)]
@@ -131,19 +133,34 @@ impl Feed {
   }
 
   fn entries(&self) -> Vec<Entry> {
-    vec![]
+    self.entries.clone()
   }
 }
 
 impl From<casts::aggregate::Feed> for Feed {
   fn from(feed: casts::aggregate::Feed) -> Feed {
     let title: String = feed.title;
+    println!("{:?}", feed.entries);
     Feed{
       title: title,
       url: Url::parse(&feed.url).unwrap(),
       description: None,
       updated_at: None,
       published_at: None,
+      entries: feed.entries.values().map(|v| Entry::from(v.clone())).collect()
+    }
+  }
+}
+
+impl From<immutable_feed::Feed> for Feed {
+  fn from(feed: immutable_feed::Feed) -> Feed {
+    Feed {
+      title: feed.title,
+      url: feed.url,
+      description: feed.description,
+      updated_at: feed.updated_at,
+      published_at: feed.published_at,
+      entries: feed.entries.into_iter().map(Entry::from).collect(),
     }
   }
 }
@@ -173,6 +190,31 @@ pub struct Entry {
   pub published_at: Option<DateTime<Utc>>,
 }
 
+impl From<casts::aggregate::Entry> for Entry {
+  fn from(entry: casts::aggregate::Entry) -> Entry {
+    Entry {
+      guid: entry.guid,
+      url: Url::parse(entry.url.as_str()).unwrap(),
+      title: entry.title,
+      summary: entry.summary,
+      updated_at: entry.updated_at,
+      published_at: entry.published_at,
+    }
+  }
+}
+
+impl From<immutable_feed::Entry> for Entry {
+  fn from(entry: immutable_feed::Entry) -> Entry {
+    Entry {
+      guid: entry.guid,
+      url: entry.url,
+      title: entry.title,
+      summary: entry.summary,
+      updated_at: entry.updated_at,
+      published_at: entry.published_at,
+    }
+  }
+}
 
 #[graphql_object(context = Context)]
 impl Entry {
@@ -216,18 +258,11 @@ impl Query {
   async fn preview_feed(url: Url) -> Option<Feed> {
     let body = fetch_feed(&url).await.unwrap();
     let immutable_feed: immutable_feed::Feed = immutable_feed::parse_doc(&url, &body).unwrap();
-    let feed = Feed {
-      url: immutable_feed.url,
-      title: immutable_feed.title,
-      description: immutable_feed.description,
-      updated_at: None,
-      published_at: None,
-    };
-    Some(feed)
+    Some(Feed::from(immutable_feed))
   }
 
-  async fn feeds() -> Vec<Feed> {
-    vec![]
+  async fn feeds<'ctx>(&self, ctx: &'ctx Context) -> Vec<Feed> {
+    ctx.feeds.clone()
   }
 }
 
@@ -243,13 +278,15 @@ fn schema() -> Arc<Schema> {
   )
 }
 
-async fn mirror_task() -> Result<()> {
+async fn mirror_task(feeds: Vec<Feed>) -> Result<()> {
   let addr = ([127, 0, 0, 1], 3000).into();
   let root_node = schema();
 
   let new_service = make_service_fn(move |_| {
     let root_node = root_node.clone();
-    let ctx = Arc::new(Context);
+    let ctx = Arc::new(Context{
+      feeds: feeds.clone()
+    });
     async {
       Ok::<_, hyper::Error>(service_fn(move |req| {
         let root_node = root_node.clone();
@@ -293,10 +330,7 @@ async fn main() -> Result<()> {
     .unwrap();
 
   let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
-  let feeds: Vec<Feed> = aggregate.feeds.values().into_iter().map(|e|e.to_owned().into()).collect();
-  for feed in feeds {
-    println!("feed url: {:?}", feed.url);
-  }
+  let feeds: Vec<Feed> = aggregate.feeds.values().map(|e|e.to_owned().into()).collect();
   
-  mirror_task().await
+  mirror_task(feeds).await
 }
