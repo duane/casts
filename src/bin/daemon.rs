@@ -49,7 +49,6 @@ async fn cron_task() -> Result<()> {
         for mutation in feed.diff(&remote_feed) {
           match mutation {
             FeedMutation::AddedEntry(entry) => {
-              let href = entry.media.unwrap().url.unwrap().to_string();
               let event = FeedAggregateEvent::EntryObserved{
                 id: uuid::Uuid::new_v4(),
 
@@ -60,7 +59,7 @@ async fn cron_task() -> Result<()> {
                 guid: entry.id.to_owned(),
 
                 /// The url where the entry content may be found.
-                url: href,
+                url: entry.media.unwrap().url.unwrap(),
 
                 /// The title of the entry.
                 title: entry.title,

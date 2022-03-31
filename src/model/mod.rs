@@ -124,16 +124,16 @@ impl Entry {
     }
 
     if self.link != other.link {
-      mutations.push(EntryMutation::ReplacedLink(other.link.to_owned()));
+      mutations.push(EntryMutation::ReplacedUrl(other.link.to_owned()));
     }
 
     if self.summary != other.summary {
       mutations.push(EntryMutation::ReplacedSummary(other.summary.to_owned()));
     }
 
-    if self.media != other.media {
-      mutations.push(EntryMutation::ReplacedContent(other.media.to_owned()));
-    }
+    // if self.media != other.media {
+    //   mutations.push(EntryMutation::ReplacedContent(other.media.to_owned()));
+    // }
 
     mutations
   }
@@ -142,8 +142,8 @@ impl Entry {
 #[derive(Clone, PartialEq, Eq, Debug)]
 /// Representing an Image as seen from a feed.
 pub struct Image {
-  /// The URI where the image may be found.
-  pub uri: String,
+  /// The URL where the image may be found.
+  pub url: String,
 
   /// The Title of the image.
   pub title: String,
@@ -244,7 +244,7 @@ pub enum EntryMutation {
   ReplacedTitle(Option<String>),
 
   /// Indicates a differing entry link.
-  ReplacedLink(Option<Link>),
+  ReplacedUrl(Option<Link>),
 
   /// Indicates a differing summary.
   ReplacedSummary(Option<String>),
@@ -284,7 +284,7 @@ impl From<RustEntry> for Entry {
 impl From<RustImage> for Image {
   fn from(image: RustImage) -> Image {
     Image {
-      uri: image.uri,
+      url: image.uri,
       title: image.title.unwrap_or_default(),
       link: image.link.map(Link::from),
       width: image.width,

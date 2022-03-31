@@ -75,7 +75,6 @@ libc = "*"
 base64 = "*"
 env_logger = "*"
 regex = "*"
-url = "*"
 log = "*"
 
 
@@ -93,6 +92,10 @@ features = ["url", "chrono", "uuid"]
 [dependencies.reqwest]
 version = "*"
 features = ["blocking", "stream"]
+
+[dependencies.url]
+version = "*"
+features = ["serde"]
 
 [dependencies.chrono]
 version = "*"

@@ -56,7 +56,7 @@ pub fn stream_to_file_best(url: url::Url, file: PathBuf) -> Map<(), ()> {
     .pool_idle_timeout(Duration::from_secs(30))
     .build_http();
   let mut request = Request::builder()
-    .uri(url.as_str().parse().unwrap())
+    .url(url.as_str().parse().unwrap())
     .header("User-Agent", "my-awesome-agent/1.0");
 
 }*/

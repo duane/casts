@@ -59,15 +59,15 @@ use url::Url;
 
 /// Representing an Image as seen from a feed.
 #[repr(C)]
-pub struct Image {
-  /// The URI where the image may be found.
-  pub uri: *const libc::c_char,
+pub struct CImage {
+  /// The URL where the image may be found.
+  pub url: *const libc::c_char,
 
   /// The Title of the image.
   pub title: *const libc::c_char,
 
   /// The Link representing the image.
-  pub link: *const Link,
+  pub link: *const CLink,
 
   /// The width of the image in pixels.
   pub width: *const u32,
@@ -79,16 +79,16 @@ pub struct Image {
   pub description: *const libc::c_char,
 }
 
-fn convert_image(image: RustImage) -> Image {
-  Image {
-    uri: CString::new(image.uri).unwrap().into_raw(),
+fn convert_image(image: RustImage) -> CImage {
+  CImage {
+    url: CString::new(image.uri).unwrap().into_raw(),
     title: image
       .title
       .map(|s| CString::new(s).unwrap().into_raw() as *const i8)
       .unwrap_or(ptr::null()),
     link: image
       .link
-      .map(|l| Box::into_raw(Box::new(convert_link(l))) as *const Link)
+      .map(|l| Box::into_raw(Box::new(convert_link(l))) as *const CLink)
       .unwrap_or(ptr::null()),
     width: image
       .width
@@ -105,17 +105,17 @@ fn convert_image(image: RustImage) -> Image {
   }
 }
 
-impl Drop for Image {
+impl Drop for CImage {
   fn drop(&mut self) {
     unsafe {
-      if !self.uri.is_null() {
-        Box::from_raw(self.uri as *mut i8);
+      if !self.url.is_null() {
+        Box::from_raw(self.url as *mut i8);
       }
       if !self.title.is_null() {
         Box::from_raw(self.title as *mut i8);
       }
       if !self.link.is_null() {
-        Box::from_raw(self.link as *mut Link);
+        Box::from_raw(self.link as *mut CLink);
       }
       if !self.width.is_null() {
         Box::from_raw(self.width as *mut u32);
@@ -132,7 +132,7 @@ impl Drop for Image {
 
 /// Representing a Link object as seen from a podcast feed.
 #[repr(C)]
-pub struct Link {
+pub struct CLink {
   /// The URL of the link.
   pub href: *const libc::c_char,
 
@@ -152,8 +152,8 @@ pub struct Link {
   pub length: *const u32,
 }
 
-fn convert_link(link: RustLink) -> Link {
-  Link {
+fn convert_link(link: RustLink) -> CLink {
+  CLink {
     href: CString::new(link.href).unwrap().into_raw() as *const i8,
     rel: link
       .rel
@@ -178,7 +178,7 @@ fn convert_link(link: RustLink) -> Link {
   }
 }
 
-impl Drop for Link {
+impl Drop for CLink {
   fn drop(&mut self) {
     unsafe {
       if !self.href.is_null() {
@@ -205,7 +205,7 @@ impl Drop for Link {
 
 /// Representing content as exposed by feeds-rs
 #[repr(C)]
-pub struct Content {
+pub struct CContent {
   /// The body of the content.
   pub body: *const libc::c_char,
 
@@ -216,11 +216,11 @@ pub struct Content {
   pub length: *const u32,
 
   /// A link where the content may be found.
-  pub src: *const Link,
+  pub src: *const CLink,
 }
 
-fn convert_content(content: RustContent) -> Content {
-  Content {
+fn convert_content(content: RustContent) -> CContent {
+  CContent {
     body: content
       .body
       .map(|s| CString::new(s).unwrap().into_raw() as *const i8)
@@ -234,12 +234,12 @@ fn convert_content(content: RustContent) -> Content {
       .unwrap_or(ptr::null()),
     src: content
       .src
-      .map(|l| Box::into_raw(Box::new(convert_link(l))) as *const Link)
+      .map(|l| Box::into_raw(Box::new(convert_link(l))) as *const CLink)
       .unwrap_or(ptr::null()),
   }
 }
 
-impl Drop for Content {
+impl Drop for CContent {
   fn drop(&mut self) {
     unsafe {
       if !self.body.is_null() {
@@ -252,7 +252,7 @@ impl Drop for Content {
         Box::from_raw(self.length as *mut u32);
       }
       if !self.src.is_null() {
-        Box::from_raw(self.src as *mut Link);
+        Box::from_raw(self.src as *mut CLink);
       }
     }
   }
@@ -260,7 +260,7 @@ impl Drop for Content {
 
 /// An entry in the podcast.
 #[repr(C)]
-pub struct Entry {
+pub struct CEntry {
   /// a GUID assigned by feeds-rs if not specified by the feed.
   pub id: *const libc::c_char,
   /// The title of the entry.
@@ -271,11 +271,11 @@ pub struct Entry {
   pub summary: *const libc::c_char,
 
   /// The content of the entry.
-  pub content: *const Content,
+  pub content: *const CContent,
 }
 
-fn convert_entry(entry: RustEntry) -> Entry {
-  Entry {
+fn convert_entry(entry: RustEntry) -> CEntry {
+  CEntry {
     id: CString::new(entry.id).unwrap().into_raw() as *const i8,
     title: entry
       .title
@@ -290,12 +290,12 @@ fn convert_entry(entry: RustEntry) -> Entry {
     link: ptr::null(),
     content: entry
       .content
-      .map(|c| Box::into_raw(Box::new(convert_content(c))) as *const Content)
+      .map(|c| Box::into_raw(Box::new(convert_content(c))) as *const CContent)
       .unwrap_or(ptr::null()),
   }
 }
 
-impl Drop for Entry {
+impl Drop for CEntry {
   fn drop(&mut self) {
     unsafe {
       Box::from_raw(self.id as *mut i8);
@@ -309,7 +309,7 @@ impl Drop for Entry {
         Box::from_raw(self.summary as *mut i8);
       }
       if !self.content.is_null() {
-        Box::from_raw(self.content as *mut Content);
+        Box::from_raw(self.content as *mut CContent);
       }
     }
   }
@@ -317,7 +317,7 @@ impl Drop for Entry {
 
 /// A feed according to feeds-rs.
 #[repr(C)]
-pub struct Feed {
+pub struct CFeed {
   /// A title for the feed (optional).
   pub title: *const libc::c_char,
 
@@ -325,16 +325,37 @@ pub struct Feed {
   pub description: *const libc::c_char,
 
   /// An image to display with the feed (optional).
-  pub logo: *const Image,
+  pub logo: *const CImage,
 
   /// Entries for the feed.
-  pub entries: *const Entry,
+  pub entries: *const CEntry,
 
   /// Total number of parsed entries.
   pub entries_count: u32,
 }
 
-impl Drop for Feed {
+// impl From<CFeed> for immutable_feed::Feed {
+//   fn from(feed: CFeed) -> immutable_feed::Feed {
+//     immutable_feed::Feed {
+//       title: feed.title,
+//       url: feed.url,
+//       description: feed.description,
+//       updated_at: feed.updated_at,
+//       published_at: feed.published_at,
+//       entries: feed.entries.iter().into_iter().map(|e|
+//         immutable_feed::Entry{
+//           guid: e.guid,
+//           url: e.url,
+//           title: e.url,
+//           summary: e.summary,
+//           updated_at: e.updated_at,
+//           published_at: e.published_at,
+//         }).collect(),
+//     }
+//   }
+// }
+
+impl Drop for CFeed {
   fn drop(&mut self) {
     unsafe {
       if !self.title.is_null() {
@@ -344,7 +365,7 @@ impl Drop for Feed {
         Box::from_raw(self.description as *mut i8);
       }
       if !self.entries.is_null() {
-        Box::from_raw(self.entries as *mut Entry);
+        Box::from_raw(self.entries as *mut CEntry);
       }
     }
   }
@@ -441,7 +462,7 @@ pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
 ///
 /// The buffer should be allocated by the calling stack.
 /// The caller is responsible for freeing the returned `Feed` with `free_feed`.
-pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const Feed {
+pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const CFeed {
   let slice = unsafe { CStr::from_ptr(buffer) };
   let str_slice: &str = slice.to_str().unwrap();
   let parsed_rust_feed = parse_feed_rs(str_slice).unwrap();
@@ -458,17 +479,17 @@ pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const Feed {
     .unwrap_or(ptr::null());
   let logo = parsed_rust_feed
     .logo
-    .map(|i| Box::into_raw(Box::new(convert_image(i))) as *const Image)
+    .map(|i| Box::into_raw(Box::new(convert_image(i))) as *const CImage)
     .unwrap_or(ptr::null());
-  let entries: Vec<Entry> = parsed_rust_feed
+  let entries: Vec<CEntry> = parsed_rust_feed
     .entries
     .into_iter()
     .map(convert_entry)
     .collect();
-  let entries_slice: Box<[Entry]> = entries.into_boxed_slice();
+  let entries_slice: Box<[CEntry]> = entries.into_boxed_slice();
   let entries_count = entries_slice.len() as u32;
-  let entries_ptr: *mut Entry = Box::into_raw(entries_slice) as _;
-  Box::into_raw(Box::new(Feed {
+  let entries_ptr: *mut CEntry = Box::into_raw(entries_slice) as _;
+  Box::into_raw(Box::new(CFeed {
     title,
     description,
     logo,
@@ -479,8 +500,8 @@ pub extern "C" fn parse_feed(buffer: *const libc::c_char) -> *const Feed {
 
 /// Call when done with a `Feed` to free its allocated memory.
 #[no_mangle]
-pub extern "C" fn free_feed(feed: *const Feed) {
+pub extern "C" fn free_feed(feed: *const CFeed) {
   unsafe {
-    Box::from_raw(feed as *mut Feed);
+    Box::from_raw(feed as *mut CFeed);
   }
 }

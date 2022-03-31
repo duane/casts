@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use event_source::events::Event;
 use uuid::Uuid;
+use url::Url;
 
 /// Aggregate events!
 #[derive(Serialize, Deserialize, Debug)]
@@ -17,7 +18,7 @@ pub enum FeedAggregateEvent {
     title: String,
 
     /// The url where the feed may be found.
-    url: String,
+    url: Url,
 
     /// A description of the feed.
     description: Option<String>,
@@ -41,7 +42,7 @@ pub enum FeedAggregateEvent {
     guid: String,
 
     /// The url where the entry content may be found.
-    url: String,
+    url: Url,
 
     /// The title of the entry.
     title: Option<String>,
@@ -83,7 +84,7 @@ pub enum FeedAggregateEvent {
     guid: String,
 
     /// The new url of the entry.
-    url: String,
+    url: Url,
   },
 
   /// An entry's summary has been updated.

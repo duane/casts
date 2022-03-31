@@ -4,6 +4,7 @@ use event_source::aggregate::Aggregate;
 use event_source::client::applicable::EventApplicable;
 use std::collections::HashMap;
 use uuid::Uuid;
+use url::Url;
 
 /// The feed aggregate, representing the total result of events in-memory.
 #[derive(Default, Serialize, Clone, Debug)]
@@ -19,7 +20,7 @@ pub struct FeedAggregate {
 }
 
 /// The feed itself.
-#[derive(Default, Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Feed {
   /// The id of the feed
   pub feed_id: String,
@@ -28,7 +29,7 @@ pub struct Feed {
   pub title: String,
 
   /// The url where the feed may be found.
-  pub url: String,
+  pub url: Url,
 
   /// The description of the feed.
   pub description: Option<String>,
@@ -44,13 +45,13 @@ pub struct Feed {
 }
 
 /// An entry associated with the feed.
-#[derive(Default, Serialize, Clone, Debug)]
+#[derive(Serialize, Clone, Debug)]
 pub struct Entry {
   /// The self-identified guid of the feed entry.
   pub guid: String,
 
   /// The url where the entry content may be found.
-  pub url: String,
+  pub url: Url,
 
   /// The title of the feed entry.
   pub title: Option<String>,
@@ -63,6 +64,19 @@ pub struct Entry {
 
   /// When the entry was first published.
   pub published_at: Option<DateTime<Utc>>,
+}
+
+impl From<Entry> for immutable_feed::Entry {
+  fn from(entry: Entry) -> immutable_feed::Entry {
+    immutable_feed::Entry{
+      guid: entry.guid,
+      url: entry.url,
+      title: entry.title,
+      summary: entry.summary,
+      updated_at: entry.updated_at,
+      published_at: entry.published_at,
+    }
+  }
 }
 
 impl FeedAggregate {
@@ -190,6 +204,19 @@ impl EventApplicable for FeedAggregate {
   }
 }
 
+impl From<Feed> for immutable_feed::Feed {
+  fn from(feed: Feed) -> immutable_feed::Feed {
+    immutable_feed::Feed{
+      url: feed.url,
+      title: feed.title,
+      description: feed.description,
+      updated_at: feed.updated_at,
+      published_at: feed.published_at,
+      entries: feed.entries.values().map(|v| immutable_feed::Entry::from(v.clone())).collect(),
+    }
+  }
+}
+
 #[cfg(test)]
 mod tests {
   use super::*;
@@ -217,7 +244,7 @@ mod tests {
       id: aggregate.id,
       feed_id: feed_id.clone(),
       title: String::from("Examplecast"),
-      url: String::from("http://example.com/examplecast.xml"),
+      url: Url::parse("http://example.com/examplecast.xml"),
       description: None,
       updated_at: None,
       published_at: None,

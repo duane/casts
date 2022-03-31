@@ -8,6 +8,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate uuid;
+extern crate url;
 
 use casts::{aggregate::FeedAggregate, commands::FeedAggregateCommand};
 use event_source::commit::Commit;
@@ -18,6 +19,7 @@ use event_source::{client::*, store::ClientStore};
 use std::env;
 use std::path::Path;
 use uuid::Uuid;
+use url::Url;
 
 use std::io::{stdin, stdout, Write};
 use tokio::sync::broadcast::{channel, Sender};
@@ -81,11 +83,11 @@ async fn main() {
       Err(err) => panic!("{}", err),
       _ => {
         if buf.starts_with("subscribe ") {
-          let uri = buf.strip_prefix("subscribe ").unwrap().trim();
+          let url = buf.strip_prefix("subscribe ").unwrap().trim();
           let command = FeedAggregateCommand::AddFeed {
             id: uuid,
-            feed_id: uri.to_owned(),
-            url: uri.to_owned(),
+            feed_id: url.to_owned(),
+            url: Url::parse(url).unwrap(),
           };
           let result = futures::executor::block_on(client.issue_command_async(
             &aggregate,

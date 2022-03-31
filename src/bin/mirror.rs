@@ -139,15 +139,13 @@ impl Feed {
 
 impl From<casts::aggregate::Feed> for Feed {
   fn from(feed: casts::aggregate::Feed) -> Feed {
-    let title: String = feed.title;
-    println!("{:?}", feed.entries);
-    Feed{
-      title: title,
-      url: Url::parse(&feed.url).unwrap(),
-      description: None,
-      updated_at: None,
-      published_at: None,
-      entries: feed.entries.values().map(|v| Entry::from(v.clone())).collect()
+    Feed {
+      url: Url::parse(feed.url.as_str()).unwrap(),
+      title: feed.title,
+      description: feed.description,
+      updated_at: feed.updated_at,
+      published_at: feed.published_at,
+      entries: feed.entries.values().into_iter().map(|v| Entry::from(v.clone())).collect(),
     }
   }
 }
