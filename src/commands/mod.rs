@@ -9,8 +9,6 @@ use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use url::Url;
 use uuid::Uuid;
-use std::convert::Into;
-// use log::info;
 
 /// The commands available for the aggregate.
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -123,14 +121,14 @@ impl Command for FeedAggregateCommand {
         _ => Ok(vec![]),
       },
       &FeedAggregateCommand::FeedEntryObserved {
-        id: ref id,
-        title: ref title,
-        feed_id: ref feed_id,
-        guid: ref guid,
-        url: ref url,
-        summary: ref summary,
-        updated_at: ref updated_at,
-        published_at: ref published_at,
+        id: ref _id,
+        ref title,
+        ref feed_id,
+        ref guid,
+        ref url,
+        ref summary,
+        ref updated_at,
+        ref published_at,
       } => match aggregate.feeds.get(feed_id) {
         Some(aggregate_feed) => {
           let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
@@ -168,7 +166,7 @@ impl Command for FeedAggregateCommand {
           }
           Ok(vec![])
         },
-        None => panic!(format!("unknown feed: {:?}", feed_id)),
+        None => panic!("unknown feed: {:?}", feed_id),
       },
     }
   }
@@ -226,14 +224,14 @@ impl Command for FeedAggregateCommand {
         Ok(events)
       },
       &FeedAggregateCommand::FeedEntryObserved {
-        id: ref id,
-        title: ref title,
-        feed_id: ref feed_id,
-        guid: ref guid,
-        url: ref url,
-        summary: ref summary,
-        updated_at: ref updated_at,
-        published_at: ref published_at,
+        id: ref _id,
+        ref title,
+        ref feed_id,
+        ref guid,
+        ref url,
+        ref summary,
+        ref updated_at,
+        ref published_at,
       } => match aggregate.feeds.get(feed_id) {
         Some(aggregate_feed) => {
           let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
@@ -271,7 +269,7 @@ impl Command for FeedAggregateCommand {
           }
           Ok(vec![])
         },
-        None => panic!(format!("unknown feed: {:?}", feed_id)),
+        None => panic!("unknown feed: {:?}", feed_id),
       },
     }
   }
