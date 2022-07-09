@@ -444,7 +444,6 @@ pub fn blocking_download_feed_rs(url: &Url) -> Result<String, DownloadError> {
 
 /// Parse a string containing a podcast feed.
 pub fn parse_feed_rs(buffer: &str) -> Result<RustFeed, ParseCastsError> {
-  println!("buffer: {}", buffer);
   let parsed_rust_feed = match parser::parse(buffer.as_bytes()) {
     Ok(rust_feed) => rust_feed,
     Err(error) => return Err(ParseCastsError::ParseFeedError(error)),

@@ -44,11 +44,13 @@ async fn cron_task() -> Result<()> {
     loop {
       interval.tick().await;
       for feed in &feeds {
+        println!("fetching {}", &feed.url);
         let body = fetch_feed(&feed.url).await?;
         let remote_feed = parse_doc(&feed.url, body.as_slice())?;
         for mutation in feed.diff(&remote_feed) {
           match mutation {
             FeedMutation::AddedEntry(entry) => {
+              println!("AddedEntry");
               let event = FeedAggregateEvent::EntryObserved{
                 id: uuid::Uuid::new_v4(),
 
@@ -75,9 +77,10 @@ async fn cron_task() -> Result<()> {
               };
               println!("{:?}", event);
             }
-            FeedMutation::ReplacedTitle(_) => {}
-            FeedMutation::ReplacedDescription(_) => {}
-            FeedMutation::ReplacedLogo(_) => {}
+            FeedMutation::ReplacedTitle(new_title) => {todo!("ReplacedTitle: {} with {}", feed.title, 
+            new_title)}
+            FeedMutation::ReplacedDescription(_) => {todo!("ReplacedDescription")}
+            FeedMutation::ReplacedLogo(_) => {todo!("ReplacedLogo")}
             _ => panic!()
           }
         }

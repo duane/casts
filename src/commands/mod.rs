@@ -116,7 +116,7 @@ impl Command for FeedAggregateCommand {
         id: _,
         ref feed_id,
         url: _,
-      } => match aggregate.feeds.get(feed_id) {
+      } => match aggregate.feeds_by_feed_id.get(feed_id) {
         Some(_feed_id) => Err(FeedAggregateError::DuplicateFeedError),
         _ => Ok(vec![]),
       },
@@ -129,7 +129,7 @@ impl Command for FeedAggregateCommand {
         ref summary,
         ref updated_at,
         ref published_at,
-      } => match aggregate.feeds.get(feed_id) {
+      } => match aggregate.feeds_by_feed_id.get(feed_id) {
         Some(aggregate_feed) => {
           let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
           match immutable_feed_aggregate.entries.iter().find(|e| e.guid.as_str() == guid) {
@@ -181,7 +181,7 @@ impl Command for FeedAggregateCommand {
         ref feed_id,
         ref url,
       } => {
-        if let Some(_) = aggregate.feeds.get(feed_id) {
+        if let Some(_) = aggregate.feeds_by_feed_id.get(feed_id) {
           return Err(FeedAggregateError::DuplicateFeedError);
         }
         println!("url: {}", url);
@@ -232,7 +232,7 @@ impl Command for FeedAggregateCommand {
         ref summary,
         ref updated_at,
         ref published_at,
-      } => match aggregate.feeds.get(feed_id) {
+      } => match aggregate.feeds_by_feed_id.get(feed_id) {
         Some(aggregate_feed) => {
           let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
           match immutable_feed_aggregate.entries.iter().find(|e| e.guid.as_str() == guid) {

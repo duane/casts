@@ -101,7 +101,7 @@ async fn main() {
             "./event_store.sqlite",
           )));
           let commits = dump_store.get_range(0, i64::MAX).unwrap();
-          println!("{}", commits.len());
+          println!("# of commits: {}", commits.len());
           for commit in commits {
             println!("{:?}", commit);
           }

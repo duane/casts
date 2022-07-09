@@ -16,7 +16,7 @@ pub struct FeedAggregate {
   pub version: i64,
 
   /// The feeds associated with the aggregate by feed id.
-  pub feeds: HashMap<String, Feed>,
+  pub feeds_by_feed_id: HashMap<String, Feed>,
 }
 
 /// The feed itself.
@@ -91,7 +91,7 @@ impl Aggregate for FeedAggregate {
     FeedAggregate {
       id: uuid,
       version: 0,
-      feeds: HashMap::new(),
+      feeds_by_feed_id: HashMap::new(),
     }
   }
 
@@ -119,7 +119,7 @@ impl EventApplicable for FeedAggregate {
         ref updated_at,
         ref published_at,
       } => {
-        match applied.feeds.get(feed_id) {
+        match applied.feeds_by_feed_id.get(feed_id) {
           Some(_) => unreachable!(),
           None => {
             let new_feed = Feed {
@@ -131,7 +131,7 @@ impl EventApplicable for FeedAggregate {
               published_at: published_at.to_owned(),
               entries: Default::default(),
             };
-            applied.feeds.insert(feed_id.to_owned(), new_feed);
+            applied.feeds_by_feed_id.insert(feed_id.to_owned(), new_feed);
           }
         };
       }
@@ -145,7 +145,7 @@ impl EventApplicable for FeedAggregate {
         ref updated_at,
         ref published_at,
       } => {
-        let feed = applied.feeds.get_mut(feed_id).unwrap();
+        let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
         match feed.entries.get(guid) {
           Some(_) => unreachable!(),
           None => {
@@ -167,7 +167,7 @@ impl EventApplicable for FeedAggregate {
         ref guid,
         ref title,
       } => {
-        let feed = applied.feeds.get_mut(feed_id).unwrap();
+        let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.title = title.to_owned();
       }
@@ -177,7 +177,7 @@ impl EventApplicable for FeedAggregate {
         ref guid,
         ref summary,
       } => {
-        let feed = applied.feeds.get_mut(feed_id).unwrap();
+        let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.summary = summary.to_owned();
       }
@@ -187,7 +187,7 @@ impl EventApplicable for FeedAggregate {
         ref guid,
         ref url,
       } => {
-        let feed = applied.feeds.get_mut(feed_id).unwrap();
+        let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
         let mut entry = feed.entries.get_mut(guid).unwrap();
         entry.url = url.to_owned();
       }
@@ -196,7 +196,7 @@ impl EventApplicable for FeedAggregate {
         ref feed_id,
         ref guid,
       } => {
-        applied.feeds.get_mut(feed_id).unwrap().entries.remove(guid);
+        applied.feeds_by_feed_id.get_mut(feed_id).unwrap().entries.remove(guid);
       }
     }
     applied.version += 1;
@@ -250,10 +250,10 @@ mod tests {
       published_at: None,
     };
     let aggregate_after_application = aggregate.apply(&event);
-    assert_eq!(aggregate_after_application.feeds.len(), 1);
+    assert_eq!(aggregate_after_application.feeds_by_feed_id.len(), 1);
     assert_eq!(aggregate_after_application.version(), 1);
     assert_eq!(
-      aggregate_after_application.feeds[feed_id.as_str()].title,
+      aggregate_after_application.feeds_by_feed_id[feed_id.as_str()].title,
       String::from("Examplecast")
     );
   }

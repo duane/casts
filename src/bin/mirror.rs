@@ -328,7 +328,7 @@ async fn main() -> Result<()> {
     .unwrap();
 
   let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
-  let feeds: Vec<Feed> = aggregate.feeds.values().map(|e|e.to_owned().into()).collect();
+  let feeds: Vec<Feed> = aggregate.feeds_by_feed_id.values().map(|e|e.to_owned().into()).collect();
   
   mirror_task(feeds).await
 }
