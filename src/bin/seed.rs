@@ -1,5 +1,6 @@
 extern crate anyhow;
 extern crate event_source;
+extern crate either;
 extern crate feed_rs;
 extern crate libc;
 extern crate quick_xml;
@@ -10,6 +11,7 @@ extern crate serde_json;
 extern crate uuid;
 extern crate url;
 
+use casts::commands::FeedAggregateError;
 use casts::{aggregate::FeedAggregate};
 use event_source::commit::Commit;
 use event_source::dispatch::DispatchDelegate;
@@ -68,10 +70,18 @@ async fn main() {
     .unwrap();
 
   let aggregate: FeedAggregate = client.fetch_latest(uuid).unwrap();
-  let cmd = casts::commands::FeedAggregateCommand::AddFeed{
-    id: uuid,
-    feed_id: Uuid::new_v4().to_string(),
-    url: Url::parse("https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml").unwrap(),
-  };
-  client.issue_command_async(&aggregate, &cmd, &cmd).await.unwrap();
+  let feeds = ["https://fans.fm/feed/e0dc46be-6f5b-453e-bfc7-2a2ac5ced97c.xml"];
+  for url_str in feeds {
+    let url = Url::parse(url_str).unwrap(); 
+    let cmd = casts::commands::FeedAggregateCommand::AddFeed{
+      id: uuid,
+      feed_id: url.to_string(),
+      url,
+    };
+    match client.issue_command_async(&aggregate, &cmd, &cmd).await {
+      Ok(_) | Err(either::Either::Right(FeedAggregateError::DuplicateFeedError)) => {}
+      Err(err) => panic!("error seeding feed: {:?}", err)
+    }
+  }
+  
 }
