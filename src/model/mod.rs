@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
-use url::Url;
 use std::time::Duration;
+use url::Url;
+use serde::Serialize;
 
 use feed_rs::model::{
   Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
@@ -11,7 +12,7 @@ use std::convert::From;
 
 /// The feed model.
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize)]
 /// A feed according to feeds-rs.
 pub struct Feed {
   /// The definitive url of the feed
@@ -92,11 +93,34 @@ impl Feed {
 // Conversions
 impl From<immutable_feed::Feed> for Feed {
   fn from(feed: immutable_feed::Feed) -> Feed {
-  Feed { url: feed.url, title: feed.title, description: feed.description, logo: None, entries: vec![] }
+    Feed {
+      url: feed.url,
+      title: feed.title,
+      description: feed.description,
+      logo: None,
+      entries: feed.entries.into_iter().map(|e| e.into()).collect(),
+    }
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+impl From<immutable_feed::Entry> for Entry {
+  fn from(entry: immutable_feed::Entry) -> Entry {
+    Entry {
+      id: entry.guid,
+      title: entry.title,
+      link: None,
+      summary: entry.summary,
+      media: Some(Media {
+        url: Some(entry.url),
+        content_type: None,
+        duration: None,
+        size: None,
+      }),
+    }
+  }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 /// A single entry in a feed.
 pub struct Entry {
   /// a GUID assigned by feeds-rs if not specified by the feed.
@@ -139,7 +163,7 @@ impl Entry {
   }
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 /// Representing an Image as seen from a feed.
 pub struct Image {
   /// The URL where the image may be found.
@@ -162,14 +186,14 @@ pub struct Image {
 }
 
 /// An audio blob
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 pub struct Media {
   /// the url of the blob
   pub url: Option<Url>,
 
   /// the content type of the blob
   pub content_type: Option<String>,
-  
+
   /// the duration of the blob
   pub duration: Option<Duration>,
 
@@ -177,7 +201,7 @@ pub struct Media {
   pub size: Option<u64>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Default, Clone, PartialEq, Eq, Debug, Serialize)]
 /// A link to some media on the internet.
 pub struct Link {
   /// The URL of the link.
@@ -199,7 +223,13 @@ pub struct Link {
   pub length: Option<u64>,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug)]
+impl From<&Url> for Link {
+  fn from(url: &Url) -> Link {
+    Link { href: url.to_string(), ..Default::default() }
+  }
+}
+
+#[derive(Clone, PartialEq, Eq, Debug, Serialize)]
 /// A description of how to interpret the content of the entry.
 pub struct Content {
   /// The body of the content.
@@ -215,7 +245,7 @@ pub struct Content {
   pub src: Option<Link>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 /// Feed delta: a struct representing changes to a feed.
 pub enum FeedMutation {
   /// Indicates a differing feed title.
@@ -237,7 +267,7 @@ pub enum FeedMutation {
   ModifiedEntry(Entry, Vec<EntryMutation>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 /// A single change to an entry.
 pub enum EntryMutation {
   /// Indicates a differing entry title.
@@ -271,12 +301,16 @@ impl Feed {
 
 impl From<RustEntry> for Entry {
   fn from(entry: RustEntry) -> Entry {
-    Entry{
+    Entry {
       id: entry.id,
-      title: entry.title.map(|text|text.content),
+      title: entry.title.map(|text| text.content),
       link: entry.links.first().map(|link| Link::from(link.to_owned())),
       summary: entry.summary.map(|text| text.content),
-      media: entry.media.first().map(|m|m.content.first().unwrap().to_owned()).map(Media::from)
+      media: entry
+        .media
+        .first()
+        .map(|m| m.content.first().unwrap().to_owned())
+        .map(Media::from),
     }
   }
 }
@@ -313,7 +347,7 @@ impl From<RustContent> for Content {
       body: content.body,
       content_type: content.content_type.to_string(),
       length: content.length,
-      src: content.src.map(Link::from)
+      src: content.src.map(Link::from),
     }
   }
 }
@@ -322,7 +356,7 @@ impl From<MediaContent> for Media {
   fn from(content: MediaContent) -> Media {
     Media {
       url: content.url,
-      content_type: content.content_type.map(|ct|ct.to_string()),
+      content_type: content.content_type.map(|ct| ct.to_string()),
       duration: content.duration,
       size: content.size,
     }

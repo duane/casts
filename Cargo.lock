@@ -255,6 +255,7 @@ dependencies = [
  "libc",
  "log",
  "magic",
+ "pretty_env_logger",
  "quick-xml",
  "regex",
  "reqwest",

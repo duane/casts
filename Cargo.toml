@@ -76,6 +76,7 @@ libc = "*"
 ## util - misc
 base64 = "*"
 env_logger = "*"
+pretty_env_logger = "*"
 regex = "*"
 log = "*"
 
