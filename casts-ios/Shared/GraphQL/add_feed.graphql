@@ -1,0 +1,3 @@
+mutation AddFeed($streamId:Uuid!,$feedId:Uuid!,$url:Url!) {
+  addFeed(streamId:$streamId, feedId:$feedId, url:$url)
+}

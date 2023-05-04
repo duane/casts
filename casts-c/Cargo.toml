@@ -1,0 +1,25 @@
+[package]
+name = "casts-c"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+path = "src/lib.rs"
+crate-type = ["staticlib"]
+
+
+[dependencies]
+casts = { path = "../casts" }
+
+log = "*"
+pretty_env_logger = "*"
+lazy_static = "*"
+futures = "*"
+juniper = { path = "../../../sandbox/juniper/juniper" }
+juniper-swift = { path = "../juniper-swift" }
+serde_json = "*"
+
+[build-dependencies]
+cbindgen = "*"

@@ -1,0 +1,10 @@
+[workspace]
+members = [
+    "casts",
+    "casts-c",
+    # "casts-ios", # xcode project
+    "commit-store",
+    # "commit-store-macos", # xcode project
+    "immutable-feed",
+    "juniper-swift",
+]

@@ -1,0 +1,14 @@
+[package]
+name = "juniper-swift"
+version = "0.1.0"
+authors = ["Duane Bailey <bailey.d.r@gmail.com>"]
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+juniper = "*"
+serde_json = "*"
+lazy_static = "*"
+libc = "*"
+futures = { version = "*", features = ["thread-pool"] }

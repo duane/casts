@@ -1,0 +1,6 @@
+{
+  "05337fa524f1693dbd379413e897180b1946a2b9f55702559eb79f85925f5053" : {
+    "name" : "AddFeed",
+    "source" : "mutation AddFeed($streamId: Uuid!, $feedId: Uuid!, $url: Url!) {\n  addFeed(streamId: $streamId, feedId: $feedId, url: $url)\n}"
+  }
+}

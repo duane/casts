@@ -1,0 +1,28 @@
+[package]
+name = "immutable-feed"
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://git.sr.ht/~duane/immutable-feed"
+readme = "README.md"
+
+[dependencies]
+## Time
+chrono = { version = "*", features = ["serde"] }
+
+## error handling
+anyhow = "*"
+
+## net
+url = { version = "*", features = ["serde"] }
+reqwest = "*"
+
+## rss
+feed-rs = { path = "../../feed-rs/feed-rs" }
+quick-xml = "~0.28.2"
+
+## content handling
+htmlescape = "*"
+
+## serialization
+serde = "*"

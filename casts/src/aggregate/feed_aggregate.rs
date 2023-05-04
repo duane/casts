@@ -1,0 +1,194 @@
+use immutable_feed::{Entry, Feed};
+
+use super::Aggregate;
+use crate::applicable::EventApplicable;
+use crate::events::FeedAggregateEvent;
+use serde::Serialize;
+use std::collections::HashMap;
+use uuid::Uuid;
+
+/// The feed aggregate, representing the total result of events in-memory.
+#[derive(Default, Serialize, Clone, Debug)]
+pub struct FeedAggregate {
+    /// The id of the aggregate
+    pub stream_id: Uuid,
+
+    /// The version of the aggregate.
+    pub version: i64,
+
+    /// The feeds associated with the aggregate by feed id.
+    pub feeds_by_feed_id: HashMap<Uuid, Feed>,
+}
+
+impl FeedAggregate {
+    /// Make a new feed aggregate.
+    pub fn new() -> FeedAggregate {
+        FeedAggregate::with_id(Uuid::new_v4())
+    }
+}
+
+impl Aggregate for FeedAggregate {
+    fn with_id(uuid: Uuid) -> FeedAggregate {
+        FeedAggregate {
+            stream_id: uuid,
+            version: 0,
+            feeds_by_feed_id: HashMap::new(),
+        }
+    }
+
+    fn version(&self) -> i64 {
+        self.version
+    }
+
+    fn id(&self) -> Uuid {
+        self.stream_id
+    }
+}
+
+impl EventApplicable for FeedAggregate {
+    type Event = FeedAggregateEvent;
+
+    fn apply(&self, event: &FeedAggregateEvent) -> FeedAggregate {
+        let mut applied = self.clone();
+        match event {
+            &FeedAggregateEvent::Added {
+                stream_id: _,
+                ref feed_id,
+                ref title,
+                ref url,
+                ref description,
+                updated_at: _,
+                published_at: _,
+            } => {
+                match applied.feeds_by_feed_id.get(feed_id) {
+                    Some(_) => unreachable!(),
+                    None => {
+                        let new_feed = Feed {
+                            title: title.to_owned(),
+                            url: url.to_owned(),
+                            description: description.to_owned(),
+                            entries: Default::default(),
+                            // logo: None,
+                            updated_at: None,
+                            published_at: None,
+                        };
+                        applied
+                            .feeds_by_feed_id
+                            .insert(feed_id.to_owned(), new_feed);
+                    }
+                };
+            }
+            &FeedAggregateEvent::EntryObserved {
+                stream_id: _,
+                ref feed_id,
+                ref guid,
+                ref title,
+                ref url,
+                ref summary,
+                updated_at: _,
+                published_at: _,
+            } => {
+                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
+                match feed.entries.iter().find(|e| &e.guid == guid) {
+                    Some(_) => unreachable!(),
+                    None => {
+                        let entry = Entry {
+                            guid: guid.to_owned(),
+                            title: title.to_owned(),
+                            // link: Some(url.into()),
+                            url: url.to_owned(),
+                            updated_at: None,
+                            published_at: None,
+                            summary: summary.to_owned(),
+                            // media: None,
+                        };
+                        feed.entries.push(entry);
+                    }
+                }
+            }
+            &FeedAggregateEvent::EntryTitleUpdated {
+                stream_id: _,
+                ref feed_id,
+                ref guid,
+                ref title,
+            } => {
+                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
+                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
+                entry.title = title.to_owned();
+            }
+            &FeedAggregateEvent::EntrySummaryUpdated {
+                stream_id: _,
+                ref feed_id,
+                ref guid,
+                ref summary,
+            } => {
+                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
+                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
+                entry.summary = summary.to_owned();
+            }
+            &FeedAggregateEvent::EntryUrlUpdated {
+                stream_id: _,
+                ref feed_id,
+                ref guid,
+                ref url,
+            } => {
+                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
+                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
+                entry.url = url.to_owned();
+            }
+            &FeedAggregateEvent::EntryDisappeared {
+                stream_id: _,
+                feed_id: _,
+                guid: _,
+            } => {
+                log::info!("Not applying entry disappearance.");
+            }
+        }
+        applied.version += 1;
+        applied
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use url::Url;
+
+    use super::*;
+    #[test]
+    fn creates_new_aggregate() {
+        let uuid = Uuid::new_v4();
+        let aggregate = FeedAggregate::with_id(uuid.clone());
+        assert_eq!(uuid, aggregate.stream_id);
+        assert_eq!(0, aggregate.version);
+    }
+
+    #[test]
+    fn works_with_sentinel_uuid() {
+        let uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
+        let aggregate = FeedAggregate::with_id(uuid.clone());
+        assert_eq!(uuid, aggregate.stream_id);
+        assert_eq!(0, aggregate.version);
+    }
+
+    #[test]
+    fn adds_item() {
+        let aggregate = FeedAggregate::new();
+        let feed_id = Uuid::new_v4();
+        let event = FeedAggregateEvent::Added {
+            stream_id: aggregate.stream_id,
+            feed_id: feed_id.clone(),
+            title: String::from("Examplecast"),
+            url: Url::parse("http://example.com/examplecast.xml").unwrap(),
+            description: None,
+            updated_at: None,
+            published_at: None,
+        };
+        let aggregate_after_application = aggregate.apply(&event);
+        assert_eq!(aggregate_after_application.feeds_by_feed_id.len(), 1);
+        assert_eq!(aggregate_after_application.version(), 1);
+        assert_eq!(
+            aggregate_after_application.feeds_by_feed_id[&feed_id].title,
+            String::from("Examplecast")
+        );
+    }
+}

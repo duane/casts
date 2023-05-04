@@ -1,0 +1,34 @@
+[package]
+name = "casts"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+anyhow = "*"
+bytes = "*"
+async-trait = "*"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "*"
+serde_derive = "*"
+pretty_env_logger = "*"
+log = "*"
+uuid = "*"
+commit-store = { path = "../commit-store" }
+juniper = { path = "../../../sandbox/juniper/juniper" }
+juniper_hyper = { path = "../../../sandbox/juniper/juniper_hyper" }
+lazy_static = "*"
+juniper-swift = { path = "../juniper-swift" }
+chrono = "*"
+url = { version = "*", features = ["serde"] }
+immutable-feed = { path = "../immutable-feed" }
+hyper = "*"
+tokio = { version = "~1.28.0", features = ["full"] }
+futures = { version = "*", features = [
+    "std",
+    "async-await",
+    "executor",
+    "thread-pool",
+] }
+reqwest = "*"
