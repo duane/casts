@@ -108,66 +108,9 @@ impl Command for FeedAggregateCommand {
 
     fn apply(
         &self,
-        aggregate: &FeedAggregate,
+        _aggregate: &FeedAggregate,
     ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
-        match self {
-            &FeedAggregateCommand::AddFeed {
-                stream_id: _,
-                ref feed_id,
-                url: _,
-            } => match aggregate.feeds_by_feed_id.get(feed_id) {
-                Some(_feed_id) => Err(FeedAggregateError::DuplicateFeedError),
-                _ => Ok(vec![]),
-            },
-            &FeedAggregateCommand::FeedEntryObserved {
-                stream_id: ref _id,
-                title: _,
-                ref feed_id,
-                guid: _,
-                url: _,
-                summary: _,
-                updated_at: _,
-                published_at: _,
-            } => match aggregate.feeds_by_feed_id.get(feed_id) {
-                Some(_aggregate_feed) => {
-                    // let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
-                    // match immutable_feed_aggregate.entries.iter().find(|e| e.guid.as_str() == guid) {
-                    //   Some(existing_entry) => {
-                    //     let observed_entry = immutable_feed::Entry{
-                    //       guid: guid.to_owned(),
-                    //       title: Some(title.to_owned()),
-                    //       url: url.to_owned(),
-                    //       summary: summary.to_owned(),
-                    //       updated_at: updated_at.to_owned(),
-                    //       published_at: published_at.to_owned(),
-                    //     };
-                    //     let diff = observed_entry.diff(&existing_entry);
-                    //     for mutation in diff.iter() {
-                    //       println!("{:?}", mutation);
-                    //     }
-                    //   },
-                    //   None => {
-                    //     return Ok(
-                    //       vec![
-                    //         FeedAggregateEvent::EntryObserved{
-                    //           id: Uuid::new_v4(),
-                    //           title: Some(title.to_owned()),
-                    //           feed_id: feed_id.to_owned(),
-                    //           guid: guid.to_owned(),
-                    //           url: url.to_owned(),
-                    //           summary: summary.to_owned(),
-                    //           updated_at: updated_at.to_owned(),
-                    //           published_at: published_at.to_owned(),
-                    //         },
-                    //       ]
-                    //     );
-                    //   },
-                    // }
-                    Ok(vec![])
-                }
-                None => panic!("unknown feed: {:?}", feed_id),
-            },
-        }
+        unimplemented!("do not use sync apply for commands")
     }
 
     async fn async_apply(
@@ -215,52 +158,44 @@ impl Command for FeedAggregateCommand {
                 Ok(events)
             }
             &FeedAggregateCommand::FeedEntryObserved {
-                stream_id: ref _id,
-                title: _,
+                ref stream_id,
+                ref title,
                 ref feed_id,
-                guid: _,
-                url: _,
-                summary: _,
-                updated_at: _,
-                published_at: _,
+                ref guid,
+                ref url,
+                ref summary,
+                ref updated_at,
+                ref published_at,
             } => match aggregate.feeds_by_feed_id.get(feed_id) {
-                Some(feed) => {
-                    // let immutable_feed_aggregate = immutable_feed::Feed::from(aggregate_feed.clone());
-                    // match immutable_feed_aggregate
-                    //   .entries
-                    //   .iter()
-                    //   .find(|e| e.guid.as_str() == guid)
-                    // {
-                    //   Some(existing_entry) => {
-                    // let observed_entry = immutable_feed::Entry {
-                    //   guid: guid.to_owned(),
-                    //   title: Some(title.to_owned()),
-                    //   url: url.to_owned(),
-                    //   summary: summary.to_owned(),
-                    //   updated_at: updated_at.to_owned(),
-                    //   published_at: published_at.to_owned(),
-                    // };
-                    // let diff = observed_entry.diff(&existing_entry);
-                    // for mutation in diff.iter() {
-                    //   println!("{:?}", mutation);
-                    // }
-                    //   Ok(vec![])
-                    // }
-                    // None => {
-                    //   return Ok(vec![FeedAggregateEvent::EntryObserved {
-                    //     id: Uuid::new_v4(),
-                    //     title: Some(title.to_owned()),
-                    //     feed_id: feed_id.to_owned(),
-                    //     guid: guid.to_owned(),
-                    //     url: url.to_owned(),
-                    //     summary: summary.to_owned(),
-                    //     updated_at: updated_at.to_owned(),
-                    //     published_at: published_at.to_owned(),
-                    //   }]);
-                    // }
-                    // }
-                    Ok(vec![])
-                }
+                Some(feed) => match feed.entries.iter().find(|e| e.guid.as_str() == guid) {
+                    Some(existing_entry) => {
+                        let observed_entry = immutable_feed::Entry {
+                            guid: guid.to_owned(),
+                            title: Some(title.to_owned()),
+                            url: url.to_owned(),
+                            summary: summary.to_owned(),
+                            updated_at: updated_at.to_owned(),
+                            published_at: published_at.to_owned(),
+                        };
+                        let diff = observed_entry.diff(&existing_entry);
+                        for mutation in diff.iter() {
+                            println!("{:?}", mutation);
+                        }
+                        Ok(vec![])
+                    }
+                    None => {
+                        return Ok(vec![FeedAggregateEvent::EntryObserved {
+                            stream_id: stream_id.to_owned(),
+                            title: Some(title.to_owned()),
+                            feed_id: feed_id.to_owned(),
+                            guid: guid.to_owned(),
+                            url: url.to_owned(),
+                            summary: summary.to_owned(),
+                            updated_at: updated_at.to_owned(),
+                            published_at: published_at.to_owned(),
+                        }]);
+                    }
+                },
                 None => panic!("unknown feed: {:?}", feed_id),
             },
         }
