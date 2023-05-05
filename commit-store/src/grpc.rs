@@ -101,7 +101,7 @@ impl AsyncClientStore for GrpcClient {
 
 pub fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
     let seconds = datetime.timestamp();
-    let nanos_i64 = (datetime.timestamp_nanos() - seconds * 1_000_000_000);
+    let nanos_i64 = datetime.timestamp_nanos() - seconds * 1_000_000_000;
     let nanos = nanos_i64 as i32;
     println!(
         "seconds: {}, nanos_i64: {}, nanos: {}",

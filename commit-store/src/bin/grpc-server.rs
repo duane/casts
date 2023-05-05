@@ -1,12 +1,11 @@
 #[macro_use]
 extern crate log;
 
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use commit_store::{
     dispatch::DispatchedStore,
     domain_to_grpc_ts,
     grpc_interface::{commit_store_server::CommitStoreServer, Commits, Cursor},
-    grpc_to_domain_ts,
     postgres::PostgresStoreAsync,
     AsyncClientStore, StoreErrorType,
 };
@@ -14,7 +13,6 @@ use futures::Stream;
 use std::pin::Pin;
 use tokio_stream::StreamExt;
 
-use prost_types::Timestamp;
 use serde_json::Value;
 use tonic::{transport::Server, Code, Request, Response, Status};
 use uuid::Uuid;

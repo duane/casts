@@ -1,8 +1,6 @@
 use chrono::Utc;
 use commit_store::{commit::CommitAttempt, AsyncClientStore, GrpcClient};
-use core::ffi::c_void;
 use juniper::{graphql_object, EmptySubscription, FieldResult, RootNode};
-use juniper_swift::{GraphQLExecuteContext, GraphQLUnownedBuffer};
 use url::Url;
 use uuid::Uuid;
 
