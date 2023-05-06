@@ -88,15 +88,17 @@ pub struct FeedsAggregate {
 
 #[derive(juniper::GraphQLObject)]
 pub struct Feed {
+    pub feed_id: Uuid,
     pub title: String,
     pub description: String,
     pub entries: Vec<Entry>,
     pub logo: Option<Image>,
 }
 
-impl From<immutable_feed::Feed> for Feed {
-    fn from(feed: immutable_feed::Feed) -> Self {
+impl Feed {
+    fn with_feed_id(feed: immutable_feed::Feed, feed_id: Uuid) -> Self {
         Feed {
+            feed_id,
             title: feed.title,
             description: feed.description.unwrap_or_default(),
             entries: feed.entries.into_iter().map(Entry::from).collect(),
@@ -146,7 +148,6 @@ impl Mutation {
         let events_count = events.len() as i64;
         let events: serde_json::Value =
             serde_json::to_value(events).expect("could not serialize events to json");
-        println!("events_json: {:?}", events);
 
         let commit_attempt = CommitAttempt {
             stream_id,
@@ -178,8 +179,8 @@ impl Query {
         let aggregate = hydrate_aggregate(&mut client, stream_id).await;
         aggregate
             .feeds_by_feed_id
-            .into_values()
-            .map(Feed::from)
+            .into_iter()
+            .map(|(feed_id, feed)| Feed::with_feed_id(feed, feed_id))
             .collect()
     }
 }

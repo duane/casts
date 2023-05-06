@@ -179,7 +179,7 @@ impl Command for FeedAggregateCommand {
                         };
                         let diff = observed_entry.diff(&existing_entry);
                         for mutation in diff.iter() {
-                            println!("{:?}", mutation);
+                            todo!()
                         }
                         Ok(vec![])
                     }

@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		471D55BA2A0479B700DE85B8 /* GraphQL in Resources */ = {isa = PBXBuildFile; fileRef = 471D55B92A0479B700DE85B8 /* GraphQL */; };
-		471D55BB2A0479B700DE85B8 /* GraphQL in Resources */ = {isa = PBXBuildFile; fileRef = 471D55B92A0479B700DE85B8 /* GraphQL */; };
 		471D55BD2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */; };
 		471D55BE2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */; };
 		471D55C12A06AB9400DE85B8 /* ApolloAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55C02A06AB9400DE85B8 /* ApolloAPI */; };
@@ -22,6 +20,12 @@
 		471D55CE2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */; };
 		471D55D02A06B7B200DE85B8 /* GraphQLClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */; };
 		471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */; };
+		471D55DA2A06BDA200DE85B8 /* Casts in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55D92A06BDA200DE85B8 /* Casts */; };
+		471D55DC2A06BDA700DE85B8 /* Casts in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55DB2A06BDA700DE85B8 /* Casts */; };
+		471D55DE2A06D5A200DE85B8 /* FeedDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55DD2A06D5A200DE85B8 /* FeedDetailView.swift */; };
+		471D55DF2A06D5A200DE85B8 /* FeedDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55DD2A06D5A200DE85B8 /* FeedDetailView.swift */; };
+		471D55E42A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */; };
+		471D55E52A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */; };
 		472186552A04766A005F4CD6 /* Apollo in Frameworks */ = {isa = PBXBuildFile; productRef = 472186542A04766A005F4CD6 /* Apollo */; };
 		47D04CF727254514000FD29E /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04CF627254514000FD29E /* Tests_iOS.swift */; };
 		47D04D0227254514000FD29E /* Tests_macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D0127254514000FD29E /* Tests_macOS.swift */; };
@@ -61,12 +65,14 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		471D55B92A0479B700DE85B8 /* GraphQL */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GraphQL; sourceTree = "<group>"; };
 		471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransport.swift; sourceTree = "<group>"; };
 		471D55C62A06AC3600DE85B8 /* RoutePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePicker.swift; sourceTree = "<group>"; };
 		471D55C92A06B02600DE85B8 /* FeedListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedListView.swift; sourceTree = "<group>"; };
 		471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedListViewModel.swift; sourceTree = "<group>"; };
 		471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphQLClient.swift; sourceTree = "<group>"; };
+		471D55D82A06BD8B00DE85B8 /* casts-swift */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = "casts-swift"; path = "../casts-swift"; sourceTree = "<group>"; };
+		471D55DD2A06D5A200DE85B8 /* FeedDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedDetailView.swift; sourceTree = "<group>"; };
+		471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedEntryDetailView.swift; sourceTree = "<group>"; };
 		47D04CDB27254513000FD29E /* playApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = playApp.swift; sourceTree = "<group>"; };
 		47D04CDC27254513000FD29E /* PlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayView.swift; sourceTree = "<group>"; };
 		47D04CDD27254514000FD29E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -93,6 +99,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55DC2A06BDA700DE85B8 /* Casts in Frameworks */,
 				471D55C12A06AB9400DE85B8 /* ApolloAPI in Frameworks */,
 				472186552A04766A005F4CD6 /* Apollo in Frameworks */,
 			);
@@ -102,6 +109,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55DA2A06BDA200DE85B8 /* Casts in Frameworks */,
 				471D55C52A06AC0000DE85B8 /* ApolloAPI in Frameworks */,
 				471D55C32A06ABFD00DE85B8 /* Apollo in Frameworks */,
 			);
@@ -131,9 +139,18 @@
 			name = Frameworks;
 			sourceTree = "<group>";
 		};
+		471D55D22A06BC9500DE85B8 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				471D55D82A06BD8B00DE85B8 /* casts-swift */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		47D04CD527254513000FD29E = {
 			isa = PBXGroup;
 			children = (
+				471D55D22A06BC9500DE85B8 /* Packages */,
 				47D04CDA27254513000FD29E /* Shared */,
 				47D04CE427254514000FD29E /* iOS */,
 				47D04CEB27254514000FD29E /* macOS */,
@@ -147,8 +164,8 @@
 		47D04CDA27254513000FD29E /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				471D55DD2A06D5A200DE85B8 /* FeedDetailView.swift */,
 				471D55C62A06AC3600DE85B8 /* RoutePicker.swift */,
-				471D55B92A0479B700DE85B8 /* GraphQL */,
 				47D04CDB27254513000FD29E /* playApp.swift */,
 				47D04D6227258D55000FD29E /* ContentView.swift */,
 				47D04CDC27254513000FD29E /* PlayView.swift */,
@@ -161,6 +178,7 @@
 				471D55C92A06B02600DE85B8 /* FeedListView.swift */,
 				471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */,
 				471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */,
+				471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -230,6 +248,7 @@
 			packageProductDependencies = (
 				472186542A04766A005F4CD6 /* Apollo */,
 				471D55C02A06AB9400DE85B8 /* ApolloAPI */,
+				471D55DB2A06BDA700DE85B8 /* Casts */,
 			);
 			productName = "play (iOS)";
 			productReference = 47D04CE227254514000FD29E /* play.app */;
@@ -251,6 +270,7 @@
 			packageProductDependencies = (
 				471D55C22A06ABFD00DE85B8 /* Apollo */,
 				471D55C42A06AC0000DE85B8 /* ApolloAPI */,
+				471D55D92A06BDA200DE85B8 /* Casts */,
 			);
 			productName = "play (macOS)";
 			productReference = 47D04CEA27254514000FD29E /* play.app */;
@@ -349,7 +369,6 @@
 			files = (
 				47D04D1D2725460E000FD29E /* sample.mp3 in Resources */,
 				47D04D0827254514000FD29E /* Assets.xcassets in Resources */,
-				471D55BA2A0479B700DE85B8 /* GraphQL in Resources */,
 				47D04D4527257C19000FD29E /* sample.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -360,7 +379,6 @@
 			files = (
 				47D04D1E2725460E000FD29E /* sample.mp3 in Resources */,
 				47D04D0927254514000FD29E /* Assets.xcassets in Resources */,
-				471D55BB2A0479B700DE85B8 /* GraphQL in Resources */,
 				47D04D4627257C19000FD29E /* sample.jpg in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -387,8 +405,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				471D55CA2A06B02600DE85B8 /* FeedListView.swift in Sources */,
+				471D55DE2A06D5A200DE85B8 /* FeedDetailView.swift in Sources */,
 				471D55CD2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0627254514000FD29E /* PlayView.swift in Sources */,
+				471D55E42A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */,
 				471D55C72A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
 				471D55D02A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
 				471D55BD2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */,
@@ -404,8 +424,10 @@
 			buildActionMask = 2147483647;
 			files = (
 				471D55CB2A06B02600DE85B8 /* FeedListView.swift in Sources */,
+				471D55DF2A06D5A200DE85B8 /* FeedDetailView.swift in Sources */,
 				471D55CE2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0727254514000FD29E /* PlayView.swift in Sources */,
+				471D55E52A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */,
 				471D55C82A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
 				471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
 				471D55BE2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */,
@@ -624,7 +646,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cc.duane.play;
 				PRODUCT_NAME = play;
 				SDKROOT = macosx;
@@ -650,7 +672,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 11.0;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
 				PRODUCT_BUNDLE_IDENTIFIER = cc.duane.play;
 				PRODUCT_NAME = play;
 				SDKROOT = macosx;
@@ -825,6 +847,14 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 472186532A04766A005F4CD6 /* XCRemoteSwiftPackageReference "apollo-ios" */;
 			productName = ApolloAPI;
+		};
+		471D55D92A06BDA200DE85B8 /* Casts */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Casts;
+		};
+		471D55DB2A06BDA700DE85B8 /* Casts */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = Casts;
 		};
 		472186542A04766A005F4CD6 /* Apollo */ = {
 			isa = XCSwiftPackageProductDependency;

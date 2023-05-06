@@ -9,8 +9,8 @@ import Foundation
 import Apollo
 
 final class GraphQLClient {
-    static let shared = Network()
+    static let shared = GraphQLClient()
     private(set) lazy var apollo = ApolloClient(
-        url: URL(string: "http://localhost:3000")!
+        url: URL(string: "http://127.0.0.1:3000/graphql")!
     )
 }

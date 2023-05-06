@@ -103,15 +103,10 @@ pub fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
     let seconds = datetime.timestamp();
     let nanos_i64 = datetime.timestamp_nanos() - seconds * 1_000_000_000;
     let nanos = nanos_i64 as i32;
-    println!(
-        "seconds: {}, nanos_i64: {}, nanos: {}",
-        seconds, nanos_i64, nanos
-    );
     GrpcTimestamp { seconds, nanos }
 }
 
 pub fn grpc_to_domain_ts(timestamp: &GrpcTimestamp) -> DateTime<Utc> {
-    println!("{:?} {}", timestamp, timestamp.nanos as u32);
     Utc.timestamp_opt(timestamp.seconds, timestamp.nanos as u32)
         .unwrap()
 }

@@ -20,5 +20,5 @@ struct playApp: App {
 }
 
 class PlayAppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
-    let client = ApolloClient(url: URL(string: "http://localhost:3000/graphql")!)
+    
 }

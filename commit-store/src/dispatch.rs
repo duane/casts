@@ -95,7 +95,6 @@ impl<S: AsyncClientStore> AsyncClientStore for DispatchedStore<S> {
         commit_attempt: &CommitAttempt,
     ) -> Result<Commit, Box<dyn StoreError>> {
         let commit = self.store.commit(&commit_attempt).await?;
-        println!("committed; dispatching.");
         self.dispatcher.dispatch(commit.clone()).await;
         Ok(commit)
     }

@@ -8,11 +8,12 @@
 import SwiftUI
 
 struct FeedListView: View {
-    
-    
+    @StateObject var feedsModel: FeedListViewModel = FeedListViewModel()
     var body: some View {
-        Button("Fetch me") {
-            print("Fetching")
+        NavigationStack {
+            List(feedsModel.feeds, id: \.feedId) { feed in
+                NavigationLink(feed.title, destination: FeedDetailView(feed: feed))
+            }.navigationTitle("Browse Feeds")
         }
     }
 }

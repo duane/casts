@@ -1,5 +1,5 @@
 {
-  "schemaNamespace": "generated",
+  "schemaNamespace": "casts",
   "input": {
     "schemaSearchPaths": [
       "**/*.graphqls"

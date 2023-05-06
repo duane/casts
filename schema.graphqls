@@ -27,6 +27,7 @@ type Mutation {
 }
 
 type Feed {
+  feedId: Uuid!
   title: String!
   description: String!
   entries: [Entry!]!
