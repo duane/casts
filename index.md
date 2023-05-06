@@ -62,4 +62,51 @@ Note what is not in this MVP:
 5. No settings or preferences.
 6. No authentication.
 7. No downloading of episodes—streaming only.
+8. No offline functionality to sync—it's either server- or client-driven, no in-between yet.
 
+### MVP Checklist
+[x] `commit-store` grpc server
+[ ] `commit-store` web frontend
+[x] `commit-store` Mac/iOS frontend
+[x] `GraphQL` server - add feed
+[ ] `GraphQL` server - subscriptions
+[x] Juniper -> apollo `NetworkTransport` binding + backing thread-pool on start.
+[ ] Commit-Store
+	[x] GRPC server
+	[x] appendCommit
+	[x] streamCommits
+	[x] readCommitRange
+	[ ] backwardsScan
+	[ ] All stream support
+	[x] Mac/iOS frontend
+	[ ] web frontend
+	[ ] GraphQL frontend (would be nice to return commits for mutations with side-effects and no data to return)
+[ ] Application server
+	[x] GraphQL server - mutation
+	[x] GraphQL server - query
+	[ ] GraphQL server - subscribe
+	[x] casts-swift generation
+[ ] macOS/iOS client
+	[x] consume `FetchFeeds` query to drive feed, entry views
+	[ ] Actually allow streaming of linked content.
+	[ ] Provide compile-time option for in-memory vs endpoint-driven application state.
+	[ ] Add `episodeState` to `Entry` model corresponding to `Active`, `Archived`, or `Hidden`.
+[ ] Infrastructure/Meta
+  [ ] Automated iOS/macOS builds
+	[ ] Continuous testing (using source hut builds)
+	[ ] Continuous integration with railway deployment (or k8s if that fails) + TLS for production environment.
+	[ ] Integration with Sentry
+	[ ] Integration with Prometheus
+	[ ] redis or memcached Aggregate Cache
+	[ ] Automatic documentation generation
+	[ ] Clamp down on rust lints.
+
+Horizon
+
+* Authentication — should go down to commit-level.
+* Downloading + audio need fundamentally different cross-platform sharing solution than graphql can offer.
+* Mirroring all assets (audio, artwork, notes) is something that might be worth paying for.
+* Linux client
+* CLI client
+* File-driven configuration for server
+* Syncing offline events and integrating both local- and server- state (big push!)
