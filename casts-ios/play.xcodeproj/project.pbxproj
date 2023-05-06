@@ -3,12 +3,25 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 52;
+	objectVersion = 53;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		471D55BA2A0479B700DE85B8 /* GraphQL in Resources */ = {isa = PBXBuildFile; fileRef = 471D55B92A0479B700DE85B8 /* GraphQL */; };
 		471D55BB2A0479B700DE85B8 /* GraphQL in Resources */ = {isa = PBXBuildFile; fileRef = 471D55B92A0479B700DE85B8 /* GraphQL */; };
+		471D55BD2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */; };
+		471D55BE2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */; };
+		471D55C12A06AB9400DE85B8 /* ApolloAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55C02A06AB9400DE85B8 /* ApolloAPI */; };
+		471D55C32A06ABFD00DE85B8 /* Apollo in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55C22A06ABFD00DE85B8 /* Apollo */; };
+		471D55C52A06AC0000DE85B8 /* ApolloAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 471D55C42A06AC0000DE85B8 /* ApolloAPI */; };
+		471D55C72A06AC3600DE85B8 /* RoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55C62A06AC3600DE85B8 /* RoutePicker.swift */; };
+		471D55C82A06AC3600DE85B8 /* RoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55C62A06AC3600DE85B8 /* RoutePicker.swift */; };
+		471D55CA2A06B02600DE85B8 /* FeedListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55C92A06B02600DE85B8 /* FeedListView.swift */; };
+		471D55CB2A06B02600DE85B8 /* FeedListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55C92A06B02600DE85B8 /* FeedListView.swift */; };
+		471D55CD2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */; };
+		471D55CE2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */; };
+		471D55D02A06B7B200DE85B8 /* GraphQLClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */; };
+		471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */; };
 		472186552A04766A005F4CD6 /* Apollo in Frameworks */ = {isa = PBXBuildFile; productRef = 472186542A04766A005F4CD6 /* Apollo */; };
 		47D04CF727254514000FD29E /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04CF627254514000FD29E /* Tests_iOS.swift */; };
 		47D04D0227254514000FD29E /* Tests_macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D0127254514000FD29E /* Tests_macOS.swift */; };
@@ -22,8 +35,6 @@
 		47D04D1E2725460E000FD29E /* sample.mp3 in Resources */ = {isa = PBXBuildFile; fileRef = 47D04D1C2725460E000FD29E /* sample.mp3 */; };
 		47D04D2F2725498B000FD29E /* PlayerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D2E2725498B000FD29E /* PlayerState.swift */; };
 		47D04D302725498B000FD29E /* PlayerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D2E2725498B000FD29E /* PlayerState.swift */; };
-		47D04D3E27257160000FD29E /* RoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D3D27257160000FD29E /* RoutePicker.swift */; };
-		47D04D3F27257160000FD29E /* RoutePicker.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D3D27257160000FD29E /* RoutePicker.swift */; };
 		47D04D4527257C19000FD29E /* sample.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 47D04D4427257C19000FD29E /* sample.jpg */; };
 		47D04D4627257C19000FD29E /* sample.jpg in Resources */ = {isa = PBXBuildFile; fileRef = 47D04D4427257C19000FD29E /* sample.jpg */; };
 		47D04D5027257F88000FD29E /* HTMLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D4F27257F88000FD29E /* HTMLView.swift */; };
@@ -51,6 +62,11 @@
 
 /* Begin PBXFileReference section */
 		471D55B92A0479B700DE85B8 /* GraphQL */ = {isa = PBXFileReference; lastKnownFileType = folder; path = GraphQL; sourceTree = "<group>"; };
+		471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InMemoryTransport.swift; sourceTree = "<group>"; };
+		471D55C62A06AC3600DE85B8 /* RoutePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePicker.swift; sourceTree = "<group>"; };
+		471D55C92A06B02600DE85B8 /* FeedListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedListView.swift; sourceTree = "<group>"; };
+		471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedListViewModel.swift; sourceTree = "<group>"; };
+		471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GraphQLClient.swift; sourceTree = "<group>"; };
 		47D04CDB27254513000FD29E /* playApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = playApp.swift; sourceTree = "<group>"; };
 		47D04CDC27254513000FD29E /* PlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayView.swift; sourceTree = "<group>"; };
 		47D04CDD27254514000FD29E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -67,7 +83,6 @@
 		47D04D0327254514000FD29E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		47D04D1C2725460E000FD29E /* sample.mp3 */ = {isa = PBXFileReference; lastKnownFileType = audio.mp3; path = sample.mp3; sourceTree = "<group>"; };
 		47D04D2E2725498B000FD29E /* PlayerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerState.swift; sourceTree = "<group>"; };
-		47D04D3D27257160000FD29E /* RoutePicker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePicker.swift; sourceTree = "<group>"; };
 		47D04D4427257C19000FD29E /* sample.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sample.jpg; sourceTree = "<group>"; };
 		47D04D4F27257F88000FD29E /* HTMLView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLView.swift; sourceTree = "<group>"; };
 		47D04D6227258D55000FD29E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
@@ -78,6 +93,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55C12A06AB9400DE85B8 /* ApolloAPI in Frameworks */,
 				472186552A04766A005F4CD6 /* Apollo in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -86,6 +102,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55C52A06AC0000DE85B8 /* ApolloAPI in Frameworks */,
+				471D55C32A06ABFD00DE85B8 /* Apollo in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -106,6 +124,13 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		471D55BF2A06AB9400DE85B8 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
 		47D04CD527254513000FD29E = {
 			isa = PBXGroup;
 			children = (
@@ -115,12 +140,14 @@
 				47D04CF527254514000FD29E /* Tests iOS */,
 				47D04D0027254514000FD29E /* Tests macOS */,
 				47D04CE327254514000FD29E /* Products */,
+				471D55BF2A06AB9400DE85B8 /* Frameworks */,
 			);
 			sourceTree = "<group>";
 		};
 		47D04CDA27254513000FD29E /* Shared */ = {
 			isa = PBXGroup;
 			children = (
+				471D55C62A06AC3600DE85B8 /* RoutePicker.swift */,
 				471D55B92A0479B700DE85B8 /* GraphQL */,
 				47D04CDB27254513000FD29E /* playApp.swift */,
 				47D04D6227258D55000FD29E /* ContentView.swift */,
@@ -129,8 +156,11 @@
 				47D04D4427257C19000FD29E /* sample.jpg */,
 				47D04D1C2725460E000FD29E /* sample.mp3 */,
 				47D04D2E2725498B000FD29E /* PlayerState.swift */,
-				47D04D3D27257160000FD29E /* RoutePicker.swift */,
 				47D04D4F27257F88000FD29E /* HTMLView.swift */,
+				471D55BC2A06AAE800DE85B8 /* InMemoryTransport.swift */,
+				471D55C92A06B02600DE85B8 /* FeedListView.swift */,
+				471D55CC2A06B76500DE85B8 /* FeedListViewModel.swift */,
+				471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -199,6 +229,7 @@
 			name = "play (iOS)";
 			packageProductDependencies = (
 				472186542A04766A005F4CD6 /* Apollo */,
+				471D55C02A06AB9400DE85B8 /* ApolloAPI */,
 			);
 			productName = "play (iOS)";
 			productReference = 47D04CE227254514000FD29E /* play.app */;
@@ -217,6 +248,10 @@
 			dependencies = (
 			);
 			name = "play (macOS)";
+			packageProductDependencies = (
+				471D55C22A06ABFD00DE85B8 /* Apollo */,
+				471D55C42A06AC0000DE85B8 /* ApolloAPI */,
+			);
 			productName = "play (macOS)";
 			productReference = 47D04CEA27254514000FD29E /* play.app */;
 			productType = "com.apple.product-type.application";
@@ -263,8 +298,9 @@
 		47D04CD627254513000FD29E /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
+				BuildIndependentTargetsInParallel = YES;
 				LastSwiftUpdateCheck = 1240;
-				LastUpgradeCheck = 1300;
+				LastUpgradeCheck = 1430;
 				TargetAttributes = {
 					47D04CE127254514000FD29E = {
 						CreatedOnToolsVersion = 12.4;
@@ -350,10 +386,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55CA2A06B02600DE85B8 /* FeedListView.swift in Sources */,
+				471D55CD2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0627254514000FD29E /* PlayView.swift in Sources */,
+				471D55C72A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
+				471D55D02A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
+				471D55BD2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */,
 				47D04D5027257F88000FD29E /* HTMLView.swift in Sources */,
 				47D04D6327258D55000FD29E /* ContentView.swift in Sources */,
-				47D04D3E27257160000FD29E /* RoutePicker.swift in Sources */,
 				47D04D2F2725498B000FD29E /* PlayerState.swift in Sources */,
 				47D04D0427254514000FD29E /* playApp.swift in Sources */,
 			);
@@ -363,10 +403,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				471D55CB2A06B02600DE85B8 /* FeedListView.swift in Sources */,
+				471D55CE2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0727254514000FD29E /* PlayView.swift in Sources */,
+				471D55C82A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
+				471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
+				471D55BE2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */,
 				47D04D5127257F88000FD29E /* HTMLView.swift in Sources */,
 				47D04D6427258D55000FD29E /* ContentView.swift in Sources */,
-				47D04D3F27257160000FD29E /* RoutePicker.swift in Sources */,
 				47D04D302725498B000FD29E /* PlayerState.swift in Sources */,
 				47D04D0527254514000FD29E /* playApp.swift in Sources */,
 			);
@@ -438,6 +482,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
@@ -497,6 +542,7 @@
 				CLANG_WARN_UNREACHABLE_CODE = YES;
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
+				DEAD_CODE_STRIPPING = YES;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
@@ -569,6 +615,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = RECPR854Z6;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -594,6 +641,7 @@
 				CODE_SIGN_IDENTITY = "-";
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = RECPR854Z6;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
@@ -661,6 +709,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = RECPR854Z6;
 				INFOPLIST_FILE = "Tests macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -683,6 +732,7 @@
 				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				CODE_SIGN_STYLE = Automatic;
 				COMBINE_HIDPI_IMAGES = YES;
+				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = RECPR854Z6;
 				INFOPLIST_FILE = "Tests macOS/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -761,6 +811,21 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		471D55C02A06AB9400DE85B8 /* ApolloAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 472186532A04766A005F4CD6 /* XCRemoteSwiftPackageReference "apollo-ios" */;
+			productName = ApolloAPI;
+		};
+		471D55C22A06ABFD00DE85B8 /* Apollo */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 472186532A04766A005F4CD6 /* XCRemoteSwiftPackageReference "apollo-ios" */;
+			productName = Apollo;
+		};
+		471D55C42A06AC0000DE85B8 /* ApolloAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 472186532A04766A005F4CD6 /* XCRemoteSwiftPackageReference "apollo-ios" */;
+			productName = ApolloAPI;
+		};
 		472186542A04766A005F4CD6 /* Apollo */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 472186532A04766A005F4CD6 /* XCRemoteSwiftPackageReference "apollo-ios" */;

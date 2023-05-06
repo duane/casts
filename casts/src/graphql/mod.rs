@@ -20,13 +20,12 @@ pub struct Store<T: AsyncClientStore + Clone> {
 
 impl<T: AsyncClientStore + Clone> Store<T> {
     pub fn new(store: T) -> Self {
-        Store { store: store }
+        Store { store }
     }
 }
 
 impl<T: AsyncClientStore + Clone> juniper::Context for Store<T> {}
 
-// type PostgresStore = Store<PostgresStoreAsync>;
 pub type GrpcStore = Store<GrpcClient>;
 
 // Model
@@ -62,26 +61,29 @@ pub struct Content {
 #[derive(juniper::GraphQLObject)]
 pub struct Entry {
     pub title: String,
+    pub guid: String,
     pub summary: String,
     pub links: Vec<Link>,
     pub content: Option<Content>,
 }
 
-#[derive(juniper::GraphQLObject)]
-pub struct FeedsAggregate {
-    pub id: String,
-    pub version: i32,
-    pub feeds: Vec<Feed>,
-}
-
-impl FeedsAggregate {
-    pub fn new() -> Self {
-        FeedsAggregate {
-            id: Uuid::new_v4().to_string(),
-            version: 0,
-            feeds: vec![],
+impl From<immutable_feed::Entry> for Entry {
+    fn from(entry: immutable_feed::Entry) -> Self {
+        Entry {
+            title: entry.title.unwrap_or_default(),
+            guid: entry.guid,
+            summary: entry.summary.unwrap_or_default(),
+            links: vec![],
+            content: None,
         }
     }
+}
+
+#[derive(juniper::GraphQLObject)]
+pub struct FeedsAggregate {
+    pub stream_id: Uuid,
+    pub version: i32,
+    pub feeds: Vec<Feed>,
 }
 
 #[derive(juniper::GraphQLObject)]
@@ -92,7 +94,34 @@ pub struct Feed {
     pub logo: Option<Image>,
 }
 
+impl From<immutable_feed::Feed> for Feed {
+    fn from(feed: immutable_feed::Feed) -> Self {
+        Feed {
+            title: feed.title,
+            description: feed.description.unwrap_or_default(),
+            entries: feed.entries.into_iter().map(Entry::from).collect(),
+            logo: None,
+        }
+    }
+}
+
 pub struct Mutation;
+
+async fn hydrate_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggregate {
+    let mut aggregate = FeedAggregate::new();
+    let commits = client
+        .get_stream_range(stream_id, 0, i64::MAX)
+        .await
+        .expect("failed to make upstream grpc call");
+    for commit in commits.into_iter() {
+        let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
+            .expect("unable to deserialize events to FeedAggregateEvent");
+        for event in events.into_iter() {
+            aggregate = aggregate.apply(&event);
+        }
+    }
+    aggregate
+}
 
 #[graphql_object(context = GrpcStore)]
 impl Mutation {
@@ -107,19 +136,8 @@ impl Mutation {
             feed_id,
             url,
         };
-        let mut aggregate = FeedAggregate::new();
         let mut client: GrpcClient = context.store.clone();
-        let commits = client
-            .get_stream_range(stream_id, 0, i64::MAX)
-            .await
-            .expect("failed to make upstream grpc call");
-        for commit in commits.into_iter() {
-            let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
-                .expect("unable to deserialize events to FeedAggregateEvent");
-            for event in events.into_iter() {
-                aggregate = aggregate.apply(&event);
-            }
-        }
+        let aggregate = hydrate_aggregate(&mut client, stream_id).await;
 
         let events = command
             .async_apply(&aggregate)
@@ -155,8 +173,14 @@ pub struct Query;
 
 #[graphql_object(context = GrpcStore)]
 impl Query {
-    fn feeds(_ctx: &GrpcStore) -> Vec<String> {
-        vec![]
+    async fn feeds(stream_id: Uuid, context: &GrpcStore) -> Vec<Feed> {
+        let mut client: GrpcClient = context.store.clone();
+        let aggregate = hydrate_aggregate(&mut client, stream_id).await;
+        aggregate
+            .feeds_by_feed_id
+            .into_values()
+            .map(Feed::from)
+            .collect()
     }
 }
 

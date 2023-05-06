@@ -13,7 +13,7 @@
       "moduleType": {
         "swiftPackageManager": {}
       },
-      "path": "./generated/schema/"
+      "path": "./casts-swift"
     },
     "operations": {
       "inSchemaModule": {}
@@ -21,7 +21,7 @@
     "testMocks": {
       "none": {}
     },
-    "operationIdentifiersPath": "./generated/other"
+    "operationIdentifiersPath": "./apq.json"
   },
   "schemaDownloadConfiguration": {
     "downloadMethod": {
@@ -36,6 +36,6 @@
     },
     "downloadTimeout": 60,
     "headers": [],
-    "outputPath": "./graphql/"
+    "outputPath": "./"
   }
 }

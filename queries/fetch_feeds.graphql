@@ -1,0 +1,7 @@
+
+query FetchFeeds($streamId:Uuid!) {
+  feeds(streamId:$streamId) {
+    title
+    description
+  }
+}

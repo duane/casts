@@ -1,0 +1,57 @@
+type Link {
+  href: String!
+  rel: String
+  mediaType: String
+  hrefLang: String
+  title: String
+  length: Int
+}
+
+type Entry {
+  title: String!
+  guid: String!
+  summary: String!
+  links: [Link!]!
+  content: Content
+}
+
+type Content {
+  body: String
+  contentType: String!
+  length: Int
+  src: Link
+}
+
+type Mutation {
+  addFeed(streamId: Uuid!, feedId: Uuid!, url: Url!): Uuid!
+}
+
+type Feed {
+  title: String!
+  description: String!
+  entries: [Entry!]!
+  logo: Image
+}
+
+type Query {
+  feeds(streamId: Uuid!): [Feed!]!
+}
+
+scalar Url
+
+scalar Uuid
+
+type Image {
+  uri: String!
+  title: String
+  link: Link
+  width: Int
+  height: Int
+  description: String
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+}
+

@@ -101,7 +101,9 @@ struct PlayView: View {
     VStack {
       Text(self.metadata.creator)
       if self.metadata.imageURL != nil {
+          #if os(iOS)
         Image(uiImage: UIImage(contentsOfFile: Bundle.main.path(forResource: "sample", ofType: "jpg")!)!).resizable().scaledToFit()
+          #endif
       } else {
         Image(systemName: "mic.circle").imageScale(.large).font(.system(size: 100))
       }
