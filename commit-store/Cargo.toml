@@ -22,9 +22,6 @@ full = ["sqlite", "psql"]
 [[bin]] # Bin to run the HelloWorld gRPC server
 name = "grpc-server"
 
-[[bin]] # Bin to run the HelloWorld gRPC client
-name = "grpc-client"
-
 [[bin]]
 name = "postgres-provision"
 required-features = ["psql"]
