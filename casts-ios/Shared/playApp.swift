@@ -10,8 +10,6 @@ import Apollo
 
 @main
 struct playApp: App {
-    @NSApplicationDelegateAdaptor private var delegate: PlayAppDelegate
-    
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -19,6 +17,4 @@ struct playApp: App {
     }
 }
 
-class PlayAppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
-    
-}
+
