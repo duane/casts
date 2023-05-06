@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use commit_store::{postgres::PostgresStoreAsync, AsyncStore};
 
 #[tokio::main]

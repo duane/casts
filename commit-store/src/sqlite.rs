@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use crate::commit::{Commit, CommitAttempt};
 use crate::{ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType};
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};

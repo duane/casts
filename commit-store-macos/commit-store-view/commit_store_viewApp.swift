@@ -1,9 +1,4 @@
-//
-//  commit_store_viewApp.swift
-//  commit-store-view
-//
-//  Created by Duane Bailey on 4/30/23.
-//
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import SwiftUI
 import GRPC

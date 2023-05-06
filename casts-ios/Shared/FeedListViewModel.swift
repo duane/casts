@@ -1,9 +1,4 @@
-//
-//  FeedListViewModel.swift
-//  play
-//
-//  Created by Duane Bailey on 5/6/23.
-//
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import Foundation
 import Casts

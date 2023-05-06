@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 #![feature(vec_into_raw_parts)]
 #![feature(concat_idents)]
 

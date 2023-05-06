@@ -1,9 +1,4 @@
-//
-//  RoutePicker.swift
-//  play
-//
-//  Created by Duane Bailey on 5/2/23.
-//
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 
 #if os(iOS)

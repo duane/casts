@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 // #![feature(async_fn_in_trait)]
 
 extern crate anyhow;

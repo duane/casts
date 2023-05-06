@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

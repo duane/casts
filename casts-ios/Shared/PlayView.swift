@@ -1,9 +1,4 @@
-//
-//  PlayView.swift
-//  Shared
-//
-//  Created by Duane Bailey on 10/24/21.
-//
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import SwiftUI
 import AVFoundation

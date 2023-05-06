@@ -1,3 +1,4 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 use crate::applicable::EventApplicable;
 use std::default::Default;
 use uuid::Uuid;

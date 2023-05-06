@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use crate::commit::{Commit, CommitAttempt};
 use crate::{AsyncClientStore, AsyncStore, StorageCommitConflict, StoreError, StoreErrorType};
 use anyhow::Result;

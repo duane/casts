@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

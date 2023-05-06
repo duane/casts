@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use chrono::Utc;
 use commit_store::{commit::CommitAttempt, AsyncClientStore, GrpcClient};
 use juniper::{graphql_object, EmptySubscription, FieldResult, RootNode};

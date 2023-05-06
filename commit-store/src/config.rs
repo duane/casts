@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 extern crate serde;
 
 use deadpool_postgres::Manager;

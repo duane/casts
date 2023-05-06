@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use super::Command;
 use crate::aggregate::FeedAggregate;
 use crate::events::FeedAggregateEvent;

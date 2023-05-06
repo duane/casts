@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use crate::{
     grpc_interface::{
         commit_store_client::CommitStoreClient, Commit as GrpcCommit,

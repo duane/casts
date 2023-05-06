@@ -1,9 +1,4 @@
-//
-//  commit_store_viewTests.swift
-//  commit-store-viewTests
-//
-//  Created by Duane Bailey on 4/30/23.
-//
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import XCTest
 

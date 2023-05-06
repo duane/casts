@@ -1,3 +1,4 @@
+# Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 language: rust
 rust:
   - stable

@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use crate::aggregate::Aggregate;
 use crate::applicable::EventApplicable;
 use async_trait::async_trait;

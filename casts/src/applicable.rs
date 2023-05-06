@@ -1,3 +1,5 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
 use crate::events::Event;
 
 /// A datatype that may be mutated with an event.
