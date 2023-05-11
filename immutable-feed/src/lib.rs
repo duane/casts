@@ -12,7 +12,10 @@ use std::collections::{HashMap, HashSet};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use feed_rs::{
-    model::{Entry as RustEntry, Feed as RustFeed, Link as RustLink},
+    model::{
+        Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
+        Link as RustLink,
+    },
     parser,
 };
 use serde::{Deserialize, Serialize};
@@ -34,6 +37,9 @@ pub struct Feed {
     /// The title of the feed.
     pub title: String,
 
+    /// The author(s) of the feed.
+    pub authors: Vec<String>,
+
     /// The url where the feed may be found.
     pub url: Url,
 
@@ -48,6 +54,85 @@ pub struct Feed {
 
     /// The entries associated with the feed.
     pub entries: Vec<Entry>,
+
+    /// Any image associated with the feed
+    pub icon: Option<Image>,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Image {
+    pub url: Url,
+    pub link: Option<Link>,
+    pub description: Option<String>,
+    pub title: Option<String>,
+    pub width: Option<u32>,
+    pub height: Option<u32>,
+}
+
+impl From<RustImage> for Image {
+    fn from(rust_image: RustImage) -> Self {
+        Image {
+            url: Url::parse(&rust_image.uri).expect("could not parse logo URL"),
+            title: rust_image.title,
+            link: rust_image.link.map(Link::from),
+            width: rust_image.width,
+            height: rust_image.height,
+            description: rust_image.description,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Content {
+    pub body: Option<String>,
+    pub content_type: String,
+    pub length: Option<u64>,
+    pub src: Option<Link>,
+}
+
+impl From<RustContent> for Content {
+    fn from(rust_content: RustContent) -> Content {
+        Content {
+            body: rust_content.body,
+            content_type: rust_content.content_type.essence_str().to_owned(),
+            length: rust_content.length,
+            src: rust_content.src.map(Link::from),
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Link {
+    /// The url where the link points.
+    pub href: String,
+
+    /// Sometimes useful.
+    pub media_type: Option<String>,
+
+    /// language of referred to content.
+    pub href_lang: Option<String>,
+
+    /// Title of link.
+    pub title: Option<String>,
+
+    /// Unused.
+    pub rel: Option<String>,
+
+    /// Unused - but length of content in seconds is a likely guess.
+    pub length: Option<u64>,
+}
+
+impl From<RustLink> for Link {
+    fn from(rust_link: RustLink) -> Link {
+        Link {
+            href: rust_link.href,
+            rel: rust_link.rel,
+            media_type: rust_link.media_type,
+            href_lang: rust_link.href_lang,
+            title: rust_link.title,
+            length: rust_link.length,
+        }
+    }
 }
 
 impl Feed {
@@ -56,10 +141,12 @@ impl Feed {
         Feed {
             url,
             title: rust_feed.title.map(|text| text.content).unwrap_or_default(),
+            authors: todo!(),
             description: rust_feed.description.map(|d| d.content),
             entries: rust_feed.entries.into_iter().map(Entry::from).collect(),
             updated_at: None,
             published_at: None,
+            icon: rust_feed.icon.map(Image::from),
         }
     }
 
@@ -135,10 +222,12 @@ impl From<RustFeed> for Feed {
                 .map(|c| c.content)
                 .expect("All feeds must have titles"),
             url: href,
+            authors: feed.authors.into_iter().map(|p| p.name).collect(),
             description: feed.description.map(|t| t.content),
             updated_at: feed.updated,
             published_at: feed.published,
             entries: feed.entries.into_iter().map(Entry::from).collect(),
+            icon: feed.icon.map(Image::from),
         }
     }
 }
@@ -163,6 +252,12 @@ pub struct Entry {
 
     /// When the entry was first published.
     pub published_at: Option<DateTime<Utc>>,
+
+    /// Actual audio content of episode
+    pub content: Option<Content>,
+
+    /// Other links associated with content
+    pub links: Vec<Link>,
 }
 
 impl Entry {
@@ -202,6 +297,8 @@ impl From<RustEntry> for Entry {
             summary: entry.summary.map(|t| t.content),
             updated_at: entry.updated,
             published_at: entry.published,
+            content: entry.content.map(Content::from),
+            links: entry.links.into_iter().map(Link::from).collect(),
         }
     }
 }
