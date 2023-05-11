@@ -66,15 +66,15 @@ Note what is not in this MVP:
 8. No offline functionality to sync—it's either server- or client-driven, no in-between yet.
 
 ## MVP Checklist
-### Commit-store
 ```
-[x] GRPC server
-[x] appendCommit
-[x] streamCommits
-[x] readCommitRange
-[ ] backwardsScan
-[ ] All stream support
-[x] Mac/iOS frontend
+[ ] Commit-store
+	[x] GRPC server
+	[x] appendCommit
+	[x] streamCommits
+	[x] readCommitRange
+	[ ] backwardsScan
+	[ ] All stream support
+	[x] Mac/iOS frontend
 	[ ] web frontend
 	[ ] GraphQL frontend (would be nice to return commits for mutations with side-effects and no data to return)
 [ ] Application server
@@ -96,6 +96,9 @@ Note what is not in this MVP:
 	[ ] `redis` or `memcached` aggregate cache
 	[ ] Automatic documentation generation
 	[ ] Clamp down on rust lints.
+[ ] Miscellaneous
+	[ ] Export both `txt` and `html` version of `content`. As well as normal content.
+	[ ] Export `Person`, `Mime` types.
 ```
 
 # Expected next steps
