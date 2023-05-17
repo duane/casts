@@ -57,26 +57,29 @@ impl EventApplicable for FeedAggregate {
                 stream_id: _,
                 ref feed_id,
                 ref title,
+                ref authors,
                 ref url,
                 ref description,
+                ref icon,
                 updated_at: _,
                 published_at: _,
             } => {
                 match applied.feeds_by_feed_id.get(feed_id) {
                     Some(_) => unreachable!(),
                     None => {
+                        let raw_url = url.to_string();
                         let new_feed = Feed {
-                            title: title.to_owned(),
-                            url: url.to_owned(),
-                            description: description.to_owned(),
+                            title: title.clone(),
+                            authors: authors.clone(),
+                            url: Some(url.clone()),
+                            raw_url,
+                            description: description.clone(),
                             entries: Default::default(),
-                            // logo: None,
+                            icon: icon.clone(),
                             updated_at: None,
                             published_at: None,
                         };
-                        applied
-                            .feeds_by_feed_id
-                            .insert(feed_id.to_owned(), new_feed);
+                        applied.feeds_by_feed_id.insert(feed_id.clone(), new_feed);
                     }
                 };
             }
@@ -87,22 +90,24 @@ impl EventApplicable for FeedAggregate {
                 ref title,
                 ref url,
                 ref summary,
-                updated_at: _,
-                published_at: _,
+                ref updated_at,
+                ref published_at,
+                ref content,
+                ref links,
             } => {
                 let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
                 match feed.entries.iter().find(|e| &e.guid == guid) {
                     Some(_) => unreachable!(),
                     None => {
                         let entry = Entry {
-                            guid: guid.to_owned(),
-                            title: title.to_owned(),
-                            // link: Some(url.into()),
-                            url: url.to_owned(),
-                            updated_at: None,
-                            published_at: None,
-                            summary: summary.to_owned(),
-                            // media: None,
+                            guid: guid.clone(),
+                            title: title.clone(),
+                            url: url.clone(),
+                            updated_at: updated_at.clone(),
+                            published_at: published_at.clone(),
+                            summary: summary.clone(),
+                            content: content.clone(),
+                            links: links.clone(),
                         };
                         feed.entries.push(entry);
                     }
@@ -116,7 +121,7 @@ impl EventApplicable for FeedAggregate {
             } => {
                 let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
                 let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.title = title.to_owned();
+                entry.title = title.clone();
             }
             &FeedAggregateEvent::EntrySummaryUpdated {
                 stream_id: _,
@@ -126,7 +131,7 @@ impl EventApplicable for FeedAggregate {
             } => {
                 let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
                 let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.summary = summary.to_owned();
+                entry.summary = summary.clone();
             }
             &FeedAggregateEvent::EntryUrlUpdated {
                 stream_id: _,
@@ -136,7 +141,7 @@ impl EventApplicable for FeedAggregate {
             } => {
                 let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
                 let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.url = url.to_owned();
+                entry.url = url.clone();
             }
             &FeedAggregateEvent::EntryDisappeared {
                 stream_id: _,
@@ -180,6 +185,8 @@ mod tests {
             stream_id: aggregate.stream_id,
             feed_id: feed_id.clone(),
             title: String::from("Examplecast"),
+            authors: vec!["Cindy Yoo-Hoo".to_string()],
+            icon: None,
             url: Url::parse("http://example.com/examplecast.xml").unwrap(),
             description: None,
             updated_at: None,

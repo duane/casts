@@ -5,6 +5,7 @@ use crate::aggregate::FeedAggregate;
 use crate::events::FeedAggregateEvent;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use immutable_feed::{Content, Image, Link};
 use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
@@ -26,8 +27,37 @@ pub enum FeedAggregateCommand {
         url: Url,
     },
 
+    // TODO: Instead of replicating each field, include the immutable_field type.
+    /// Per-feed metadata.
+    ObserveFeed {
+        /// The stream in which the feed was observed.
+        stream_id: Uuid,
+
+        /// The feed that was observed
+        feed_id: Uuid,
+
+        /// Title of the feed.
+        title: String,
+
+        /// Authors of the feed.
+        authors: Vec<String>,
+
+        /// The description of the feed
+        description: Option<String>,
+
+        /// The icon of the feed.
+        icon: Option<Image>,
+
+        /// Updated timestamp
+        updated_at: Option<DateTime<Utc>>,
+
+        /// Published timestamp
+        published_at: Option<DateTime<Utc>>,
+    },
+
+    // TODO: Instead of replicating each field, include the immutable_field type.
     /// Observe an entry for a feed.
-    FeedEntryObserved {
+    ObserveFeedEntry {
         /// aggregate id
         stream_id: Uuid,
 
@@ -45,6 +75,12 @@ pub enum FeedAggregateCommand {
 
         /// Text summary of the entry.
         summary: Option<String>,
+
+        /// Content of the entry.
+        content: Option<Content>,
+
+        /// Links associated with the entry.
+        links: Vec<Link>,
 
         /// When the entry was last updated.
         updated_at: Option<DateTime<Utc>>,
@@ -95,7 +131,17 @@ impl Command for FeedAggregateCommand {
                 feed_id: _,
                 url: _,
             } => inner_id,
-            &FeedAggregateCommand::FeedEntryObserved {
+            &FeedAggregateCommand::ObserveFeed {
+                stream_id: ref inner_id,
+                feed_id: _,
+                title: _,
+                authors: _,
+                description: _,
+                icon: _,
+                updated_at: _,
+                published_at: _,
+            } => inner_id,
+            &FeedAggregateCommand::ObserveFeedEntry {
                 stream_id: ref inner_id,
                 title: _,
                 feed_id: _,
@@ -104,6 +150,8 @@ impl Command for FeedAggregateCommand {
                 summary: _,
                 updated_at: _,
                 published_at: _,
+                content: _,
+                links: _,
             } => inner_id,
         }
     }
@@ -120,6 +168,18 @@ impl Command for FeedAggregateCommand {
         aggregate: &FeedAggregate,
     ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
         match self {
+            &FeedAggregateCommand::ObserveFeed {
+                stream_id: _,
+                feed_id: _,
+                title: _,
+                authors: _,
+                description: _,
+                icon: _,
+                updated_at: _,
+                published_at: _,
+            } => {
+                unimplemented!("implement me")
+            }
             &FeedAggregateCommand::AddFeed {
                 ref stream_id,
                 ref feed_id,
@@ -141,6 +201,8 @@ impl Command for FeedAggregateCommand {
                     url: url.to_owned(),
                     feed_id: feed_id.to_owned(),
                     title: parsed_feed.title,
+                    authors: parsed_feed.authors,
+                    icon: parsed_feed.icon.map(Image::from),
                     description: parsed_feed.description,
                     updated_at: parsed_feed.updated_at,
                     published_at: parsed_feed.published_at,
@@ -155,11 +217,13 @@ impl Command for FeedAggregateCommand {
                         summary: entry.summary.clone(),
                         updated_at: entry.updated_at.clone(),
                         published_at: entry.published_at.clone(),
+                        content: entry.content.clone(),
+                        links: entry.links.clone(),
                     });
                 }
                 Ok(events)
             }
-            &FeedAggregateCommand::FeedEntryObserved {
+            &FeedAggregateCommand::ObserveFeedEntry {
                 ref stream_id,
                 ref title,
                 ref feed_id,
@@ -168,6 +232,8 @@ impl Command for FeedAggregateCommand {
                 ref summary,
                 ref updated_at,
                 ref published_at,
+                ref content,
+                ref links,
             } => match aggregate.feeds_by_feed_id.get(feed_id) {
                 Some(feed) => match feed.entries.iter().find(|e| e.guid.as_str() == guid) {
                     Some(existing_entry) => {
@@ -178,6 +244,8 @@ impl Command for FeedAggregateCommand {
                             summary: summary.to_owned(),
                             updated_at: updated_at.to_owned(),
                             published_at: published_at.to_owned(),
+                            content: content.to_owned(),
+                            links: links.to_owned(),
                         };
                         let diff = observed_entry.diff(&existing_entry);
                         for mutation in diff.iter() {
@@ -195,6 +263,8 @@ impl Command for FeedAggregateCommand {
                             summary: summary.to_owned(),
                             updated_at: updated_at.to_owned(),
                             published_at: published_at.to_owned(),
+                            content: content.to_owned(),
+                            links: links.to_owned(),
                         }]);
                     }
                 },

@@ -2,6 +2,7 @@
 
 use super::Event;
 use chrono::{DateTime, Utc};
+use immutable_feed::{Content, Image, Link};
 use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
@@ -23,8 +24,14 @@ pub enum FeedAggregateEvent {
         /// The url where the feed may be found.
         url: Url,
 
+        /// (iTunes) Authors associated with the feed.
+        authors: Vec<String>,
+
         /// A description of the feed.
         description: Option<String>,
+
+        /// An icon associated with the feed.
+        icon: Option<Image>,
 
         /// When the feed was updated.
         updated_at: Option<DateTime<Utc>>,
@@ -58,6 +65,12 @@ pub enum FeedAggregateEvent {
 
         /// When the feed was published (according to the feed).
         published_at: Option<DateTime<Utc>>,
+
+        /// Actual content.
+        content: Option<Content>,
+
+        /// Other associated links.
+        links: Vec<Link>,
     },
 
     /// The entry updated its title.

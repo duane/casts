@@ -42,14 +42,42 @@ pub struct Link {
     pub length: Option<i32>,
 }
 
+impl From<immutable_feed::Link> for Link {
+    fn from(link: immutable_feed::Link) -> Link {
+        Link {
+            href: link.href,
+            rel: link.rel,
+            media_type: link.media_type,
+            href_lang: link.href_lang,
+            title: link.title,
+            length: link.length.map(|length| length as i32),
+        }
+    }
+}
+
 #[derive(juniper::GraphQLObject)]
 pub struct Image {
-    pub uri: String,
+    pub url: Option<Url>,
+    pub raw_url: String,
     pub title: Option<String>,
     pub link: Option<Link>,
     pub width: Option<i32>,
     pub height: Option<i32>,
     pub description: Option<String>,
+}
+
+impl From<immutable_feed::Image> for Image {
+    fn from(img: immutable_feed::Image) -> Image {
+        Image {
+            url: img.url.clone(),
+            raw_url: img.raw_url.clone(),
+            title: img.title.clone(),
+            link: img.link.map(Link::from),
+            width: img.width.map(|i| i as i32),
+            height: img.height.map(|i| i as i32),
+            description: img.description.clone(),
+        }
+    }
 }
 
 #[derive(juniper::GraphQLObject)]
@@ -94,7 +122,7 @@ pub struct Feed {
     pub title: String,
     pub description: String,
     pub entries: Vec<Entry>,
-    pub logo: Option<Image>,
+    pub icon: Option<Image>,
 }
 
 impl Feed {
@@ -104,7 +132,7 @@ impl Feed {
             title: feed.title,
             description: feed.description.unwrap_or_default(),
             entries: feed.entries.into_iter().map(Entry::from).collect(),
-            logo: None,
+            icon: feed.icon.map(Image::from),
         }
     }
 }

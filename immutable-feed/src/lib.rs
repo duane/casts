@@ -34,34 +34,44 @@ pub fn convert_link_to_url(link: &RustLink) -> Url {
 /// The feed itself.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Feed {
-    /// The title of the feed.
+    // pub title_txt: Option<String>, // converts html -> txt if necessary
+    // pub title_html: Option<String>, // access the title as html
+    // pub title_content: Option<Content>, // access the title as Content
+    /// The title of the feed. This is typically text.
     pub title: String,
+
+    /// Any image associated with the feed
+    pub icon: Option<Image>,
 
     /// The author(s) of the feed.
     pub authors: Vec<String>,
 
-    /// The url where the feed may be found.
-    pub url: Url,
+    /// The well-formed url where the feed may be found.
+    pub url: Option<Url>,
+
+    /// If the url fails to parse, the raw url is stored here.
+    pub raw_url: String,
 
     /// The description of the feed.
     pub description: Option<String>,
 
+    // pub description_txt: Option<String>,
+    // pub description_html: Option<String>,
+    // pub description_content: Option<Content>,
     /// When the feed was last updated.
     pub updated_at: Option<DateTime<Utc>>,
 
-    /// When the feed was first published.
+    /// When the feed was originally published.
     pub published_at: Option<DateTime<Utc>>,
 
-    /// The entries associated with the feed.
+    /// The entries associated with the feed in serialized order
     pub entries: Vec<Entry>,
-
-    /// Any image associated with the feed
-    pub icon: Option<Image>,
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
 pub struct Image {
-    pub url: Url,
+    pub url: Option<Url>,
+    pub raw_url: String,
     pub link: Option<Link>,
     pub description: Option<String>,
     pub title: Option<String>,
@@ -72,7 +82,8 @@ pub struct Image {
 impl From<RustImage> for Image {
     fn from(rust_image: RustImage) -> Self {
         Image {
-            url: Url::parse(&rust_image.uri).expect("could not parse logo URL"),
+            url: Url::parse(&rust_image.uri).ok(),
+            raw_url: rust_image.uri,
             title: rust_image.title,
             link: rust_image.link.map(Link::from),
             width: rust_image.width,
@@ -101,7 +112,7 @@ impl From<RustContent> for Content {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Link {
     /// The url where the link points.
     pub href: String,
@@ -138,10 +149,12 @@ impl From<RustLink> for Link {
 impl Feed {
     /// Create a feed from the feed-rs type and the url from which it originated.
     pub fn from_url_and_feed(url: Url, rust_feed: RustFeed) -> Feed {
+        let raw_url = url.to_string();
         Feed {
-            url,
+            url: Some(url),
+            raw_url,
             title: rust_feed.title.map(|text| text.content).unwrap_or_default(),
-            authors: todo!(),
+            authors: rust_feed.authors.iter().map(|p| p.name.clone()).collect(),
             description: rust_feed.description.map(|d| d.content),
             entries: rust_feed.entries.into_iter().map(Entry::from).collect(),
             updated_at: None,
@@ -161,9 +174,9 @@ impl Feed {
             mutations.push(FeedMutation::ReplacedDescription(other.description.clone()))
         }
 
-        // if self.logo != other.logo {
-        //   mutations.push(FeedMutation::ReplacedLogo(other.logo.clone()));
-        // }
+        if self.icon != other.icon {
+            mutations.push(FeedMutation::ReplacedIcon(other.icon.clone()));
+        }
 
         let existing_entry_by_guid: HashMap<&str, &Entry> = self
             .entries
@@ -208,20 +221,19 @@ impl Feed {
 
 impl From<RustFeed> for Feed {
     fn from(feed: RustFeed) -> Feed {
-        let href = Url::parse(
-            &feed
-                .links
-                .first()
-                .map(|l| &l.href)
-                .expect("feed has no link"),
-        )
-        .expect("not a url");
+        let raw_url = feed
+            .links
+            .first()
+            .map(|l| l.href.clone())
+            .unwrap_or_default();
+        let url = Url::parse(&raw_url).ok();
         Feed {
             title: feed
                 .title
                 .map(|c| c.content)
                 .expect("All feeds must have titles"),
-            url: href,
+            url,
+            raw_url,
             authors: feed.authors.into_iter().map(|p| p.name).collect(),
             description: feed.description.map(|t| t.content),
             updated_at: feed.updated,
@@ -334,7 +346,7 @@ pub enum FeedMutation {
     ReplacedDescription(Option<String>),
 
     /// Indicates a differing logo.
-    // ReplacedLogo(Option<Image>),
+    ReplacedIcon(Option<Image>),
 
     /// Indicates a new entry.
     AddedEntry(Entry),
