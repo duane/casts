@@ -23,11 +23,13 @@ public enum SchemaMetadata: ApolloAPI.SchemaMetadata {
   public static func objectType(forTypename typename: String) -> Object? {
     switch typename {
     case "Mutation": return Casts.Objects.Mutation
-    case "Query": return Casts.Objects.Query
+    case "Subscription": return Casts.Objects.Subscription
     case "Feed": return Casts.Objects.Feed
+    case "Image": return Casts.Objects.Image
+    case "Link": return Casts.Objects.Link
+    case "Query": return Casts.Objects.Query
     case "Entry": return Casts.Objects.Entry
     case "Content": return Casts.Objects.Content
-    case "Link": return Casts.Objects.Link
     default: return nil
     }
   }

@@ -9,6 +9,9 @@ struct FeedDetailView: View {
     
     var body: some View {
         VStack {
+            if let logoUrl = feed.logo?.url {
+                SquareImageView(url:URL(string:logoUrl)!)
+            }
             Text(feed.title)
             Text(feed.description)
             List(feed.entries, id: \.guid) { entry in

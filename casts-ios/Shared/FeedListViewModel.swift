@@ -7,7 +7,7 @@ final class FeedListViewModel: ObservableObject {
     @Published var feeds: [FetchFeedsQuery.Data.Feed] = []
     
     func fetch() {
-        let query = FetchFeedsQuery(streamId: "E6C1E8A3-06EB-4243-9147-0303E059ABE5")
+        let query = FetchFeedsQuery(streamId: "34c3c08d-0d55-4af4-a126-170c1380f07e")
         GraphQLClient.shared.apollo.fetch(query:query) { result in
             guard let data = try! result.get().data else { fatalError("could not call into gql server") }
             print("got \(data.feeds.count) entries")

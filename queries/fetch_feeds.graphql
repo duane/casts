@@ -2,7 +2,24 @@ query FetchFeeds($streamId:Uuid!) {
   feeds(streamId:$streamId) {
 	  feedId
     title
+    authors
     description
+    logo {
+        url
+        rawUrl
+        title
+        link {
+            href
+            rel
+            mediaType
+            hrefLang
+            title
+            length
+        }
+        width
+        height
+        description
+    }
     entries {
       guid
       title

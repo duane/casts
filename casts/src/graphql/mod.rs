@@ -74,8 +74,22 @@ pub struct Image {
 
 impl From<immutable_feed::Image> for Image {
     fn from(img: immutable_feed::Image) -> Image {
+        // MUNGE ALERT
+        // TODO: replace with more sane way of handling.
+        // ATS complains because of lack of security.
+        let url = img.url.map(|url| {
+            if url.scheme() != "http" {
+                url
+            } else {
+                let mut new_url = url.clone();
+                new_url
+                    .set_scheme("https")
+                    .expect("could not set scheme of url to https");
+                new_url
+            }
+        });
         Image {
-            url: img.url.clone(),
+            url,
             raw_url: img.raw_url.clone(),
             title: img.title.clone(),
             link: img.link.map(Link::from),
