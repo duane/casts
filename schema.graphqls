@@ -27,11 +27,22 @@ type Mutation {
 }
 
 type Feed {
+  "The ID of the feed."
   feedId: Uuid!
+  "The title of the feed."
   title: String!
+  "Authors of the feed"
+  authors: [String!]!
+  "A string describing the feed."
   description: String!
+  "A list of entries to which the feed links."
   entries: [Entry!]!
+  "A link to an image with which to represent the feed."
   logo: Image
+}
+
+type Subscription {
+  watchFeeds(streamId: Uuid!): [Feed!]!
 }
 
 type Query {
@@ -43,7 +54,8 @@ scalar Url
 scalar Uuid
 
 type Image {
-  uri: String!
+  url: Url
+  rawUrl: String!
   title: String
   link: Link
   width: Int
@@ -54,5 +66,6 @@ type Image {
 schema {
   query: Query
   mutation: Mutation
+  subscription: Subscription
 }
 

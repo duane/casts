@@ -1,6 +1,6 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use immutable_feed::{Entry, Feed};
+use immutable_feed::Feed;
 
 use super::Aggregate;
 use crate::applicable::EventApplicable;
@@ -50,105 +50,45 @@ impl Aggregate for FeedAggregate {
 impl EventApplicable for FeedAggregate {
     type Event = FeedAggregateEvent;
 
-    fn apply(&self, event: &FeedAggregateEvent) -> FeedAggregate {
+    fn apply(self, event: FeedAggregateEvent) -> FeedAggregate {
+        self.apply_many(vec![event])
+    }
+
+    fn apply_many(self, events: Vec<FeedAggregateEvent>) -> FeedAggregate {
         let mut applied = self.clone();
-        match event {
-            &FeedAggregateEvent::Added {
-                stream_id: _,
-                ref feed_id,
-                ref title,
-                ref authors,
-                ref url,
-                ref description,
-                ref icon,
-                updated_at: _,
-                published_at: _,
-            } => {
-                match applied.feeds_by_feed_id.get(feed_id) {
-                    Some(_) => unreachable!(),
-                    None => {
-                        let raw_url = url.to_string();
-                        let new_feed = Feed {
-                            title: title.clone(),
-                            authors: authors.clone(),
-                            url: Some(url.clone()),
-                            raw_url,
-                            description: description.clone(),
-                            entries: Default::default(),
-                            icon: icon.clone(),
-                            updated_at: None,
-                            published_at: None,
-                        };
-                        applied.feeds_by_feed_id.insert(feed_id.clone(), new_feed);
-                    }
-                };
-            }
-            &FeedAggregateEvent::EntryObserved {
-                stream_id: _,
-                ref feed_id,
-                ref guid,
-                ref title,
-                ref url,
-                ref summary,
-                ref updated_at,
-                ref published_at,
-                ref content,
-                ref links,
-            } => {
-                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
-                match feed.entries.iter().find(|e| &e.guid == guid) {
-                    Some(_) => unreachable!(),
-                    None => {
-                        let entry = Entry {
-                            guid: guid.clone(),
-                            title: title.clone(),
-                            url: url.clone(),
-                            updated_at: updated_at.clone(),
-                            published_at: published_at.clone(),
-                            summary: summary.clone(),
-                            content: content.clone(),
-                            links: links.clone(),
-                        };
-                        feed.entries.push(entry);
-                    }
+        for event in events.into_iter() {
+            match event {
+                FeedAggregateEvent::Added {
+                    stream_id: _,
+                    feed_id,
+                    url,
+                    metadata,
+                    entries,
+                } => {
+                    // TODO: also look up by url if feed_id fails.
+                    let found_feed = applied.feeds_by_feed_id.get(&feed_id);
+                    match found_feed {
+                        Some(_) => unreachable!(),
+                        None => {
+                            let raw_url = url.to_string();
+                            let new_feed = Feed {
+                                url: Some(url),
+                                raw_url,
+                                entries,
+                                metadata,
+                            };
+                            applied.feeds_by_feed_id.insert(feed_id.clone(), new_feed);
+                        }
+                    };
                 }
-            }
-            &FeedAggregateEvent::EntryTitleUpdated {
-                stream_id: _,
-                ref feed_id,
-                ref guid,
-                ref title,
-            } => {
-                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
-                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.title = title.clone();
-            }
-            &FeedAggregateEvent::EntrySummaryUpdated {
-                stream_id: _,
-                ref feed_id,
-                ref guid,
-                ref summary,
-            } => {
-                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
-                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.summary = summary.clone();
-            }
-            &FeedAggregateEvent::EntryUrlUpdated {
-                stream_id: _,
-                ref feed_id,
-                ref guid,
-                ref url,
-            } => {
-                let feed = applied.feeds_by_feed_id.get_mut(feed_id).unwrap();
-                let mut entry = feed.entries.iter_mut().find(|e| &e.guid == guid).unwrap();
-                entry.url = url.clone();
-            }
-            &FeedAggregateEvent::EntryDisappeared {
-                stream_id: _,
-                feed_id: _,
-                guid: _,
-            } => {
-                log::info!("Not applying entry disappearance.");
+                FeedAggregateEvent::ObservedChanges {
+                    stream_id: _,
+                    feed_id,
+                    changes,
+                } => {
+                    let feed = applied.feeds_by_feed_id.get_mut(&feed_id).unwrap();
+                    *feed = feed.apply_diff(changes);
+                }
             }
         }
         applied.version += 1;
@@ -158,6 +98,7 @@ impl EventApplicable for FeedAggregate {
 
 #[cfg(test)]
 mod tests {
+    use immutable_feed::FeedMetadata;
     use url::Url;
 
     use super::*;
@@ -184,19 +125,24 @@ mod tests {
         let event = FeedAggregateEvent::Added {
             stream_id: aggregate.stream_id,
             feed_id: feed_id.clone(),
-            title: String::from("Examplecast"),
-            authors: vec!["Cindy Yoo-Hoo".to_string()],
-            icon: None,
             url: Url::parse("http://example.com/examplecast.xml").unwrap(),
-            description: None,
-            updated_at: None,
-            published_at: None,
+            metadata: FeedMetadata {
+                title: String::from("Examplecast"),
+                authors: vec!["Cindy Yoo-Hoo".to_string()],
+                logo: None,
+                description: None,
+                updated_at: None,
+                published_at: None,
+            },
+            entries: vec![],
         };
-        let aggregate_after_application = aggregate.apply(&event);
+        let aggregate_after_application = aggregate.apply(event);
         assert_eq!(aggregate_after_application.feeds_by_feed_id.len(), 1);
         assert_eq!(aggregate_after_application.version(), 1);
         assert_eq!(
-            aggregate_after_application.feeds_by_feed_id[&feed_id].title,
+            aggregate_after_application.feeds_by_feed_id[&feed_id]
+                .metadata
+                .title,
             String::from("Examplecast")
         );
     }

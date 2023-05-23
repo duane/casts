@@ -32,3 +32,5 @@ futures = { version = "*", features = [
     "thread-pool",
 ] }
 reqwest = "*"
+futures-core = "*"
+juniper_subscriptions = "*"

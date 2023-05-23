@@ -1,17 +1,21 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
+use std::pin::Pin;
+
 use crate::{
     grpc_interface::{
         commit_store_client::CommitStoreClient, Commit as GrpcCommit,
         CommitAttempt as GrpcCommitAttempt, Cursor,
     },
-    AsyncClientStore, StoreError,
+    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
 };
 use crate::{Commit, CommitAttempt};
 use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use prost_types::Timestamp as GrpcTimestamp;
+use tokio_stream::{Stream, StreamExt};
+use tonic::Streaming;
 use uuid::Uuid;
 
 // Grpc Async Client
@@ -97,6 +101,24 @@ impl AsyncClientStore for GrpcClient {
     }
 }
 
+#[async_trait]
+impl DispatchingAsyncClientStore for GrpcClient {
+    async fn subscribe(&mut self, stream_id: &Uuid) -> CommitStream {
+        let cursor = Cursor {
+            stream_id: stream_id.to_string(),
+            min_version: 0,
+            max_version: i64::MAX,
+        };
+        CommitStream::GrpcBacked(
+            self.client
+                .stream_stream_range(cursor)
+                .await
+                .unwrap()
+                .into_inner(),
+        )
+    }
+}
+
 //
 // Conversion utilities
 //
@@ -113,7 +135,7 @@ pub fn grpc_to_domain_ts(timestamp: &GrpcTimestamp) -> DateTime<Utc> {
         .unwrap()
 }
 
-fn grpc_to_domain_commit(commit: &GrpcCommit) -> Commit {
+pub fn grpc_to_domain_commit(commit: &GrpcCommit) -> Commit {
     Commit {
         stream_id: Uuid::parse_str(&commit.stream_id).expect("failed to parse stream_id"),
         stream_version: commit.stream_version,

@@ -22,12 +22,6 @@ pub trait Command: Serialize + DeserializeOwned + Send + Sync + Clone + Debug {
     fn id(&self) -> &Uuid;
 
     /// Produce a new aggregate with the command applied.
-    fn apply(
-        &self,
-        aggregate: &Self::Aggregate,
-    ) -> Result<Vec<<<Self as Command>::Aggregate as EventApplicable>::Event>, Self::Error>;
-
-    /// Produce a new aggregate with the command applied.
     async fn async_apply(
         &self,
         aggregate: &Self::Aggregate,

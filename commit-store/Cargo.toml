@@ -20,7 +20,7 @@ psql = [
 full = ["sqlite", "psql"]
 
 [[bin]] # Bin to run the HelloWorld gRPC server
-name = "grpc-server"
+name = "commit-store-server"
 
 [[bin]]
 name = "postgres-provision"
@@ -63,6 +63,7 @@ url = "~2.3.1"
 tonic = "~0.9.1"
 prost = "*"
 prost-types = "*"
+futures-core = "*"
 
 [dependencies.chrono]
 version = "*"

@@ -204,59 +204,59 @@ impl ClientStore for SqliteStore {
         Ok(rows)
     }
 
-    fn get_range(
-        &mut self,
-        min_commit_number: i64,
-        max_commit_number: i64,
-    ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
-        let mut stmt = match self.conn.prepare(
-            "SELECT
-          stream_id,
-          stream_version,
-          commit_id,
-          commit_timestamp,
-          commit_sequence,
-          commit_number,
-          events_count,
-          metadata,
-          events,
-          dispatched
-        FROM commits
-        WHERE commit_number > ?
-        AND commit_number <= ?;",
-        ) {
-            Ok(result) => result,
-            Err(err) => return Err(SqliteStoreError::from(err).into()),
-        };
-        let rows = match stmt.query_map(&[&min_commit_number, &max_commit_number], |row| {
-            let stream_id_str: String = row.get(0).expect("no stream_id result column");
-            let commit_id_str: String = row.get(2).expect("no commit_id result column");
-            let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
-            let metadata = serde_json::from_str(&metadata_string)
-                .expect("could not deserialize metadata string");
-            let events_string: String = row.get(8).expect("no serialized_metadat result column");
-            let events = serde_json::from_str(&events_string)
-                .expect("could not deserialize metadata string");
-            Ok(Commit {
-                stream_id: Uuid::parse_str(stream_id_str.as_ref()).unwrap(),
-                stream_version: row.get(1).expect("no stream_version result column"),
-                commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
-                commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
-                commit_sequence: row.get(4).expect("no commit_sequence result column"),
-                commit_number: row.get(5).expect("no commit_number result column"),
-                events_count: row.get(6).expect("no events_count result column"),
-                metadata,
-                events,
-                dispatched: row.get(9).expect("no dispatched result column"),
-            })
-        }) {
-            Ok(result) => result,
-            Err(err) => return Err(SqliteStoreError::from(err).into()),
-        }
-        .map(|row| row.unwrap())
-        .collect();
-        Ok(rows)
-    }
+    // fn get_range(
+    //     &mut self,
+    //     min_commit_number: i64,
+    //     max_commit_number: i64,
+    // ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+    //     let mut stmt = match self.conn.prepare(
+    //         "SELECT
+    //       stream_id,
+    //       stream_version,
+    //       commit_id,
+    //       commit_timestamp,
+    //       commit_sequence,
+    //       commit_number,
+    //       events_count,
+    //       metadata,
+    //       events,
+    //       dispatched
+    //     FROM commits
+    //     WHERE commit_number > ?
+    //     AND commit_number <= ?;",
+    //     ) {
+    //         Ok(result) => result,
+    //         Err(err) => return Err(SqliteStoreError::from(err).into()),
+    //     };
+    //     let rows = match stmt.query_map(&[&min_commit_number, &max_commit_number], |row| {
+    //         let stream_id_str: String = row.get(0).expect("no stream_id result column");
+    //         let commit_id_str: String = row.get(2).expect("no commit_id result column");
+    //         let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
+    //         let metadata = serde_json::from_str(&metadata_string)
+    //             .expect("could not deserialize metadata string");
+    //         let events_string: String = row.get(8).expect("no serialized_metadat result column");
+    //         let events = serde_json::from_str(&events_string)
+    //             .expect("could not deserialize metadata string");
+    //         Ok(Commit {
+    //             stream_id: Uuid::parse_str(stream_id_str.as_ref()).unwrap(),
+    //             stream_version: row.get(1).expect("no stream_version result column"),
+    //             commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
+    //             commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
+    //             commit_sequence: row.get(4).expect("no commit_sequence result column"),
+    //             commit_number: row.get(5).expect("no commit_number result column"),
+    //             events_count: row.get(6).expect("no events_count result column"),
+    //             metadata,
+    //             events,
+    //             dispatched: row.get(9).expect("no dispatched result column"),
+    //         })
+    //     }) {
+    //         Ok(result) => result,
+    //         Err(err) => return Err(SqliteStoreError::from(err).into()),
+    //     }
+    //     .map(|row| row.unwrap())
+    //     .collect();
+    //     Ok(rows)
+    // }
 
     fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
         let mut statement = match self.conn.prepare(

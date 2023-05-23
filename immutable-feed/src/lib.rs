@@ -1,14 +1,5 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-// rss/atom
-extern crate anyhow;
-extern crate chrono;
-extern crate feed_rs;
-extern crate htmlescape;
-extern crate url;
-
-use std::collections::{HashMap, HashSet};
-
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use feed_rs::{
@@ -18,8 +9,11 @@ use feed_rs::{
     },
     parser,
 };
+use std::collections::{HashMap, HashSet};
+
 use serde::{Deserialize, Serialize};
 use url::Url;
+
 // --------------
 // util functions
 // --------------
@@ -34,6 +28,22 @@ pub fn convert_link_to_url(link: &RustLink) -> Url {
 /// The feed itself.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Feed {
+    /// The well-formed url where the feed may be found.
+    pub url: Option<Url>,
+
+    /// If the url fails to parse, the raw url is stored here.
+    pub raw_url: String,
+
+    /// Metadata associated with the feed.
+    pub metadata: FeedMetadata,
+
+    /// The entries associated with the feed in serialized order
+    pub entries: Vec<Entry>,
+}
+
+/// Data associated with but not identifying the feed.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct FeedMetadata {
     // pub title_txt: Option<String>, // converts html -> txt if necessary
     // pub title_html: Option<String>, // access the title as html
     // pub title_content: Option<Content>, // access the title as Content
@@ -41,16 +51,10 @@ pub struct Feed {
     pub title: String,
 
     /// Any image associated with the feed
-    pub icon: Option<Image>,
+    pub logo: Option<Image>,
 
     /// The author(s) of the feed.
     pub authors: Vec<String>,
-
-    /// The well-formed url where the feed may be found.
-    pub url: Option<Url>,
-
-    /// If the url fails to parse, the raw url is stored here.
-    pub raw_url: String,
 
     /// The description of the feed.
     pub description: Option<String>,
@@ -63,9 +67,57 @@ pub struct Feed {
 
     /// When the feed was originally published.
     pub published_at: Option<DateTime<Utc>>,
+}
 
-    /// The entries associated with the feed in serialized order
-    pub entries: Vec<Entry>,
+impl FeedMetadata {
+    /// Produce a delta between two feeds.
+    pub fn diff(&self, other: &FeedMetadata) -> Vec<FeedMetadataMutation> {
+        let mut mutations: Vec<FeedMetadataMutation> = vec![];
+        if self.title != other.title {
+            mutations.push(FeedMetadataMutation::ReplacedTitle(self.title.clone()))
+        }
+        if self.authors != other.authors {
+            mutations.push(FeedMetadataMutation::ReplacedAuthors(self.authors.clone()))
+        }
+        if self.description != other.description {
+            mutations.push(FeedMetadataMutation::ReplacedDescription(
+                self.description.clone(),
+            ));
+        }
+        mutations
+    }
+
+    /// Apply a delta to a feed to produce a new feed.
+    pub fn apply_diff(&self, mutations: Vec<FeedMetadataMutation>) -> FeedMetadata {
+        let mut applied = self.to_owned();
+        for mutation in mutations {
+            match mutation {
+                FeedMetadataMutation::ReplacedAuthors(authors) => applied.authors = authors,
+                FeedMetadataMutation::ReplacedDescription(description) => {
+                    applied.description = description
+                }
+                FeedMetadataMutation::ReplacedLogo(logo) => applied.logo = logo,
+                FeedMetadataMutation::ReplacedTitle(title) => applied.title = title,
+            }
+        }
+        applied
+    }
+}
+
+impl From<RustFeed> for FeedMetadata {
+    fn from(feed: RustFeed) -> FeedMetadata {
+        FeedMetadata {
+            title: feed
+                .title
+                .map(|c| c.content)
+                .expect("All feeds must have titles"),
+            authors: feed.authors.into_iter().map(|p| p.name).collect(),
+            description: feed.description.map(|t| t.content),
+            updated_at: feed.updated,
+            published_at: feed.published,
+            logo: feed.logo.map(Image::from),
+        }
+    }
 }
 
 #[derive(PartialEq, Clone, Debug, Serialize, Deserialize)]
@@ -93,7 +145,7 @@ impl From<RustImage> for Image {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 pub struct Content {
     pub body: Option<String>,
     pub content_type: String,
@@ -150,33 +202,19 @@ impl Feed {
     /// Create a feed from the feed-rs type and the url from which it originated.
     pub fn from_url_and_feed(url: Url, rust_feed: RustFeed) -> Feed {
         let raw_url = url.to_string();
+        let metadata = FeedMetadata::from(rust_feed.clone());
+        let entries = rust_feed.entries.into_iter().map(Entry::from).collect();
         Feed {
             url: Some(url),
             raw_url,
-            title: rust_feed.title.map(|text| text.content).unwrap_or_default(),
-            authors: rust_feed.authors.iter().map(|p| p.name.clone()).collect(),
-            description: rust_feed.description.map(|d| d.content),
-            entries: rust_feed.entries.into_iter().map(Entry::from).collect(),
-            updated_at: None,
-            published_at: None,
-            icon: rust_feed.icon.map(Image::from),
+            metadata,
+            entries,
         }
     }
 
     /// Produce an arbitrarily ordered list of changes between two feeds.
     pub fn diff(&self, other: &Feed) -> Vec<FeedMutation> {
-        let mut mutations = vec![];
-        if self.title != other.title {
-            mutations.push(FeedMutation::ReplacedTitle(other.title.clone()));
-        }
-
-        if self.description != other.description {
-            mutations.push(FeedMutation::ReplacedDescription(other.description.clone()))
-        }
-
-        if self.icon != other.icon {
-            mutations.push(FeedMutation::ReplacedIcon(other.icon.clone()));
-        }
+        let mut mutations: Vec<FeedMutation> = vec![];
 
         let existing_entry_by_guid: HashMap<&str, &Entry> = self
             .entries
@@ -196,26 +234,44 @@ impl Feed {
         for guid in all_observed_guids.iter() {
             let existing_entry = existing_entry_by_guid.get(*guid);
             let remote_entry = remote_entry_by_guid.get(*guid);
-            match (existing_entry, remote_entry) {
-                (Some(existing_entry), Some(remote_entry)) => {
-                    let entry_mutations = existing_entry.diff(remote_entry);
-                    if !entry_mutations.is_empty() {
-                        mutations.push(FeedMutation::ModifiedEntry(
-                            (*existing_entry).to_owned(),
-                            entry_mutations,
-                        ))
-                    }
-                }
-                (Some(existing_entry), None) => {
-                    mutations.push(FeedMutation::RemovedEntry((*existing_entry).to_owned()));
-                }
+            let entry_mutations: Vec<EntryMutation> = match (existing_entry, remote_entry) {
+                (Some(existing_entry), Some(remote_entry)) => existing_entry.diff(remote_entry),
+                (Some(_), None) => vec![EntryMutation::RemovedEntry],
                 (None, Some(remote_entry)) => {
-                    mutations.push(FeedMutation::AddedEntry((*remote_entry).to_owned()));
+                    vec![EntryMutation::AddedEntry((*remote_entry).to_owned())]
                 }
                 _ => unreachable!("iterating over a guid not in either set should not be possible"),
             };
+            mutations.push(FeedMutation::EntryMutation(
+                guid.to_string(),
+                entry_mutations,
+            ));
         }
         mutations
+    }
+
+    pub fn apply_diff(&self, mutations: Vec<FeedMutation>) -> Feed {
+        let mut applied = self.to_owned();
+        let mut entry_mutations_by_guid = HashMap::new();
+        for mutation in mutations {
+            match mutation {
+                FeedMutation::MetadataChange(metadata_mutation) => {
+                    applied.metadata = applied.metadata.apply_diff(vec![metadata_mutation]);
+                }
+                FeedMutation::EntryMutation(guid, entry_mutations) => {
+                    entry_mutations_by_guid.insert(guid, entry_mutations);
+                }
+            }
+        }
+        applied.entries = applied
+            .entries
+            .into_iter()
+            .flat_map(|entry| match entry_mutations_by_guid.remove(&entry.guid) {
+                Some(mutations) => entry.apply(mutations),
+                None => Some(entry),
+            })
+            .collect();
+        applied
     }
 }
 
@@ -228,18 +284,10 @@ impl From<RustFeed> for Feed {
             .unwrap_or_default();
         let url = Url::parse(&raw_url).ok();
         Feed {
-            title: feed
-                .title
-                .map(|c| c.content)
-                .expect("All feeds must have titles"),
             url,
             raw_url,
-            authors: feed.authors.into_iter().map(|p| p.name).collect(),
-            description: feed.description.map(|t| t.content),
-            updated_at: feed.updated,
-            published_at: feed.published,
+            metadata: FeedMetadata::from(feed.clone()),
             entries: feed.entries.into_iter().map(Entry::from).collect(),
-            icon: feed.icon.map(Image::from),
         }
     }
 }
@@ -297,11 +345,36 @@ impl Entry {
 
         mutations
     }
+
+    fn apply(&self, mutations: Vec<EntryMutation>) -> Option<Entry> {
+        let mut applied = self.clone();
+        for mutation in mutations {
+            match mutation {
+                EntryMutation::AddedEntry(_) => {
+                    unreachable!("this should be prevented by only calling apply on extant entries")
+                }
+                EntryMutation::RemovedEntry => return None,
+                EntryMutation::ReplacedContent(new_content) => applied.content = new_content,
+                EntryMutation::ReplacedLinks(new_links) => applied.links = new_links,
+                EntryMutation::ReplacedSummary(new_summary) => applied.summary = new_summary,
+                EntryMutation::ReplacedTitle(new_title) => applied.title = new_title,
+                EntryMutation::ReplacedUrl(new_url) => {
+                    applied.url = new_url.expect("failed to parse URL")
+                }
+            }
+        }
+        Some(applied)
+    }
 }
 
 impl From<RustEntry> for Entry {
     fn from(entry: RustEntry) -> Entry {
-        let content_url = convert_link_to_url(entry.links.first().unwrap());
+        let content_url = convert_link_to_url(
+            entry
+                .links
+                .first()
+                .expect(format!("Entry {:?} has no links", entry).as_str()),
+        );
         Entry {
             guid: entry.id.clone(),
             url: content_url,
@@ -336,39 +409,54 @@ pub async fn fetch_feed(url: &Url) -> Result<Feed> {
 
 // Delta bits
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 /// Feed delta: a struct representing changes to a feed.
 pub enum FeedMutation {
-    /// Indicates a differing feed title.
-    ReplacedTitle(String),
-
-    /// Indicates a differing description.
-    ReplacedDescription(Option<String>),
-
-    /// Indicates a differing logo.
-    ReplacedIcon(Option<Image>),
-
-    /// Indicates a new entry.
-    AddedEntry(Entry),
-
-    /// Indicates a removed entry.
-    RemovedEntry(Entry),
+    /// Stores changes to metadata.
+    MetadataChange(FeedMetadataMutation),
 
     /// Indicates a modified entry.
-    ModifiedEntry(Entry, Vec<EntryMutation>),
+    /// The first parameter is the guid of the entry that was changed.
+    /// the second parameter is the change in question.
+    EntryMutation(String, Vec<EntryMutation>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FeedMetadataMutation {
+    /// Stores the new title.
+    ReplacedTitle(String),
+
+    /// Stores a new description
+    ReplacedDescription(Option<String>),
+
+    /// Stores a new logo.
+    ReplacedLogo(Option<Image>),
+
+    /// Stores the new set of authors
+    ReplacedAuthors(Vec<String>),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
 /// A single change to an entry.
 pub enum EntryMutation {
-    /// Indicates a differing entry title.
+    /// Stores the new title.
     ReplacedTitle(Option<String>),
 
-    /// Indicates a differing entry link.
+    /// Stores the new URL.
     ReplacedUrl(Option<Url>),
 
-    /// Indicates a differing summary.
+    /// Stores the new summary.
     ReplacedSummary(Option<String>),
-    ///// Indicates differing content.
-    // ReplacedContent(Option<Media>),
+
+    /// Stores the new content.
+    ReplacedContent(Option<Content>),
+
+    /// Stores the new links.
+    ReplacedLinks(Vec<Link>),
+
+    /// Used when an entirely new entry is introduced
+    AddedEntry(Entry),
+
+    /// Used when the entry is removed
+    RemovedEntry,
 }

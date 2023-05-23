@@ -8,7 +8,6 @@ use commit_store::{
     commit::CommitAttempt, grpc_interface::commit_store_client::CommitStoreClient,
     AsyncClientStore, GrpcClient,
 };
-use serde_json::Value;
 use url::Url;
 use uuid::uuid;
 

@@ -1,14 +1,20 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
+use std::pin::Pin;
+
 use chrono::Utc;
-use commit_store::{commit::CommitAttempt, AsyncClientStore, GrpcClient};
-use juniper::{graphql_object, EmptySubscription, FieldResult, RootNode};
+use commit_store::{
+    commit::CommitAttempt, AsyncClientStore, DispatchingAsyncClientStore, GrpcClient,
+};
+use futures_core::Stream;
+use juniper::graphql_subscription;
+use juniper::{graphql_object, FieldError, FieldResult, RootNode};
 use url::Url;
 use uuid::Uuid;
 
 use crate::{
     aggregate::FeedAggregate,
-    applicable::EventApplicable,
+    applicable::{ApplicableStream, EventApplicable},
     commands::{Command, FeedAggregateCommand},
     events::FeedAggregateEvent,
 };
@@ -118,21 +124,35 @@ pub struct FeedsAggregate {
 
 #[derive(juniper::GraphQLObject)]
 pub struct Feed {
+    /// The ID of the feed.
     pub feed_id: Uuid,
+
+    // TODO: URL
+    /// The title of the feed.
     pub title: String,
+
+    /// Authors of the feed
+    pub authors: Vec<String>,
+
+    /// A string describing the feed.
     pub description: String,
+
+    /// A list of entries to which the feed links.
     pub entries: Vec<Entry>,
-    pub icon: Option<Image>,
+
+    /// A link to an image with which to represent the feed.
+    pub logo: Option<Image>,
 }
 
 impl Feed {
     fn with_feed_id(feed: immutable_feed::Feed, feed_id: Uuid) -> Self {
         Feed {
             feed_id,
-            title: feed.title,
-            description: feed.description.unwrap_or_default(),
+            title: feed.metadata.title,
+            authors: feed.metadata.authors.clone(),
+            description: feed.metadata.description.unwrap_or_default(),
             entries: feed.entries.into_iter().map(Entry::from).collect(),
-            icon: feed.icon.map(Image::from),
+            logo: feed.metadata.logo.map(Image::from),
         }
     }
 }
@@ -149,11 +169,28 @@ async fn hydrate_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggr
         let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
             .expect("unable to deserialize events to FeedAggregateEvent");
         for event in events.into_iter() {
-            aggregate = aggregate.apply(&event);
+            aggregate = aggregate.apply(event);
+            println!("applied aggregate");
         }
     }
     aggregate
 }
+
+// async fn stream_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggregate {
+//     let mut aggregate = hydrate_aggregate(client, stream_id).await;
+//     let commits = client
+//         .get_stream_range(stream_id, 0, i64::MAX)
+//         .await
+//         .expect("failed to make upstream grpc call");
+//     for commit in commits.into_iter() {
+//         let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
+//             .expect("unable to deserialize events to FeedAggregateEvent");
+//         for event in events.into_iter() {
+//             aggregate = aggregate.apply(event);
+//         }
+//     }
+//     aggregate
+// }
 
 #[graphql_object(context = GrpcStore)]
 impl Mutation {
@@ -215,9 +252,31 @@ impl Query {
     }
 }
 
-impl Query {}
+type FeedAggregateStream = Pin<Box<dyn Stream<Item = Result<Vec<Feed>, FieldError>> + Send>>;
+use futures::StreamExt;
 
-pub type Schema = RootNode<'static, Query, Mutation, EmptySubscription<GrpcStore>>;
+pub struct Subscription;
+
+#[graphql_subscription]
+impl Subscription {
+    async fn watch_feeds(stream_id: Uuid, context: &GrpcStore) -> FeedAggregateStream {
+        let aggregate_stream = ApplicableStream::subscribe_aggregate(
+            FeedAggregate::default(),
+            context.store.clone().subscribe(&stream_id).await,
+        );
+        let gql_stream = aggregate_stream.map(|commit_result| match commit_result {
+            Ok((_, agg)) => Ok(agg
+                .feeds_by_feed_id
+                .into_iter()
+                .map(|(feed_id, immutable_feed)| Feed::with_feed_id(immutable_feed, feed_id))
+                .collect()),
+            Err(_) => unimplemented!(),
+        });
+        Box::pin(gql_stream)
+    }
+}
+
+pub type Schema = RootNode<'static, Query, Mutation, Subscription>;
 
 pub async fn create_store() -> GrpcStore {
     let grpc_client =
@@ -231,5 +290,5 @@ pub async fn create_store() -> GrpcStore {
 }
 
 pub fn create_schema() -> Schema {
-    RootNode::new(Query, Mutation, EmptySubscription::new())
+    RootNode::new(Query, Mutation, Subscription)
 }

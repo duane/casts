@@ -1,7 +1,5 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use lazy_static::lazy_static;
-
 use casts::graphql::{create_store, Mutation, Query, Schema};
 use core::ffi::c_void;
 use juniper::EmptySubscription;

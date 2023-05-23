@@ -1,4 +1,4 @@
-use casts::graphql::{GrpcStore, Mutation, Query, Schema};
+use casts::graphql::{create_schema, GrpcStore};
 use commit_store::GrpcClient;
 use std::{convert::Infallible, sync::Arc};
 
@@ -8,15 +8,13 @@ use hyper::{
     service::{make_service_fn, service_fn},
     Method, Response, StatusCode,
 };
-use juniper::EmptySubscription;
-
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
 
     let addr = ([127, 0, 0, 1], 3000).into();
 
-    let root_node = Arc::new(Schema::new(Query, Mutation, EmptySubscription::new()));
+    let root_node = Arc::new(create_schema());
 
     let grpc_client = CommitStoreClient::connect("http://127.0.0.1:5059")
         .await
