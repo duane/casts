@@ -1,11 +1,11 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 use anyhow::Result;
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use feed_rs::{
     model::{
         Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,
-        Link as RustLink,
+        Link as RustLink, MediaContent as RustMediaContent, MediaObject as RustMediaObject,
     },
     parser,
 };
@@ -141,6 +141,63 @@ impl From<RustImage> for Image {
             width: rust_image.width,
             height: rust_image.height,
             description: rust_image.description,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct MediaContent {
+    pub url: Option<Url>,
+    pub content_type: Option<String>,
+    pub height: Option<u32>,
+    pub width: Option<u32>,
+    // pub duration: Option<(u32, u32)>,
+    pub size: Option<u64>,
+    // pub rating: Option<MediaRating>,
+}
+
+impl From<RustMediaContent> for MediaContent {
+    fn from(value: RustMediaContent) -> Self {
+        MediaContent {
+            url: value.url,
+            content_type: value.content_type.map(|m| m.to_string()),
+            height: value.height,
+            width: value.width,
+            // duration: value.duration,
+            size: value.size,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct MediaObject {
+    /// Title of the object (from the media:title element)
+    pub title: Option<String>,
+    /// Collection of the media content elements
+    pub content: Vec<MediaContent>,
+    /// Duration of the object
+    pub duration: Option<(u32, u32)>,
+    // Representative images for the object (from media:thumbnail elements)
+    // pub thumbnails: Vec<MediaThumbnail>,
+    // A text transcript, closed captioning or lyrics of the media content.
+    // pub texts: Vec<MediaText>,
+    /// Short description of the media object (from the media:description element)
+    pub description: Option<String>,
+    // Community info (from the media:community element)
+    // pub community: Option<MediaCommunity>,
+    // Credits
+    // pub credits: Vec<MediaCredit>,
+}
+
+impl From<RustMediaObject> for MediaObject {
+    fn from(value: RustMediaObject) -> Self {
+        MediaObject {
+            title: value.title.and_then(|t| t.src),
+            content: value.content.into_iter().map(MediaContent::from).collect(),
+            duration: value
+                .duration
+                .map(|d| (d.as_secs() as u32, d.subsec_nanos())),
+            description: value.description.and_then(|t| t.src),
         }
     }
 }
@@ -313,11 +370,14 @@ pub struct Entry {
     /// When the entry was first published.
     pub published_at: Option<DateTime<Utc>>,
 
-    /// Actual audio content of episode
+    /// Content (typically html) associated with media.
     pub content: Option<Content>,
 
     /// Other links associated with content
     pub links: Vec<Link>,
+
+    /// Other media
+    pub media: Vec<MediaObject>,
 }
 
 impl Entry {
@@ -384,6 +444,7 @@ impl From<RustEntry> for Entry {
             published_at: entry.published,
             content: entry.content.map(Content::from),
             links: entry.links.into_iter().map(Link::from).collect(),
+            media: entry.media.into_iter().map(MediaObject::from).collect(),
         }
     }
 }

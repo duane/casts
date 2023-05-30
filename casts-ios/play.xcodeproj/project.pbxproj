@@ -49,6 +49,8 @@
 		47D04D5127257F88000FD29E /* HTMLView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D4F27257F88000FD29E /* HTMLView.swift */; };
 		47D04D6327258D55000FD29E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D6227258D55000FD29E /* ContentView.swift */; };
 		47D04D6427258D55000FD29E /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D6227258D55000FD29E /* ContentView.swift */; };
+		47E19B2D2A1D5E840084F518 /* LocalCachedAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E19B2C2A1D5E830084F518 /* LocalCachedAsset.swift */; };
+		47E19B2E2A1D5E840084F518 /* LocalCachedAsset.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47E19B2C2A1D5E830084F518 /* LocalCachedAsset.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -98,6 +100,7 @@
 		47D04D4427257C19000FD29E /* sample.jpg */ = {isa = PBXFileReference; lastKnownFileType = image.jpeg; path = sample.jpg; sourceTree = "<group>"; };
 		47D04D4F27257F88000FD29E /* HTMLView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HTMLView.swift; sourceTree = "<group>"; };
 		47D04D6227258D55000FD29E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		47E19B2C2A1D5E830084F518 /* LocalCachedAsset.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalCachedAsset.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -195,6 +198,7 @@
 				471D55CF2A06B7B200DE85B8 /* GraphQLClient.swift */,
 				471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */,
 				471D55E92A0728BD00DE85B8 /* SquareLogoView.swift */,
+				47E19B2C2A1D5E830084F518 /* LocalCachedAsset.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -426,6 +430,7 @@
 				471D55EA2A0728BD00DE85B8 /* SquareLogoView.swift in Sources */,
 				471D55CD2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0627254514000FD29E /* PlayView.swift in Sources */,
+				47E19B2D2A1D5E840084F518 /* LocalCachedAsset.swift in Sources */,
 				471D55E42A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */,
 				471D55C72A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
 				471D55D02A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
@@ -447,6 +452,7 @@
 				471D55EB2A0728BD00DE85B8 /* SquareLogoView.swift in Sources */,
 				471D55CE2A06B76500DE85B8 /* FeedListViewModel.swift in Sources */,
 				47D04D0727254514000FD29E /* PlayView.swift in Sources */,
+				47E19B2E2A1D5E840084F518 /* LocalCachedAsset.swift in Sources */,
 				471D55E52A06DCBC00DE85B8 /* FeedEntryDetailView.swift in Sources */,
 				471D55C82A06AC3600DE85B8 /* RoutePicker.swift in Sources */,
 				471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,

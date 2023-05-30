@@ -40,7 +40,7 @@ pub type GrpcStore = Store<GrpcClient>;
 
 #[derive(juniper::GraphQLObject)]
 pub struct Link {
-    pub href: String,
+    pub href: Url,
     pub rel: Option<String>,
     pub media_type: Option<String>,
     pub href_lang: Option<String>,
@@ -51,7 +51,7 @@ pub struct Link {
 impl From<immutable_feed::Link> for Link {
     fn from(link: immutable_feed::Link) -> Link {
         Link {
-            href: link.href,
+            href: Url::parse(&link.href).unwrap(),
             rel: link.rel,
             media_type: link.media_type,
             href_lang: link.href_lang,
@@ -108,6 +108,71 @@ pub struct Content {
     pub src: Option<Link>,
 }
 
+impl From<immutable_feed::Content> for Content {
+    fn from(value: immutable_feed::Content) -> Self {
+        Content {
+            body: value.body,
+            content_type: value.content_type.to_string(),
+            length: value.length.map(|i| i as i32),
+            src: value.src.map(Link::from),
+        }
+    }
+}
+
+#[derive(juniper::GraphQLObject)]
+pub struct MediaContent {
+    pub url: Option<Url>,
+    pub content_type: Option<String>,
+    pub height: Option<i32>,
+    pub width: Option<i32>,
+    // pub duration: Option<(u32, u32)>,
+    pub size: Option<i32>,
+    // pub rating: Option<MediaRating>,
+}
+
+impl From<immutable_feed::MediaContent> for MediaContent {
+    fn from(value: immutable_feed::MediaContent) -> MediaContent {
+        MediaContent {
+            url: value.url,
+            content_type: value.content_type,
+            height: value.height.map(|i| i as i32),
+            width: value.width.map(|i| i as i32),
+            size: value.size.map(|i| i as i32),
+        }
+    }
+}
+
+#[derive(juniper::GraphQLObject)]
+pub struct MediaObject {
+    /// Title of the object (from the media:title element)
+    pub title: Option<String>,
+    /// Collection of the media content elements
+    pub content: Vec<MediaContent>,
+    /// Duration of the object
+    pub duration: Option<[i32; 2]>,
+    // Representative images for the object (from media:thumbnail elements)
+    // pub thumbnails: Vec<MediaThumbnail>,
+    // A text transcript, closed captioning or lyrics of the media content.
+    // pub texts: Vec<MediaText>,
+    /// Short description of the media object (from the media:description element)
+    pub description: Option<String>,
+    // Community info (from the media:community element)
+    // pub community: Option<MediaCommunity>,
+    // Credits
+    // pub credits: Vec<MediaCredit>,
+}
+
+impl From<immutable_feed::MediaObject> for MediaObject {
+    fn from(value: immutable_feed::MediaObject) -> Self {
+        MediaObject {
+            title: value.title,
+            content: value.content.into_iter().map(MediaContent::from).collect(),
+            duration: value.duration.map(|d| [d.0 as i32, d.1 as i32]),
+            description: value.description,
+        }
+    }
+}
+
 #[derive(juniper::GraphQLObject)]
 pub struct Entry {
     pub title: String,
@@ -115,6 +180,7 @@ pub struct Entry {
     pub summary: String,
     pub links: Vec<Link>,
     pub content: Option<Content>,
+    pub media: Vec<MediaObject>,
 }
 
 impl From<immutable_feed::Entry> for Entry {
@@ -123,8 +189,9 @@ impl From<immutable_feed::Entry> for Entry {
             title: entry.title.unwrap_or_default(),
             guid: entry.guid,
             summary: entry.summary.unwrap_or_default(),
-            links: vec![],
-            content: None,
+            links: entry.links.into_iter().map(Link::from).collect(),
+            content: entry.content.map(Content::from),
+            media: entry.media.into_iter().map(MediaObject::from).collect(),
         }
     }
 }
@@ -184,27 +251,10 @@ async fn hydrate_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggr
             .expect("unable to deserialize events to FeedAggregateEvent");
         for event in events.into_iter() {
             aggregate = aggregate.apply(event);
-            println!("applied aggregate");
         }
     }
     aggregate
 }
-
-// async fn stream_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggregate {
-//     let mut aggregate = hydrate_aggregate(client, stream_id).await;
-//     let commits = client
-//         .get_stream_range(stream_id, 0, i64::MAX)
-//         .await
-//         .expect("failed to make upstream grpc call");
-//     for commit in commits.into_iter() {
-//         let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
-//             .expect("unable to deserialize events to FeedAggregateEvent");
-//         for event in events.into_iter() {
-//             aggregate = aggregate.apply(event);
-//         }
-//     }
-//     aggregate
-// }
 
 #[graphql_object(context = GrpcStore)]
 impl Mutation {

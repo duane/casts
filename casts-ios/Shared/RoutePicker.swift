@@ -1,6 +1,5 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-
 #if os(iOS)
 import UIKit
 #endif

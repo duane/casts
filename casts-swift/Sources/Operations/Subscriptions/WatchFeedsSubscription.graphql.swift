@@ -122,7 +122,7 @@ public class WatchFeedsSubscription: GraphQLSubscription {
           public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Link }
           public static var __selections: [ApolloAPI.Selection] { [
             .field("__typename", String.self),
-            .field("href", String.self),
+            .field("href", Casts.Url.self),
             .field("rel", String?.self),
             .field("mediaType", String?.self),
             .field("hrefLang", String?.self),
@@ -130,7 +130,7 @@ public class WatchFeedsSubscription: GraphQLSubscription {
             .field("length", Int?.self),
           ] }
 
-          public var href: String { __data["href"] }
+          public var href: Casts.Url { __data["href"] }
           public var rel: String? { __data["rel"] }
           public var mediaType: String? { __data["mediaType"] }
           public var hrefLang: String? { __data["hrefLang"] }

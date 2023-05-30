@@ -3,13 +3,26 @@
 import SwiftUI
 
 struct SquareImageView: View {
+    #if os(iOS)
     @State var image: UIImage? = nil
+    #endif
+    
+    #if os(macOS)
+    @State var image: NSImage? = nil
+    #endif
+
+    var feedId: UUID
     var url: URL
 
     var body: some View {
         VStack {
             if image != nil {
-                Image(uiImage: image!).resizable().aspectRatio(contentMode: .fill)
+                #if os(iOS)
+                Image(uiImage: FeedLogoManager.shared.image(feedId: feedId, url: url)).resizable().aspectRatio(contentMode: .fill)
+                #endif
+                #if os(macOS)
+                Image(nsImage: FeedLogoManager.shared.image(feedId: feedId, url: url)).resizable().aspectRatio(contentMode: .fit)
+                #endif
             } else {
                 Spacer()
             }
@@ -23,6 +36,6 @@ struct SquareImageView: View {
 
 struct SquareImageView_Previews: PreviewProvider {
     static var previews: some View {
-        SquareImageView(url: URL(string: "https://placehold.co/600x400.png")!)
+        SquareImageView(feedId: UUID(), url: URL(string: "https://placehold.co/600x400.png")!)
     }
 }

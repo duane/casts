@@ -1,7 +1,5 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use std::pin::Pin;
-
 use crate::{
     grpc_interface::{
         commit_store_client::CommitStoreClient, Commit as GrpcCommit,
@@ -14,8 +12,6 @@ use anyhow::Result;
 use async_trait::async_trait;
 use chrono::{DateTime, TimeZone, Utc};
 use prost_types::Timestamp as GrpcTimestamp;
-use tokio_stream::{Stream, StreamExt};
-use tonic::Streaming;
 use uuid::Uuid;
 
 // Grpc Async Client

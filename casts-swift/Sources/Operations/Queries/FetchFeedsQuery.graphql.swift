@@ -38,6 +38,20 @@ public class FetchFeedsQuery: GraphQLQuery {
             guid
             title
             summary
+            media {
+              __typename
+              content {
+                __typename
+                url
+                contentType
+                height
+                width
+                size
+              }
+              title
+              description
+              duration
+            }
             content {
               __typename
               body
@@ -143,7 +157,7 @@ public class FetchFeedsQuery: GraphQLQuery {
           public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Link }
           public static var __selections: [ApolloAPI.Selection] { [
             .field("__typename", String.self),
-            .field("href", String.self),
+            .field("href", Casts.Url.self),
             .field("rel", String?.self),
             .field("mediaType", String?.self),
             .field("hrefLang", String?.self),
@@ -151,7 +165,7 @@ public class FetchFeedsQuery: GraphQLQuery {
             .field("length", Int?.self),
           ] }
 
-          public var href: String { __data["href"] }
+          public var href: Casts.Url { __data["href"] }
           public var rel: String? { __data["rel"] }
           public var mediaType: String? { __data["mediaType"] }
           public var hrefLang: String? { __data["hrefLang"] }
@@ -173,13 +187,65 @@ public class FetchFeedsQuery: GraphQLQuery {
           .field("guid", String.self),
           .field("title", String.self),
           .field("summary", String.self),
+          .field("media", [Medium].self),
           .field("content", Content?.self),
         ] }
 
         public var guid: String { __data["guid"] }
         public var title: String { __data["title"] }
         public var summary: String { __data["summary"] }
+        public var media: [Medium] { __data["media"] }
         public var content: Content? { __data["content"] }
+
+        /// Feed.Entry.Medium
+        ///
+        /// Parent Type: `MediaObject`
+        public struct Medium: Casts.SelectionSet {
+          public let __data: DataDict
+          public init(_dataDict: DataDict) { __data = _dataDict }
+
+          public static var __parentType: ApolloAPI.ParentType { Casts.Objects.MediaObject }
+          public static var __selections: [ApolloAPI.Selection] { [
+            .field("__typename", String.self),
+            .field("content", [Content].self),
+            .field("title", String?.self),
+            .field("description", String?.self),
+            .field("duration", [Int]?.self),
+          ] }
+
+          /// Collection of the media content elements
+          public var content: [Content] { __data["content"] }
+          /// Title of the object (from the media:title element)
+          public var title: String? { __data["title"] }
+          /// Short description of the media object (from the media:description element)
+          public var description: String? { __data["description"] }
+          /// Duration of the object
+          public var duration: [Int]? { __data["duration"] }
+
+          /// Feed.Entry.Medium.Content
+          ///
+          /// Parent Type: `MediaContent`
+          public struct Content: Casts.SelectionSet {
+            public let __data: DataDict
+            public init(_dataDict: DataDict) { __data = _dataDict }
+
+            public static var __parentType: ApolloAPI.ParentType { Casts.Objects.MediaContent }
+            public static var __selections: [ApolloAPI.Selection] { [
+              .field("__typename", String.self),
+              .field("url", Casts.Url?.self),
+              .field("contentType", String?.self),
+              .field("height", Int?.self),
+              .field("width", Int?.self),
+              .field("size", Int?.self),
+            ] }
+
+            public var url: Casts.Url? { __data["url"] }
+            public var contentType: String? { __data["contentType"] }
+            public var height: Int? { __data["height"] }
+            public var width: Int? { __data["width"] }
+            public var size: Int? { __data["size"] }
+          }
+        }
 
         /// Feed.Entry.Content
         ///
@@ -212,12 +278,12 @@ public class FetchFeedsQuery: GraphQLQuery {
             public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Link }
             public static var __selections: [ApolloAPI.Selection] { [
               .field("__typename", String.self),
-              .field("href", String.self),
+              .field("href", Casts.Url.self),
               .field("hrefLang", String?.self),
               .field("rel", String?.self),
             ] }
 
-            public var href: String { __data["href"] }
+            public var href: Casts.Url { __data["href"] }
             public var hrefLang: String? { __data["hrefLang"] }
             public var rel: String? { __data["rel"] }
           }

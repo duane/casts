@@ -1,5 +1,13 @@
+type MediaContent {
+  url: Url
+  contentType: String
+  height: Int
+  width: Int
+  size: Int
+}
+
 type Link {
-  href: String!
+  href: Url!
   rel: String
   mediaType: String
   hrefLang: String
@@ -13,6 +21,18 @@ type Entry {
   summary: String!
   links: [Link!]!
   content: Content
+  media: [MediaObject!]!
+}
+
+type MediaObject {
+  "Title of the object (from the media:title element)"
+  title: String
+  "Collection of the media content elements"
+  content: [MediaContent!]!
+  "Duration of the object"
+  duration: [Int!]
+  "Short description of the media object (from the media:description element)"
+  description: String
 }
 
 type Content {
@@ -45,11 +65,11 @@ type Subscription {
   watchFeeds(streamId: Uuid!): [Feed!]!
 }
 
+scalar Url
+
 type Query {
   feeds(streamId: Uuid!): [Feed!]!
 }
-
-scalar Url
 
 scalar Uuid
 

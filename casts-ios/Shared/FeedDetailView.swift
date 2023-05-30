@@ -10,12 +10,12 @@ struct FeedDetailView: View {
     var body: some View {
         VStack {
             if let logoUrl = feed.logo?.url {
-                SquareImageView(url:URL(string:logoUrl)!)
+                SquareImageView(feedId: UUID(uuidString: feed.feedId)!, url:URL(string:logoUrl)!)
             }
             Text(feed.title)
             Text(feed.description)
             List(feed.entries, id: \.guid) { entry in
-                NavigationLink(entry.title, destination: FeedEntryDetailView(entry: entry))
+                NavigationLink(entry.title, destination: PlayView(feed: feed, entry: entry))
             }.navigationTitle(feed.title)
         }
     }

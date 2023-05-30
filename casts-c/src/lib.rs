@@ -1,12 +1,11 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use casts::graphql::{create_store, Mutation, Query, Schema};
+use casts::graphql::{create_schema, create_store, Schema};
 use core::ffi::c_void;
-use juniper::EmptySubscription;
 use juniper_swift::{GraphQLExecuteContext, GraphQLUnownedBuffer};
 
 lazy_static::lazy_static! {
-    static ref SCHEMA: Schema = Schema::new(Query, Mutation, EmptySubscription::new());
+    static ref SCHEMA: Schema = create_schema();
     static ref GQL_CASTS_POOL: ThreadPool = ThreadPool::new().unwrap();
 }
 use futures::executor::ThreadPool;

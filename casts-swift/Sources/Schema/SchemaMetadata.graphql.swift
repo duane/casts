@@ -29,6 +29,8 @@ public enum SchemaMetadata: ApolloAPI.SchemaMetadata {
     case "Link": return Casts.Objects.Link
     case "Query": return Casts.Objects.Query
     case "Entry": return Casts.Objects.Entry
+    case "MediaObject": return Casts.Objects.MediaObject
+    case "MediaContent": return Casts.Objects.MediaContent
     case "Content": return Casts.Objects.Content
     default: return nil
     }

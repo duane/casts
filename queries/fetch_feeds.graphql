@@ -24,6 +24,18 @@ query FetchFeeds($streamId:Uuid!) {
       guid
       title
       summary
+      media {
+        content {
+          url
+          contentType
+          height
+          width
+          size
+        }
+        title
+        description
+        duration
+      }
       content {
         body
         contentType
