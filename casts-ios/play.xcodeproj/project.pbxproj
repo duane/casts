@@ -31,6 +31,7 @@
 		471D55EE2A0729DD00DE85B8 /* ImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55ED2A0729DD00DE85B8 /* ImageLoader.swift */; };
 		471D55EF2A0729DD00DE85B8 /* ImageLoader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 471D55ED2A0729DD00DE85B8 /* ImageLoader.swift */; };
 		472186552A04766A005F4CD6 /* Apollo in Frameworks */ = {isa = PBXBuildFile; productRef = 472186542A04766A005F4CD6 /* Apollo */; };
+		474B51EE2A27D5A9005AE600 /* ButtonDemo.swift in Sources */ = {isa = PBXBuildFile; fileRef = 474B51ED2A27D530005AE600 /* ButtonDemo.swift */; };
 		47D04CF727254514000FD29E /* Tests_iOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04CF627254514000FD29E /* Tests_iOS.swift */; };
 		47D04D0227254514000FD29E /* Tests_macOS.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04D0127254514000FD29E /* Tests_macOS.swift */; };
 		47D04D0427254514000FD29E /* playApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D04CDB27254513000FD29E /* playApp.swift */; };
@@ -81,6 +82,7 @@
 		471D55E32A06DCBC00DE85B8 /* FeedEntryDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedEntryDetailView.swift; sourceTree = "<group>"; };
 		471D55E92A0728BD00DE85B8 /* SquareLogoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SquareLogoView.swift; sourceTree = "<group>"; };
 		471D55ED2A0729DD00DE85B8 /* ImageLoader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageLoader.swift; sourceTree = "<group>"; };
+		474B51ED2A27D530005AE600 /* ButtonDemo.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ButtonDemo.swift; sourceTree = "<group>"; };
 		47D04CDB27254513000FD29E /* playApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = playApp.swift; sourceTree = "<group>"; };
 		47D04CDC27254513000FD29E /* PlayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayView.swift; sourceTree = "<group>"; };
 		47D04CDD27254514000FD29E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -227,6 +229,7 @@
 			children = (
 				47D04CEC27254514000FD29E /* Info.plist */,
 				47D04CED27254514000FD29E /* macOS.entitlements */,
+				474B51ED2A27D530005AE600 /* ButtonDemo.swift */,
 			);
 			path = macOS;
 			sourceTree = "<group>";
@@ -458,6 +461,7 @@
 				471D55D12A06B7B200DE85B8 /* GraphQLClient.swift in Sources */,
 				471D55BE2A06AAE800DE85B8 /* InMemoryTransport.swift in Sources */,
 				47D04D5127257F88000FD29E /* HTMLView.swift in Sources */,
+				474B51EE2A27D5A9005AE600 /* ButtonDemo.swift in Sources */,
 				47D04D6427258D55000FD29E /* ContentView.swift in Sources */,
 				47D04D302725498B000FD29E /* PlayerState.swift in Sources */,
 				47D04D0527254514000FD29E /* playApp.swift in Sources */,

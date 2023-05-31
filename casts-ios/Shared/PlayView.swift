@@ -53,30 +53,28 @@ struct PlayView: View {
             HStack {
                 Spacer()
                 Button(action: {
-                    print("rw")
                     self.state.seekDelta(-30)
                 }, label: {
                     Image(systemName: "gobackward.30").imageScale(.large).font(.system(size: 40))
-                })
+                }).buttonStyle(.borderless)
                 Spacer()
                 Button(action: {
                     self.state.togglePlayState()
-                }, label: {
+                }) {
                     Image(systemName: self.state.isPlaying ? "pause.circle" : "play.circle").imageScale(.large).font(.system(size: 40))
-                })
+                }.buttonStyle(.borderless)
                 Spacer()
                 Button(action: {
-                    print("ff")
                     self.state.seekDelta(30)
                 }, label: {
                     Image(systemName: "goforward.30").imageScale(.large).font(.system(size: 40))
-                })
+                }).buttonStyle(.borderless)
                 Spacer()
             }
             HStack {
                 Button(state.speed.display()) {
                     state.speed = state.speed.next_in_rotation()
-                }.font(.system(size: 20)).padding(8)
+                }.font(.system(size: 20)).padding(8).buttonStyle(.borderless)
                 Image(systemName: "speaker")
                 Slider(
                     value: $state.volume,
@@ -89,14 +87,7 @@ struct PlayView: View {
             let mediaObjects: [FetchFeedsQuery.Data.Feed.Entry.Medium] = entry.media;
             let audioObject: FetchFeedsQuery.Data.Feed.Entry.Medium? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
             let url = URL(string: (audioObject?.content[0].url)!)!
-            print("url: \(url)")
             self.state.prepareToPlay(url: url)
         }
     }
 }
-
-//struct PlayView_Previews: PreviewProvider {
-//    static var previews: some View {
-//        PlayView()
-//    }
-//}

@@ -116,7 +116,6 @@ final class FeedLogoManager {
     
     #if os(macOS)
     func image(feedId: UUID, url: URL) -> NSImage {
-        print("image?")
         if let feedLogo = self.cache.object(forKey: url as NSURL) {
             return feedLogo.image
         }

@@ -9,7 +9,9 @@ import AVKit
 #if os(iOS)
 struct RoutePicker: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
-      return AVRoutePickerView()
+        let view = AVRoutePickerView();
+        view.isRoutePickerButtonBordered = false;
+        return view;
     }
 
     func updateUIView(_ uiView: UIView, context: Context) {}
@@ -19,7 +21,9 @@ struct RoutePicker: UIViewRepresentable {
 #if os(macOS)
 struct RoutePicker: NSViewRepresentable {
     func makeNSView(context: Context) -> AVRoutePickerView {
-        return AVRoutePickerView()
+        let view = AVRoutePickerView();
+        view.isRoutePickerButtonBordered = false;
+        return view;
     }
     
     func updateNSView(_ nsView: AVRoutePickerView, context: Context) {}

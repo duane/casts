@@ -93,8 +93,6 @@ class PlayerState: NSObject, ObservableObject {
   }
   
   func togglePlayState() {
-    print(self.player.status.rawValue)
-    
     if self.isPlaying {
       self.isPlaying = false
       self.player.pause()
@@ -172,20 +170,13 @@ class PlayerState: NSObject, ObservableObject {
       // Switch over the status
       switch status {
       case .readyToPlay:
-        print("ready to play")
         break
-      // Player item is ready to play.
       case .failed:
-        print("failed")
         break
-      // Player item failed. See error.
       case .unknown:
-        print("unknown")
         break
       default:
-        print("default")
         break
-          // Player item is not yet ready.
       }
     }
   }
