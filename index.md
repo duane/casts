@@ -80,16 +80,20 @@ Note what is not in this MVP:
 [ ] Application server
 	[x] GraphQL server - mutation
 	[x] GraphQL server - query
-	[ ] GraphQL server - subscribe
-	[x] casts-swift generation	
+	[x] GraphQL server - subscribe
+	[x] casts-swift generation
+	[ ] in-memory subscription (bypass websockets!)
+	[ ] Flesh out error and failure states
 [ ] macOS/iOS client
 	[x] consume `FetchFeeds` query to drive feed, entry views
-	[ ] Actually allow streaming of linked content.
+	[x] Actually allow streaming of linked content.
+	[ ] Add ability to subscribe to and archive feeds.
 	[ ] Provide compile-time option for in-memory vs endpoint-driven application state.
 	[ ] Add `episodeState` to `Entry` model corresponding to `Active`, `Archived`, or `Hidden`.
+	[ ] Flesh out error and failure states
 [ ] Infrastructure/Meta
 	[ ] Automated iOS/macOS builds
-	[ ] Continuous testing (using source hut builds)
+	[ ] Continuous testing (using sourcehut builds)
 	[ ] Continuous integration with railway deployment (or k8s if that fails) + TLS for production environment.
 	[ ] Integration with Sentry
 	[ ] Integration with Prometheus
@@ -99,6 +103,7 @@ Note what is not in this MVP:
 [ ] Miscellaneous
 	[ ] Export both `txt` and `html` version of `content`. As well as normal content.
 	[ ] Export `Person`, `Mime` types.
+	[ ] Have better handling of text.
 ```
 
 # Expected next steps
