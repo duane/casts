@@ -24,7 +24,6 @@ struct PlayView: View {
     
     var body: some View {
         VStack {
-//            Text(self.feed.authors[0])
             if self.feed.logo?.url != nil {
 #if os(iOS)
                 Image(uiImage: UIImage(contentsOfFile: Bundle.main.path(forResource: "sample", ofType: "jpg")!)!).resizable().scaledToFit()

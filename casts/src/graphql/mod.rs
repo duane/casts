@@ -22,19 +22,19 @@ use crate::{
 // Store
 
 #[derive(Clone, Debug)]
-pub struct Store<T: AsyncClientStore + Clone> {
+pub struct GraphQLStore<T: AsyncClientStore + Clone> {
     store: T,
 }
 
-impl<T: AsyncClientStore + Clone> Store<T> {
+impl<T: AsyncClientStore + Clone> GraphQLStore<T> {
     pub fn new(store: T) -> Self {
-        Store { store }
+        GraphQLStore { store }
     }
 }
 
-impl<T: AsyncClientStore + Clone> juniper::Context for Store<T> {}
+impl<T: AsyncClientStore + Clone> juniper::Context for GraphQLStore<T> {}
 
-pub type GrpcStore = Store<GrpcClient>;
+pub type GrpcStore = GraphQLStore<GrpcClient>;
 
 // Model
 

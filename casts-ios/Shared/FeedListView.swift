@@ -4,10 +4,17 @@ import SwiftUI
 
 struct FeedListView: View {
     @StateObject var feedsModel: FeedListViewModel = FeedListViewModel()
+    @Environment(\.openWindow) private var openWindow
+    
     var body: some View {
         NavigationStack {
-            List(feedsModel.feeds, id: \.feedId) { feed in
-                NavigationLink(feed.title, destination: FeedDetailView(feed: feed))
+            VStack {
+                List(feedsModel.feeds, id: \.feedId) { feed in
+                    NavigationLink(feed.title, destination: FeedDetailView(feed: feed))
+                }
+                Button("+") {
+                    openWindow(id: "add-feed-by-url-prompt")
+                }.font(.system(size: 30)).buttonStyle(.borderless)
             }.navigationTitle("Browse Feeds")
         }
     }

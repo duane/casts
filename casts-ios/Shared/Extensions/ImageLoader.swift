@@ -7,11 +7,8 @@ final class ImageLoader {
     static func loadImage(withUrl url: URL, onComplete: @escaping (UIImage) -> Void) {
         DispatchQueue.global().async {
             if let imageData = try? Data(contentsOf: url) {
-                print("maybe got an image: \(imageData.debugDescription)")
                 if let image = UIImage(data: imageData) {
-                    print("found some image")
                     DispatchQueue.main.async {
-                        print("completed!")
                         onComplete(image)
                     }
                 }
@@ -24,11 +21,8 @@ final class ImageLoader {
     static func loadImage(withUrl url: URL, onComplete: @escaping (NSImage) -> Void) {
         DispatchQueue.global().async {
             if let imageData = try? Data(contentsOf: url) {
-                print("maybe got an image: \(imageData.debugDescription)")
                 if let image = NSImage(data: imageData) {
-                    print("found some image")
                     DispatchQueue.main.async {
-                        print("completed!")
                         onComplete(image)
                     }
                 }
