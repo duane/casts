@@ -11,9 +11,12 @@
   "output": {
     "schemaTypes": {
       "moduleType": {
-        "swiftPackageManager": {}
+        "embeddedInTarget": {
+          "name": "CastsSchema",
+          "accessModifier": "internal"
+        }
       },
-      "path": "./casts-swift"
+      "path": "./casts-ios/casts-swift/Sources/Generated"
     },
     "operations": {
       "inSchemaModule": {}

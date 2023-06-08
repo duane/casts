@@ -17,6 +17,7 @@ async fn main() {
     let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:5059")
         .await
         .expect("Failed to connect to backend commit store");
+
     let commits: Commits = grpc_client
         .get_stream_range(Cursor {
             stream_id,
@@ -27,10 +28,12 @@ async fn main() {
         .unwrap()
         .get_mut()
         .to_owned();
+
     let mut aggregate = FeedAggregate::default();
     for commit in commits.commits.iter() {
         aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice()).unwrap());
     }
     let json_aggregate: Value = serde_json::to_value(aggregate).unwrap();
+
     println!("{:#?}", json_aggregate);
 }

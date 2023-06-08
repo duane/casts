@@ -4,7 +4,7 @@ import SwiftUI
 import Casts
 
 struct FeedEntryDetailView: View {
-    var entry: FetchFeedsQuery.Data.Feed.Entry!
+    var entry: Casts.FetchFeedsQuery.Data.Feed.Entry!
     
     var body: some View {
         Text(entry.title).navigationTitle(entry.title)

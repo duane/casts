@@ -1,0 +1,5 @@
+module casts_c {
+  header "../../../../casts-c/libcasts-c.h"
+  link "casts_c"
+  export *
+}

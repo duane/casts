@@ -9,7 +9,6 @@ edition = "2021"
 path = "src/lib.rs"
 crate-type = ["staticlib"]
 
-
 [dependencies]
 casts = { path = "../casts" }
 
@@ -20,6 +19,7 @@ futures = "*"
 juniper = { path = "../../../sandbox/juniper/juniper" }
 juniper-swift = { path = "../juniper-swift" }
 serde_json = "*"
+tokio = { version = "*", features = ["rt-multi-thread"] }
 
 [build-dependencies]
 cbindgen = "*"

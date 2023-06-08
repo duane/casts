@@ -1,14 +1,13 @@
-#include <cstdarg>
-#include <cstdint>
-#include <cstdlib>
-#include <ostream>
-#include <new>
+/* Generated with cbindgen:0.24.3 */
 
-extern "C" {
+#include <stdarg.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include "../juniper-swift/libjuniper-c.h"
 
 void gql_casts(GraphQLUnownedBuffer document,
                GraphQLUnownedBuffer op_name,
+               const GraphQLInputValue *variables,
                const void *context,
                void (*callback)(GraphQLUnownedBuffer, const void*));
-
-} // extern "C"

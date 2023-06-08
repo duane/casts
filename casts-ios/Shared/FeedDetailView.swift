@@ -4,7 +4,7 @@ import SwiftUI
 import Casts
 
 struct FeedDetailView: View {
-    var feed: FetchFeedsQuery.Data.Feed!
+    var feed: Casts.FetchFeedsQuery.Data.Feed!
     @State var isShowingDetailView: Bool = false
     
     var body: some View {

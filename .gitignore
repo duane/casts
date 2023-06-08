@@ -1,3 +1,4 @@
 /target
 /Cargo.lock
 xcuserdata/
+.DS_Store

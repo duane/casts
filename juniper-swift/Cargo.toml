@@ -7,8 +7,11 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-juniper = "*"
+juniper = { path = "../../../sandbox/juniper/juniper" }
 serde_json = "*"
 lazy_static = "*"
 libc = "*"
 futures = { version = "*", features = ["thread-pool"] }
+
+[build-dependencies]
+cbindgen = "*"
