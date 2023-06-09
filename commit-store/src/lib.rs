@@ -53,7 +53,7 @@ pub enum StoreErrorType {
 }
 
 /// A trait allowing querying store-specific error type.
-pub trait StoreError: Error {
+pub trait StoreError: Error + Send + Sync {
     /// Query the error for which type of store error this represents.
     fn error_type(&self) -> StoreErrorType;
 }

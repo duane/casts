@@ -1,11 +1,17 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 use crate::commit::{Commit, CommitAttempt};
-use crate::{ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType};
+use crate::{
+    AsyncClientStore, ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType,
+};
+use async_trait::async_trait;
+use futures::executor::block_on;
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::error::Error;
 use std::fmt;
 use std::path::Path;
+use std::thread;
+use tokio::sync::mpsc::{channel, Sender};
 use uuid::Uuid;
 
 /// The store representing a sqlite connection.
@@ -17,6 +23,53 @@ impl SqliteStore {
     /// create the store around the given connection
     pub fn with_connection(connection: RusqliteConnection) -> Self {
         SqliteStore { conn: connection }
+    }
+}
+
+enum CallResult {
+    Commit(Commit),
+    Commits(Vec<Commit>),
+}
+
+type CallMessage = (
+    Sender<Result<CallResult, Box<dyn StoreError>>>,
+    Box<dyn (FnMut(&mut SqliteStore) -> Result<CallResult, Box<dyn StoreError>>) + Send>,
+);
+
+pub struct SqliteStoreAsync {
+    sender: Sender<CallMessage>,
+}
+
+impl SqliteStoreAsync {
+    pub fn with_connection(connection: RusqliteConnection) -> Self {
+        let (tx, rx) = channel::<CallMessage>(10);
+        thread::spawn(move || {
+            let mut sqlite_receiver = rx;
+            let mut sqlite_store = SqliteStore::with_connection(connection);
+            loop {
+                let (result_sender, mut closure): CallMessage =
+                    block_on(sqlite_receiver.recv()).unwrap();
+                let result = closure(&mut sqlite_store);
+                result_sender.send(result);
+            }
+        });
+
+        SqliteStoreAsync { sender: tx }
+    }
+
+    async fn call(
+        &self,
+        closure: Box<dyn FnMut(&mut SqliteStore) -> Result<CallResult, Box<dyn StoreError>> + Send>,
+    ) -> Result<CallResult, Box<dyn StoreError>> {
+        let (result_sender, mut result_receiver) =
+            channel::<Result<CallResult, Box<dyn StoreError>>>(1);
+        if let Err(_err) = self.sender.send((result_sender, closure)).await {
+            panic!("Send error. :(");
+        };
+        result_receiver
+            .recv()
+            .await
+            .expect("SqliteStoreAsync recv failure")
     }
 }
 
@@ -204,60 +257,6 @@ impl ClientStore for SqliteStore {
         Ok(rows)
     }
 
-    // fn get_range(
-    //     &mut self,
-    //     min_commit_number: i64,
-    //     max_commit_number: i64,
-    // ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
-    //     let mut stmt = match self.conn.prepare(
-    //         "SELECT
-    //       stream_id,
-    //       stream_version,
-    //       commit_id,
-    //       commit_timestamp,
-    //       commit_sequence,
-    //       commit_number,
-    //       events_count,
-    //       metadata,
-    //       events,
-    //       dispatched
-    //     FROM commits
-    //     WHERE commit_number > ?
-    //     AND commit_number <= ?;",
-    //     ) {
-    //         Ok(result) => result,
-    //         Err(err) => return Err(SqliteStoreError::from(err).into()),
-    //     };
-    //     let rows = match stmt.query_map(&[&min_commit_number, &max_commit_number], |row| {
-    //         let stream_id_str: String = row.get(0).expect("no stream_id result column");
-    //         let commit_id_str: String = row.get(2).expect("no commit_id result column");
-    //         let metadata_string: String = row.get(7).expect("no serialized_metadat result column");
-    //         let metadata = serde_json::from_str(&metadata_string)
-    //             .expect("could not deserialize metadata string");
-    //         let events_string: String = row.get(8).expect("no serialized_metadat result column");
-    //         let events = serde_json::from_str(&events_string)
-    //             .expect("could not deserialize metadata string");
-    //         Ok(Commit {
-    //             stream_id: Uuid::parse_str(stream_id_str.as_ref()).unwrap(),
-    //             stream_version: row.get(1).expect("no stream_version result column"),
-    //             commit_id: Uuid::parse_str(commit_id_str.as_ref()).unwrap(),
-    //             commit_timestamp: row.get(3).expect("no commit_timestamp result column"),
-    //             commit_sequence: row.get(4).expect("no commit_sequence result column"),
-    //             commit_number: row.get(5).expect("no commit_number result column"),
-    //             events_count: row.get(6).expect("no events_count result column"),
-    //             metadata,
-    //             events,
-    //             dispatched: row.get(9).expect("no dispatched result column"),
-    //         })
-    //     }) {
-    //         Ok(result) => result,
-    //         Err(err) => return Err(SqliteStoreError::from(err).into()),
-    //     }
-    //     .map(|row| row.unwrap())
-    //     .collect();
-    //     Ok(rows)
-    // }
-
     fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
         let mut statement = match self.conn.prepare(
             "SELECT
@@ -306,6 +305,68 @@ impl ClientStore for SqliteStore {
             Err(err) => return Err(SqliteStoreError::from(err).into()),
         };
         Ok(commit)
+    }
+}
+
+#[async_trait]
+impl AsyncClientStore for SqliteStoreAsync {
+    async fn commit(
+        &mut self,
+        commit_attempt: &CommitAttempt,
+    ) -> Result<Commit, Box<dyn StoreError>> {
+        let attempt: CommitAttempt = commit_attempt.clone();
+        let result = self
+            .call(Box::new(move |sync_store: &mut SqliteStore| {
+                sync_store.commit(&attempt).map(CallResult::Commit)
+            }))
+            .await;
+        match result {
+            Ok(CallResult::Commit(commit)) => Ok(commit),
+            Ok(_) => unreachable!(),
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn get_stream_range(
+        &mut self,
+        stream_id: Uuid,
+        min_version: i64,
+        max_version: i64,
+    ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+        let result = self
+            .call(Box::new(move |sync_store: &mut SqliteStore| {
+                sync_store
+                    .get_stream_range(stream_id, min_version, max_version)
+                    .map(CallResult::Commits)
+            }))
+            .await;
+        match result {
+            Ok(CallResult::Commits(commits)) => Ok(commits),
+            Ok(_) => unreachable!(),
+            Err(err) => Err(err),
+        }
+    }
+
+    async fn get_range(
+        &mut self,
+        _min_commit_number: i64,
+        _max_commit_number: i64,
+    ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+        unimplemented!("not implemented in synchronous yet either")
+    }
+
+    async fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
+        let commit_id = commit_id.clone();
+        let result = self
+            .call(Box::new(move |sync_store: &mut SqliteStore| {
+                sync_store.get_commit(&commit_id).map(CallResult::Commit)
+            }))
+            .await;
+        match result {
+            Ok(CallResult::Commit(commit)) => Ok(commit),
+            Ok(_) => unreachable!(),
+            Err(err) => Err(err),
+        }
     }
 }
 
