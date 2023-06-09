@@ -8,6 +8,6 @@
 
 void gql_casts(GraphQLUnownedBuffer document,
                GraphQLUnownedBuffer op_name,
-               const GraphQLInputValue *_variables,
+               GraphQLUnownedBuffer variables,
                const void *context,
                void (*callback)(GraphQLUnownedBuffer, const void*));

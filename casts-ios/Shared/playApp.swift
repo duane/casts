@@ -5,6 +5,8 @@ import Apollo
 
 @main
 struct playApp: App {
+    static let STREAM_ID: UUID = UUID(uuidString: "34c3c08d-0d55-4af4-a126-170c1380f07e")!
+    
     var body: some Scene {
         Window("Casts", id: "main-window") {
             ContentView()
@@ -17,5 +19,3 @@ struct playApp: App {
         .windowStyle(.hiddenTitleBar)
     }
 }
-
-

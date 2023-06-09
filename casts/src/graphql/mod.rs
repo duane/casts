@@ -249,17 +249,21 @@ async fn hydrate_aggregate(
     stream_id: Uuid,
 ) -> FeedAggregate {
     let mut aggregate = FeedAggregate::new();
+    println!("empty aggregate");
     let commits = client
         .get_stream_range(stream_id, 0, i64::MAX)
         .await
         .expect("failed to make upstream grpc call");
+    println!("commits in hand");
     for commit in commits.into_iter() {
         let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
             .expect("unable to deserialize events to FeedAggregateEvent");
         for event in events.into_iter() {
             aggregate = aggregate.apply(event);
+            println!("applied event");
         }
     }
+    println!("returning aggregate");
     aggregate
 }
 
@@ -271,6 +275,7 @@ impl Mutation {
         url: Url,
         context: &'db GraphQLStore,
     ) -> FieldResult<Uuid> {
+        println!("add feed");
         let command = FeedAggregateCommand::AddFeed {
             stream_id,
             feed_id,
@@ -300,6 +305,8 @@ impl Mutation {
             events_count,
         };
 
+        println!("commit attempt: {:?}", commit_attempt);
+
         let committed = client
             .commit(&commit_attempt)
             .await
@@ -314,14 +321,19 @@ pub struct Query;
 #[graphql_object(context = GraphQLStore)]
 impl Query {
     async fn feeds(stream_id: Uuid, context: &GraphQLStore) -> Vec<Feed> {
+        println!("inside feed accessor");
         let mut mutable_ctx = context.clone();
         let client: &mut dyn DispatchingAsyncClientStore = mutable_ctx.store();
+        println!("client");
         let aggregate = hydrate_aggregate(client, stream_id).await;
-        aggregate
+        println!("aggregate");
+        let feed_result = aggregate
             .feeds_by_feed_id
             .into_iter()
             .map(|(feed_id, feed)| Feed::with_feed_id(feed, feed_id))
-            .collect()
+            .collect();
+        println!("returning result...");
+        feed_result
     }
 }
 

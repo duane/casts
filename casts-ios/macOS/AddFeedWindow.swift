@@ -1,6 +1,7 @@
 // Copyright (c) 2023 by Duane R Bailey. All rights reserved.
 
 import SwiftUI
+import Casts
 
 func isUrl(val: String) -> Bool {
     let url = URL(string: val)
@@ -24,7 +25,12 @@ struct AddFeedWindow: View {
                     self.isValid = text.isEmpty ? nil : isUrl(val: text)
                 }
             Button("Submit") {
-                print("submitted \(text)")
+                let newUuid = UUID()
+                let mutation = Casts.AddFeedMutation(streamId: playApp.STREAM_ID.uuidString, feedId: newUuid.uuidString, url: self.text)
+                let cancellable = EmbeddedClient.shared.apollo.perform(mutation: mutation)
+                print("Added feed")
+                self.text = ""
+                self.isValid = nil
                 dismiss()
             }.disabled(isValid != true)
         }

@@ -2,7 +2,8 @@
 
 use crate::commit::{Commit, CommitAttempt};
 use crate::{
-    AsyncClientStore, ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType,
+    AsyncClientStore, AsyncStore, ClientStore, StorageCommitConflict, Store, StoreError,
+    StoreErrorType,
 };
 use async_trait::async_trait;
 use futures::executor::block_on;
@@ -42,24 +43,30 @@ pub struct SqliteStoreAsync {
 }
 
 impl SqliteStoreAsync {
-    pub fn with_connection(connection: RusqliteConnection) -> Self {
+    pub fn with_store(sqlite_store: SqliteStore) -> Self {
         let (tx, rx) = channel::<CallMessage>(10);
         let runtime_handle = Handle::current();
         let _guard = runtime_handle.enter();
         let _result = runtime_handle.spawn(async move {
             let mut sqlite_receiver = rx;
-            let mut sqlite_store = SqliteStore::with_connection(connection);
+            let mut sqlite_store = sqlite_store;
             loop {
                 let (result_sender, mut closure): CallMessage =
-                    block_on(sqlite_receiver.recv()).unwrap();
+                    sqlite_receiver.recv().await.unwrap();
                 let result = closure(&mut sqlite_store);
-                if let Err(_err) = result_sender.send(result).await {
-                    unimplemented!("result channel dropped")
+                println!("got result, vending to result sender");
+                if let Err(err) = result_sender.send(result).await {
+                    unimplemented!("result channel dropped: {}", err.to_string())
                 }
+                println!("vended!");
             }
         });
 
         SqliteStoreAsync { sender: tx }
+    }
+
+    pub fn with_connection(connection: RusqliteConnection) -> Self {
+        Self::with_store(SqliteStore::with_connection(connection))
     }
 
     async fn call(
@@ -68,18 +75,25 @@ impl SqliteStoreAsync {
     ) -> Result<CallResult, Box<dyn StoreError>> {
         let (result_sender, mut result_receiver) =
             channel::<Result<CallResult, Box<dyn StoreError>>>(1);
+        println!("sending");
         if let Err(_err) = self.sender.send((result_sender, closure)).await {
             panic!("Send error. :(");
         };
-        result_receiver
+        println!("awaiting result");
+        let result = result_receiver
             .recv()
             .await
-            .expect("SqliteStoreAsync recv failure")
+            .expect("SqliteStoreAsync recv failure");
+        println!("got result!");
+        result
     }
 
     /// Create a new store in-memory.
     pub fn with_new_in_memory_connection() -> Self {
-        Self::with_connection(RusqliteConnection::open_in_memory().unwrap())
+        let connection = RusqliteConnection::open_in_memory().unwrap();
+        let mut sync_store = SqliteStore::with_connection(connection);
+        sync_store.initialize().unwrap();
+        Self::with_store(sync_store)
     }
 
     /// Create a new store at the given path.
@@ -213,6 +227,7 @@ impl ClientStore for SqliteStore {
         min_version: i64,
         max_version: i64,
     ) -> Result<Vec<Commit>, Box<dyn StoreError>> {
+        println!("in get_stream_range");
         let mut stmt = match self.conn.prepare(
             "SELECT
           stream_id,
@@ -233,7 +248,7 @@ impl ClientStore for SqliteStore {
             Ok(result) => result,
             Err(err) => return Err(SqliteStoreError::from(err).into()),
         };
-        let rows = match stmt.query_map(
+        let rows: Vec<Commit> = match stmt.query_map(
             &[
                 &min_version,
                 &max_version,
@@ -269,6 +284,7 @@ impl ClientStore for SqliteStore {
         }
         .map(|row| row.unwrap())
         .collect();
+        println!("Returning {:?} rows", rows.len());
         Ok(rows)
     }
 
@@ -356,7 +372,10 @@ impl AsyncClientStore for SqliteStoreAsync {
             }))
             .await;
         match result {
-            Ok(CallResult::Commits(commits)) => Ok(commits),
+            Ok(CallResult::Commits(commits)) => {
+                println!("got results");
+                Ok(commits)
+            }
             Ok(_) => unreachable!(),
             Err(err) => Err(err),
         }

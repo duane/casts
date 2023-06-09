@@ -7,7 +7,7 @@ final class FeedListViewModel: ObservableObject {
     @Published var feeds: [Casts.FetchFeedsQuery.Data.Feed] = []
     
     func fetch() {
-        let query = Casts.FetchFeedsQuery(streamId: "34c3c08d-0d55-4af4-a126-170c1380f07e")
+        let query = Casts.FetchFeedsQuery(streamId: playApp.STREAM_ID.uuidString)
         EmbeddedClient.shared.apollo.fetch(query:query) { result in
             do {
                 let data = try result.get().data

@@ -78,8 +78,6 @@ class EmbeddedNetworkTransport: NetworkTransport {
             Result<Apollo.GraphQLResult<Operation.Data>, Error>
         ) -> Void
     ) -> Apollo.Cancellable where Operation : ApolloAPI.GraphQLOperation {
-        let requestId = UUID()
-        
         var serializedDoc: GraphQLUnownedBuffer? = nil
         switch Operation.document {
         case let .notPersisted(definition):
@@ -89,7 +87,7 @@ class EmbeddedNetworkTransport: NetworkTransport {
         };
         
 
-        let operation = EmbeddedCancellableOperation(operation: operation, callbackQueue: callbackQueue) { result in
+        let embeddedOperation = EmbeddedCancellableOperation(operation: operation, callbackQueue: callbackQueue) { result in
             switch result {
             case let .success(json):
                 do {
@@ -103,21 +101,22 @@ class EmbeddedNetworkTransport: NetworkTransport {
                 fatalError("unimplemented")
             }
         }
-        let retained = Unmanaged.passRetained(operation).toOpaque()
-        let valuePtr = UnsafeMutablePointer<GraphQLUnownedBuffer>.allocate(capacity: 1)
-        valuePtr.pointee = "34c3c08d-0d55-4af4-a126-170c1380f07e".toGraphQLUnownedBuffer()
-        let inputValuePtr = UnsafeMutablePointer<GraphQLInputValue>.allocate(capacity: 1)
-        inputValuePtr.pointee = GraphQLInputValue(typ: 1, count: 0, slot_b: valuePtr, slot_c: nil)
-        let namePtr = UnsafeMutablePointer<GraphQLUnownedBuffer>.allocate(capacity: 1)
-        namePtr.pointee = "streamId".toGraphQLUnownedBuffer()
+
+        let retained = Unmanaged.passRetained(embeddedOperation).toOpaque()
+        let variablesJsonValue = operation.__variables?._jsonEncodableValue?._jsonValue
+        do {
+            let encoded = try JSONSerialization.data(withJSONObject: variablesJsonValue!)
+            let variablesString = String(data: encoded, encoding: .utf8)?.toGraphQLUnownedBuffer()
+            gql_casts(serializedDoc!,
+                      GraphQLUnownedBuffer(buffer: nil, length: 0),
+                      variablesString ?? GraphQLUnownedBuffer(buffer:nil, length: 0),
+                      retained,
+                      performCallback);
+        } catch {
+            fatalError("caught error when serializing json: \(error)")
+        }
         
-        gql_casts(serializedDoc!,
-                  GraphQLUnownedBuffer(buffer: nil, length: 0),
-                  nil,
-                  retained,
-                  performCallback);
-        
-        return operation
+        return embeddedOperation
     }
 }
 
