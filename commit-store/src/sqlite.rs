@@ -10,7 +10,7 @@ use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::error::Error;
 use std::fmt;
 use std::path::Path;
-use std::thread;
+use tokio::runtime::Handle;
 use tokio::sync::mpsc::{channel, Sender};
 use uuid::Uuid;
 
@@ -36,6 +36,7 @@ type CallMessage = (
     Box<dyn (FnMut(&mut SqliteStore) -> Result<CallResult, Box<dyn StoreError>>) + Send>,
 );
 
+#[derive(Clone, Debug)]
 pub struct SqliteStoreAsync {
     sender: Sender<CallMessage>,
 }
@@ -43,14 +44,18 @@ pub struct SqliteStoreAsync {
 impl SqliteStoreAsync {
     pub fn with_connection(connection: RusqliteConnection) -> Self {
         let (tx, rx) = channel::<CallMessage>(10);
-        thread::spawn(move || {
+        let runtime_handle = Handle::current();
+        let _guard = runtime_handle.enter();
+        let _result = runtime_handle.spawn(async move {
             let mut sqlite_receiver = rx;
             let mut sqlite_store = SqliteStore::with_connection(connection);
             loop {
                 let (result_sender, mut closure): CallMessage =
                     block_on(sqlite_receiver.recv()).unwrap();
                 let result = closure(&mut sqlite_store);
-                result_sender.send(result);
+                if let Err(_err) = result_sender.send(result).await {
+                    unimplemented!("result channel dropped")
+                }
             }
         });
 
@@ -70,6 +75,16 @@ impl SqliteStoreAsync {
             .recv()
             .await
             .expect("SqliteStoreAsync recv failure")
+    }
+
+    /// Create a new store in-memory.
+    pub fn with_new_in_memory_connection() -> Self {
+        Self::with_connection(RusqliteConnection::open_in_memory().unwrap())
+    }
+
+    /// Create a new store at the given path.
+    pub fn with_new_connection_at_path(path: &Path) -> Self {
+        Self::with_connection(RusqliteConnection::open(path).unwrap())
     }
 }
 

@@ -3,9 +3,9 @@
 use std::pin::Pin;
 
 use chrono::Utc;
-use commit_store::{
-    commit::CommitAttempt, AsyncClientStore, DispatchingAsyncClientStore, GrpcClient,
-};
+use commit_store::dispatch::DispatchedStore;
+use commit_store::sqlite::SqliteStoreAsync;
+use commit_store::{commit::CommitAttempt, DispatchingAsyncClientStore, GrpcClient};
 use futures_core::Stream;
 use juniper::graphql_subscription;
 use juniper::{graphql_object, FieldError, FieldResult, RootNode};
@@ -22,19 +22,23 @@ use crate::{
 // Store
 
 #[derive(Clone, Debug)]
-pub struct GraphQLStore<T: AsyncClientStore + Clone> {
-    store: T,
+pub enum GraphQLStore {
+    Sqlite(DispatchedStore<SqliteStoreAsync>),
+    // Postgres(DispatchedStore<PostgresStoreAsync>),
+    Grpc(GrpcClient),
 }
 
-impl<T: AsyncClientStore + Clone> GraphQLStore<T> {
-    pub fn new(store: T) -> Self {
-        GraphQLStore { store }
+impl juniper::Context for GraphQLStore {}
+
+impl GraphQLStore {
+    fn store(&mut self) -> &mut dyn DispatchingAsyncClientStore {
+        match self {
+            GraphQLStore::Sqlite(ref mut sqlite) => sqlite,
+            // GraphQLStore::Postgres(ref mut postgres) => postgres,
+            GraphQLStore::Grpc(ref mut client) => client,
+        }
     }
 }
-
-impl<T: AsyncClientStore + Clone> juniper::Context for GraphQLStore<T> {}
-
-pub type GrpcStore = GraphQLStore<GrpcClient>;
 
 // Model
 
@@ -240,7 +244,10 @@ impl Feed {
 
 pub struct Mutation;
 
-async fn hydrate_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggregate {
+async fn hydrate_aggregate(
+    client: &mut dyn DispatchingAsyncClientStore,
+    stream_id: Uuid,
+) -> FeedAggregate {
     let mut aggregate = FeedAggregate::new();
     let commits = client
         .get_stream_range(stream_id, 0, i64::MAX)
@@ -256,21 +263,22 @@ async fn hydrate_aggregate(client: &mut GrpcClient, stream_id: Uuid) -> FeedAggr
     aggregate
 }
 
-#[graphql_object(context = GrpcStore)]
+#[graphql_object(context = GraphQLStore)]
 impl Mutation {
     async fn add_feed<'db>(
         stream_id: Uuid,
         feed_id: Uuid,
         url: Url,
-        context: &'db GrpcStore,
+        context: &'db GraphQLStore,
     ) -> FieldResult<Uuid> {
         let command = FeedAggregateCommand::AddFeed {
             stream_id,
             feed_id,
             url,
         };
-        let mut client: GrpcClient = context.store.clone();
-        let aggregate = hydrate_aggregate(&mut client, stream_id).await;
+        let mut mutable_ctx = context.clone();
+        let client: &mut dyn DispatchingAsyncClientStore = mutable_ctx.store();
+        let aggregate = hydrate_aggregate(client, stream_id).await;
 
         let events = command
             .async_apply(&aggregate)
@@ -303,11 +311,12 @@ impl Mutation {
 
 pub struct Query;
 
-#[graphql_object(context = GrpcStore)]
+#[graphql_object(context = GraphQLStore)]
 impl Query {
-    async fn feeds(stream_id: Uuid, context: &GrpcStore) -> Vec<Feed> {
-        let mut client: GrpcClient = context.store.clone();
-        let aggregate = hydrate_aggregate(&mut client, stream_id).await;
+    async fn feeds(stream_id: Uuid, context: &GraphQLStore) -> Vec<Feed> {
+        let mut mutable_ctx = context.clone();
+        let client: &mut dyn DispatchingAsyncClientStore = mutable_ctx.store();
+        let aggregate = hydrate_aggregate(client, stream_id).await;
         aggregate
             .feeds_by_feed_id
             .into_iter()
@@ -323,10 +332,11 @@ pub struct Subscription;
 
 #[graphql_subscription]
 impl Subscription {
-    async fn watch_feeds(stream_id: Uuid, context: &GrpcStore) -> FeedAggregateStream {
+    async fn watch_feeds(stream_id: Uuid, context: &GraphQLStore) -> FeedAggregateStream {
+        let mut mutable_ctx = context.clone();
         let aggregate_stream = ApplicableStream::subscribe_aggregate(
             FeedAggregate::default(),
-            context.store.clone().subscribe(&stream_id).await,
+            mutable_ctx.store().subscribe(&stream_id).await,
         );
         let gql_stream = aggregate_stream.map(|commit_result| match commit_result {
             Ok((_, agg)) => Ok(agg
@@ -342,7 +352,7 @@ impl Subscription {
 
 pub type Schema = RootNode<'static, Query, Mutation, Subscription>;
 
-pub async fn create_store() -> GrpcStore {
+pub async fn create_grpc_store() -> GraphQLStore {
     let grpc_client =
         commit_store::grpc_interface::commit_store_client::CommitStoreClient::connect(
             "http://127.0.0.1:5059",
@@ -350,7 +360,13 @@ pub async fn create_store() -> GrpcStore {
         .await
         .expect("Failed to connect to backend commit store");
     let async_wrapper_client = GrpcClient::new(grpc_client);
-    GrpcStore::new(async_wrapper_client)
+    GraphQLStore::Grpc(async_wrapper_client)
+}
+
+pub fn create_sqlite_store() -> GraphQLStore {
+    GraphQLStore::Sqlite(DispatchedStore::new(
+        SqliteStoreAsync::with_new_in_memory_connection(),
+    ))
 }
 
 pub fn create_schema() -> Schema {

@@ -11,16 +11,16 @@ use uuid::Uuid;
 
 use crate::{
     commit::{Commit, CommitAttempt},
-    AsyncClientStore, StoreError,
+    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
 };
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 struct Subscriber {
     tx: Sender<Commit>,
     // commit_number: i64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Dispatcher {
     subscriptions: Arc<Mutex<HashMap<Uuid, Vec<Subscriber>>>>,
 }
@@ -71,13 +71,20 @@ impl Dispatcher {
     }
 }
 
-#[derive(Clone)]
-pub struct DispatchedStore<S> {
+#[derive(Clone, Debug)]
+pub struct DispatchedStore<S: AsyncClientStore + Send> {
     store: S,
     dispatcher: Dispatcher,
 }
 
-impl<S> DispatchedStore<S> {
+#[async_trait]
+impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
+    async fn subscribe(&mut self, stream_id: &Uuid) -> CommitStream {
+        self.subscribe(stream_id).await
+    }
+}
+
+impl<S: AsyncClientStore + Send> DispatchedStore<S> {
     pub fn new(s: S) -> DispatchedStore<S> {
         DispatchedStore {
             store: s,
@@ -91,7 +98,7 @@ impl<S> DispatchedStore<S> {
 }
 
 #[async_trait]
-impl<S: AsyncClientStore> AsyncClientStore for DispatchedStore<S> {
+impl<S: AsyncClientStore + Send> AsyncClientStore for DispatchedStore<S> {
     async fn commit(
         &mut self,
         commit_attempt: &CommitAttempt,

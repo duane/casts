@@ -1,4 +1,4 @@
-use casts::graphql::{create_schema, GrpcStore};
+use casts::graphql::{create_schema, GraphQLStore};
 use commit_store::GrpcClient;
 use std::{convert::Infallible, sync::Arc};
 
@@ -16,11 +16,14 @@ async fn main() {
 
     let root_node = Arc::new(create_schema());
 
-    let grpc_client = CommitStoreClient::connect("http://127.0.0.1:5059")
-        .await
-        .expect("Failed to connect to backend commit store");
-    let async_wrapper_client = GrpcClient::new(grpc_client);
-    let grpc_store1 = Arc::new(GrpcStore::new(async_wrapper_client));
+    let grpc_client = GrpcClient::new(
+        CommitStoreClient::connect("http://127.0.0.1:5059")
+            .await
+            .expect("Failed to connect to backend commit store"),
+    );
+
+    let async_wrapper_client = GraphQLStore::Grpc(grpc_client);
+    let grpc_store1 = Arc::new(async_wrapper_client);
     let new_service = make_service_fn(move |_| {
         let root_node = root_node.clone();
         let grpc_store2 = grpc_store1.clone();

@@ -41,7 +41,7 @@ impl Stream for CommitStream {
             &mut CommitStream::GrpcBacked(ref mut grpc) => {
                 let mut mapped_stream = grpc.map(|r| match r {
                     Ok(commit) => Ok(grpc_to_domain_commit(&commit)),
-                    Err(e) => Err(CommitStreamError::GrpcError),
+                    Err(_status) => Err(CommitStreamError::GrpcError),
                 });
                 Pin::new(&mut mapped_stream).poll_next(cx)
             }

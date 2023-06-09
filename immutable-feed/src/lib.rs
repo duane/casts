@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 use anyhow::Result;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use feed_rs::{
     model::{
         Content as RustContent, Entry as RustEntry, Feed as RustFeed, Image as RustImage,

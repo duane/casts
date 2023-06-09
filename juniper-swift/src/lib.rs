@@ -3,9 +3,9 @@
 #![feature(vec_into_raw_parts)]
 #![feature(concat_idents)]
 
+use std::collections::HashMap;
 use std::ffi::c_void;
 use std::mem;
-use std::collections::HashMap;
 
 use juniper::{DefaultScalarValue, InputValue};
 
@@ -14,11 +14,11 @@ use juniper::{DefaultScalarValue, InputValue};
 extern crate lazy_static;
 
 #[repr(C)]
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct SourcePosition {
     pub index: usize,
     pub line: usize,
-    pub col: usize
+    pub col: usize,
 }
 
 impl Into<juniper::parser::SourcePosition> for SourcePosition {
@@ -28,11 +28,11 @@ impl Into<juniper::parser::SourcePosition> for SourcePosition {
 }
 
 #[repr(C)]
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct StringSpan {
     pub item: GraphQLUnownedBuffer,
     pub start: SourcePosition,
-    pub end: SourcePosition
+    pub end: SourcePosition,
 }
 
 impl StringSpan {
@@ -40,17 +40,17 @@ impl StringSpan {
         juniper::parser::Spanning {
             item: self.item.clone().into(),
             start: self.start.clone().into(),
-            end: self.end.clone().into()
+            end: self.end.clone().into(),
         }
     }
 }
 
 #[repr(C)]
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct ValueSpan {
     pub item: GraphQLInputValue,
     pub start: SourcePosition,
-    pub end: SourcePosition
+    pub end: SourcePosition,
 }
 
 impl ValueSpan {
@@ -58,17 +58,17 @@ impl ValueSpan {
         juniper::parser::Spanning {
             item: self.item.clone().into_native(),
             start: self.start.clone().into(),
-            end: self.end.clone().into()
+            end: self.end.clone().into(),
         }
     }
 }
 
 #[repr(C)]
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct GraphQLInputVariables {
     pub count: usize,
     pub names: *const GraphQLUnownedBuffer,
-    pub values: *const GraphQLInputValue
+    pub values: *const GraphQLInputValue,
 }
 
 impl GraphQLInputVariables {
@@ -77,8 +77,12 @@ impl GraphQLInputVariables {
         let names_slice = std::ptr::slice_from_raw_parts(self.names, self.count);
         let values_slice = std::ptr::slice_from_raw_parts(self.values, self.count);
         for i in 0..self.count {
-            let name: String = unsafe { <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*names_slice)[i].clone())}.unwrap_or_default();
-            let value: InputValue<DefaultScalarValue> = unsafe { &*values_slice }[i].clone().into_native();
+            let name: String = unsafe {
+                <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*names_slice)[i].clone())
+            }
+            .unwrap_or_default();
+            let value: InputValue<DefaultScalarValue> =
+                unsafe { &*values_slice }[i].clone().into_native();
             map.insert(name, value);
         }
         map
@@ -86,12 +90,12 @@ impl GraphQLInputVariables {
 }
 
 #[repr(C)]
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct GraphQLInputValue {
     pub typ: u32,
-    pub count: usize, // length for LIST and OBJECT types
+    pub count: usize,          // length for LIST and OBJECT types
     pub slot_b: *const c_void, // GraphQLUnownedBuffer (aka string), StringSpan, ValueSpan, or NULL array, of length slot_a
-    pub slot_c: *const c_void // NULL or StringSpan, of length slot_a.
+    pub slot_c: *const c_void, // NULL or StringSpan, of length slot_a.
 }
 
 impl GraphQLInputValue {
@@ -100,25 +104,28 @@ impl GraphQLInputValue {
             0 => InputValue::Null,
             // Scalar
             1 => {
-               let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
-               let string_value: String = unsafe {
-                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone()).unwrap_or_default()
-               };
-               InputValue::Scalar(juniper::DefaultScalarValue::String(string_value))
-            },
+                let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
+                let string_value: String = unsafe {
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                        .unwrap_or_default()
+                };
+                InputValue::Scalar(juniper::DefaultScalarValue::String(string_value))
+            }
             // Enum
             2 => {
-               let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
-               let string_value: String = unsafe {
-                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone()).unwrap_or_default()
-               };
-               InputValue::Enum(string_value)
+                let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
+                let string_value: String = unsafe {
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                        .unwrap_or_default()
+                };
+                InputValue::Enum(string_value)
             }
             // Variable
             3 => {
                 let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
                 let string_value: String = unsafe {
-                        <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone()).unwrap_or_default()
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                        .unwrap_or_default()
                 };
                 InputValue::Variable(string_value)
             }
@@ -128,7 +135,8 @@ impl GraphQLInputValue {
                 let slice = std::ptr::slice_from_raw_parts(valuespan_arr_ptr, self.count);
                 let mut buf = vec![];
                 for i in 0..self.count {
-                    let input_val: juniper::parser::Spanning<InputValue> = unsafe { &*slice }[i].clone_into();
+                    let input_val: juniper::parser::Spanning<InputValue> =
+                        unsafe { &*slice }[i].clone_into();
                     buf.push(input_val)
                 }
                 InputValue::List(buf)
@@ -141,13 +149,15 @@ impl GraphQLInputValue {
                 let valueslice = std::ptr::slice_from_raw_parts(valuespan_arr_ptr, self.count);
                 let mut buf = vec![];
                 for i in 0..self.count {
-                    let string_val: juniper::parser::Spanning<String> = unsafe { &*stringslice }[i].clone().clone_into();
-                    let input_val: juniper::parser::Spanning<InputValue> = unsafe { &*valueslice }[i].clone_into();
+                    let string_val: juniper::parser::Spanning<String> =
+                        unsafe { &*stringslice }[i].clone().clone_into();
+                    let input_val: juniper::parser::Spanning<InputValue> =
+                        unsafe { &*valueslice }[i].clone_into();
                     buf.push((string_val, input_val))
                 }
                 InputValue::Object(buf)
             }
-            _ => todo!("unimplemented")
+            _ => todo!("unimplemented"),
         }
     }
 }
@@ -167,6 +177,7 @@ impl Into<Option<Vec<u8>>> for GraphQLUnownedBuffer {
         }
         let buffer_slice: &[u8] =
             unsafe { std::slice::from_raw_parts(self.buffer as *const u8, self.length) };
+        unimplemented!("memory leak");
         mem::forget(buffer_slice);
         let mut buffer_vec: Vec<u8> = Vec::with_capacity(buffer_slice.len());
         buffer_vec.extend_from_slice(buffer_slice);
