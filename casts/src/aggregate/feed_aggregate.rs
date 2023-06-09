@@ -65,10 +65,12 @@ impl EventApplicable for FeedAggregate {
                     metadata,
                     entries,
                 } => {
-                    // TODO: also look up by url if feed_id fails.
                     let found_feed = applied.feeds_by_feed_id.get(&feed_id);
                     match found_feed {
-                        Some(_) => unreachable!(),
+                        Some(_feed) => {
+                            println!("feed already added, doing nothing.");
+                            return self;
+                        }
                         None => {
                             let raw_url = url.to_string();
                             let new_feed = Feed {
@@ -77,6 +79,7 @@ impl EventApplicable for FeedAggregate {
                                 entries,
                                 metadata,
                             };
+
                             applied.feeds_by_feed_id.insert(feed_id.clone(), new_feed);
                         }
                     };

@@ -105,6 +105,17 @@ impl Command for FeedAggregateCommand {
                 if aggregate.feeds_by_feed_id.get(feed_id).is_some() {
                     return Err(FeedAggregateError::DuplicateFeedError);
                 }
+
+                // does the url already exist in the platform?
+                if aggregate
+                    .feeds_by_feed_id
+                    .values()
+                    .find(|f| f.url.is_some() && f.url.as_ref().unwrap() == url)
+                    .is_some()
+                {
+                    return Err(FeedAggregateError::DuplicateFeedError);
+                }
+
                 let download_result = reqwest::get(url.to_string())
                     .await
                     .unwrap()
