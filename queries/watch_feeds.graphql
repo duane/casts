@@ -1,24 +1,8 @@
 subscription WatchFeeds($streamId:Uuid!) {
   watchFeeds(streamId:$streamId) {
-    feedId
-    title
-    authors
-    description
-    logo {
-        url
-        rawUrl
-        title
-        link {
-            href
-            rel
-            mediaType
-            hrefLang
-            title
-            length
-        }
-        width
-        height
-        description
+    ...FeedMetadata
+    entries {
+      ...EntryMetadata
     }
   }
 }

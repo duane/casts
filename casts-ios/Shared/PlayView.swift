@@ -5,16 +5,16 @@ import AVFoundation
 import Casts
 
 struct PlayView: View {
-    let feed: Casts.FetchFeedsQuery.Data.Feed!
-    let entry: Casts.FetchFeedsQuery.Data.Feed.Entry!
+    let feed: Casts.FeedMetadata!
+    let entry: Casts.EntryMetadata!
     
     private let formatter = DateFormatter()
     
     @State private var playing = false
     @ObservedObject private var state: PlayerState
     
-    init(feed: Casts.FetchFeedsQuery.Data.Feed,
-         entry: Casts.FetchFeedsQuery.Data.Feed.Entry) {
+    init(feed: Casts.FeedMetadata,
+         entry: Casts.EntryMetadata) {
         self.formatter.dateStyle = .long
         self.formatter.timeStyle = .none
         self.feed = feed
@@ -83,8 +83,8 @@ struct PlayView: View {
                 RoutePicker().frame(maxWidth: 40, maxHeight: 40)
             }
         }.onAppear {
-            let mediaObjects: [Casts.FetchFeedsQuery.Data.Feed.Entry.Medium] = entry.media;
-            let audioObject: Casts.FetchFeedsQuery.Data.Feed.Entry.Medium? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
+            let mediaObjects: [Casts.EntryMetadata.Medium] = entry.media;
+            let audioObject: Casts.EntryMetadata.Medium? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
             let url = URL(string: (audioObject?.content[0].url)!)!
             self.state.prepareToPlay(url: url)
         }

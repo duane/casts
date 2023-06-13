@@ -62,9 +62,11 @@ impl Dispatcher {
         };
         match subscriptions {
             Some(subs) => {
+                println!("dispatching");
                 for sub in subs {
                     sub.tx.send(commit.clone()).await.unwrap()
                 }
+                println!("dispatched");
             }
             None => (),
         }

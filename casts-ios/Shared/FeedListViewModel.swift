@@ -4,15 +4,16 @@ import Foundation
 import Casts
 
 final class FeedListViewModel: ObservableObject {
-    @Published var feeds: [Casts.FetchFeedsQuery.Data.Feed] = []
+    @Published var feeds: [Casts.WatchFeedsSubscription.Data.WatchFeed] = []
     
     func fetch() {
-        let query = Casts.FetchFeedsQuery(streamId: playApp.STREAM_ID.uuidString)
-        EmbeddedClient.shared.apollo.fetch(query:query) { result in
+//        let query = Casts.FetchFeedsQuery(streamId: playApp.STREAM_ID.uuidString)
+        let subscription = Casts.WatchFeedsSubscription(streamId: playApp.STREAM_ID.uuidString)
+        let subscribed = EmbeddedClient.shared.apollo.subscribe(subscription: subscription) { result in
             do {
                 let data = try result.get().data
                 DispatchQueue.main.async {
-                    self.feeds = data?.feeds ?? []
+                    self.feeds = data?.watchFeeds ?? []
                 }
             } catch {
                 fatalError("could not call into gql server: \(error)")

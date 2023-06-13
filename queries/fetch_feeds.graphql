@@ -1,51 +1,8 @@
 query FetchFeeds($streamId:Uuid!) {
   feeds(streamId:$streamId) {
-	  feedId
-    title
-    authors
-    description
-    logo {
-        url
-        rawUrl
-        title
-        link {
-            href
-            rel
-            mediaType
-            hrefLang
-            title
-            length
-        }
-        width
-        height
-        description
-    }
+    ...FeedMetadata
     entries {
-      guid
-      title
-      summary
-      media {
-        content {
-          url
-          contentType
-          height
-          width
-          size
-        }
-        title
-        description
-        duration
-      }
-      content {
-        body
-        contentType
-        length
-        src {
-          href
-          hrefLang
-          rel
-        }
-      }
+      ...EntryMetadata
     }
   }
 }

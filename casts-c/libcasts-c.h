@@ -11,3 +11,9 @@ void gql_casts(GraphQLUnownedBuffer document,
                GraphQLUnownedBuffer variables,
                const void *context,
                void (*callback)(GraphQLUnownedBuffer, const void*));
+
+void gql_casts_subscribe(GraphQLUnownedBuffer document,
+                         GraphQLUnownedBuffer op_name,
+                         GraphQLUnownedBuffer variables,
+                         const void *context,
+                         void (*callback)(GraphQLUnownedBuffer, const void*));

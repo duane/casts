@@ -36,11 +36,11 @@ public extension Casts {
       case "Feed": return Casts.Objects.Feed
       case "Image": return Casts.Objects.Image
       case "Link": return Casts.Objects.Link
-      case "Query": return Casts.Objects.Query
       case "Entry": return Casts.Objects.Entry
       case "MediaObject": return Casts.Objects.MediaObject
       case "MediaContent": return Casts.Objects.MediaContent
       case "Content": return Casts.Objects.Content
+      case "Query": return Casts.Objects.Query
       default: return nil
       }
     }

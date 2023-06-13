@@ -12,31 +12,15 @@ public extension Casts {
         subscription WatchFeeds($streamId: Uuid!) {
           watchFeeds(streamId: $streamId) {
             __typename
-            feedId
-            title
-            authors
-            description
-            logo {
+            ...FeedMetadata
+            entries {
               __typename
-              url
-              rawUrl
-              title
-              link {
-                __typename
-                href
-                rel
-                mediaType
-                hrefLang
-                title
-                length
-              }
-              width
-              height
-              description
+              ...EntryMetadata
             }
           }
         }
-        """#
+        """#,
+        fragments: [FeedMetadata.self, EntryMetadata.self]
       ))
 
     public var streamId: Uuid
@@ -68,13 +52,12 @@ public extension Casts {
         public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Feed }
         public static var __selections: [ApolloAPI.Selection] { [
           .field("__typename", String.self),
-          .field("feedId", Casts.Uuid.self),
-          .field("title", String.self),
-          .field("authors", [String].self),
-          .field("description", String.self),
-          .field("logo", Logo?.self),
+          .field("entries", [Entry].self),
+          .fragment(FeedMetadata.self),
         ] }
 
+        /// A list of entries to which the feed links.
+        public var entries: [Entry] { __data["entries"] }
         /// The ID of the feed.
         public var feedId: Casts.Uuid { __data["feedId"] }
         /// The title of the feed.
@@ -84,59 +67,39 @@ public extension Casts {
         /// A string describing the feed.
         public var description: String { __data["description"] }
         /// A link to an image with which to represent the feed.
-        public var logo: Logo? { __data["logo"] }
+        public var logo: FeedMetadata.Logo? { __data["logo"] }
 
-        /// WatchFeed.Logo
-        ///
-        /// Parent Type: `Image`
-        public struct Logo: Casts.SelectionSet {
+        public struct Fragments: FragmentContainer {
           public let __data: DataDict
           public init(_dataDict: DataDict) { __data = _dataDict }
 
-          public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Image }
+          public var feedMetadata: FeedMetadata { _toFragment() }
+        }
+
+        /// WatchFeed.Entry
+        ///
+        /// Parent Type: `Entry`
+        public struct Entry: Casts.SelectionSet {
+          public let __data: DataDict
+          public init(_dataDict: DataDict) { __data = _dataDict }
+
+          public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Entry }
           public static var __selections: [ApolloAPI.Selection] { [
             .field("__typename", String.self),
-            .field("url", Casts.Url?.self),
-            .field("rawUrl", String.self),
-            .field("title", String?.self),
-            .field("link", Link?.self),
-            .field("width", Int?.self),
-            .field("height", Int?.self),
-            .field("description", String?.self),
+            .fragment(EntryMetadata.self),
           ] }
 
-          public var url: Casts.Url? { __data["url"] }
-          public var rawUrl: String { __data["rawUrl"] }
-          public var title: String? { __data["title"] }
-          public var link: Link? { __data["link"] }
-          public var width: Int? { __data["width"] }
-          public var height: Int? { __data["height"] }
-          public var description: String? { __data["description"] }
+          public var guid: String { __data["guid"] }
+          public var title: String { __data["title"] }
+          public var summary: String { __data["summary"] }
+          public var media: [EntryMetadata.Medium] { __data["media"] }
+          public var content: EntryMetadata.Content? { __data["content"] }
 
-          /// WatchFeed.Logo.Link
-          ///
-          /// Parent Type: `Link`
-          public struct Link: Casts.SelectionSet {
+          public struct Fragments: FragmentContainer {
             public let __data: DataDict
             public init(_dataDict: DataDict) { __data = _dataDict }
 
-            public static var __parentType: ApolloAPI.ParentType { Casts.Objects.Link }
-            public static var __selections: [ApolloAPI.Selection] { [
-              .field("__typename", String.self),
-              .field("href", Casts.Url.self),
-              .field("rel", String?.self),
-              .field("mediaType", String?.self),
-              .field("hrefLang", String?.self),
-              .field("title", String?.self),
-              .field("length", Int?.self),
-            ] }
-
-            public var href: Casts.Url { __data["href"] }
-            public var rel: String? { __data["rel"] }
-            public var mediaType: String? { __data["mediaType"] }
-            public var hrefLang: String? { __data["hrefLang"] }
-            public var title: String? { __data["title"] }
-            public var length: Int? { __data["length"] }
+            public var entryMetadata: EntryMetadata { _toFragment() }
           }
         }
       }

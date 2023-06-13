@@ -4,9 +4,9 @@ import SwiftUI
 import Casts
 
 struct FeedDetailView: View {
-    var feed: Casts.FetchFeedsQuery.Data.Feed!
+    var feed: Casts.WatchFeedsSubscription.Data.WatchFeed
     @State var isShowingDetailView: Bool = false
-    
+
     var body: some View {
         VStack {
             if let logoUrl = feed.logo?.url {
@@ -15,14 +15,14 @@ struct FeedDetailView: View {
             Text(feed.title)
             Text(feed.description)
             List(feed.entries, id: \.guid) { entry in
-                NavigationLink(entry.title, destination: PlayView(feed: feed, entry: entry))
+                NavigationLink(entry.title, destination: PlayView(feed: feed.fragments.feedMetadata, entry: entry.fragments.entryMetadata))
             }.navigationTitle(feed.title)
         }
     }
 }
-
-struct FeedDetailView_Previews: PreviewProvider {
-    static var previews: some View {
-        FeedDetailView()
-    }
-}
+//
+//struct FeedDetailView_Previews: PreviewProvider {
+//    static var previews: some View {
+////        FeedDetailView()
+//    }
+//}

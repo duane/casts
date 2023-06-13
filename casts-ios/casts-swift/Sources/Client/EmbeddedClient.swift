@@ -86,37 +86,42 @@ class EmbeddedNetworkTransport: NetworkTransport {
             fatalError("not implemented")
         };
         
-
-        let embeddedOperation = EmbeddedCancellableOperation(operation: operation, callbackQueue: callbackQueue) { result in
-            switch result {
-            case let .success(json):
-                do {
-                    let response = GraphQLResponse(operation: operation, body: json)
-                    let (result, _parsedResults) = try response.parseResult()
-                    completionHandler(.success(result))
-                } catch {
-                    print("Error: \(error)")
+        switch Operation.operationType {
+        case .query, .mutation:
+            let embeddedOperation = EmbeddedCancellableOperation(operation: operation, callbackQueue: callbackQueue) { result in
+                switch result {
+                case let .success(json):
+                    do {
+                        let response = GraphQLResponse(operation: operation, body: json)
+                        let (result, _parsedResults) = try response.parseResult()
+                        completionHandler(.success(result))
+                    } catch {
+                        print("Error: \(error)")
+                    }
+                default:
+                    fatalError("unimplemented")
                 }
-            default:
-                fatalError("unimplemented")
             }
+            
+            let retained = Unmanaged.passRetained(embeddedOperation).toOpaque()
+            let variablesJsonValue = operation.__variables?._jsonEncodableValue?._jsonValue
+            do {
+                let encoded = try JSONSerialization.data(withJSONObject: variablesJsonValue!)
+                let variablesString = String(data: encoded, encoding: .utf8)?.toGraphQLUnownedBuffer()
+                gql_casts(serializedDoc!,
+                          GraphQLUnownedBuffer(buffer: nil, length: 0),
+                          variablesString ?? GraphQLUnownedBuffer(buffer:nil, length: 0),
+                          retained,
+                          performCallback);
+            } catch {
+                fatalError("caught error when serializing json: \(error)")
+            }
+            
+            return embeddedOperation
+        default:
+            fatalError("unknown operation type \(Operation.operationType)")
+            break
         }
-
-        let retained = Unmanaged.passRetained(embeddedOperation).toOpaque()
-        let variablesJsonValue = operation.__variables?._jsonEncodableValue?._jsonValue
-        do {
-            let encoded = try JSONSerialization.data(withJSONObject: variablesJsonValue!)
-            let variablesString = String(data: encoded, encoding: .utf8)?.toGraphQLUnownedBuffer()
-            gql_casts(serializedDoc!,
-                      GraphQLUnownedBuffer(buffer: nil, length: 0),
-                      variablesString ?? GraphQLUnownedBuffer(buffer:nil, length: 0),
-                      retained,
-                      performCallback);
-        } catch {
-            fatalError("caught error when serializing json: \(error)")
-        }
-        
-        return embeddedOperation
     }
 }
 

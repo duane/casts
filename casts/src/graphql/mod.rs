@@ -297,7 +297,7 @@ impl Mutation {
             stream_id,
             stream_version: aggregate.version + 1,
             commit_id: Uuid::new_v4(),
-            commit_sequence: 0,
+            commit_sequence: aggregate.version + 1,
             commit_timestamp: Utc::now(),
             metadata: serde_json::to_value(command)
                 .expect("could not serialize command to metadata"),
