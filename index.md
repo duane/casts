@@ -72,25 +72,28 @@ Note what is not in this MVP:
 	[x] appendCommit
 	[x] streamCommits
 	[x] readCommitRange
-	[ ] backwardsScan
-	[ ] All stream support
+	[ ] Add support to scan backwards through commits.
+	[ ] Add support to scan through all commits regardless of stream.
 	[x] Mac/iOS frontend
-	[ ] web frontend
+	[ ] Web frontend
 	[ ] GraphQL frontend (would be nice to return commits for mutations with side-effects and no data to return)
+	[ ] Flesh out error and failure states.
 [ ] Application server
 	[x] GraphQL server - mutation
 	[x] GraphQL server - query
 	[x] GraphQL server - subscribe
 	[x] casts-swift generation
-	[ ] in-memory subscription (bypass websockets!)
+	[x] in-memory subscription (bypass websockets!)
 	[ ] Flesh out error and failure states
+	[ ] Provide endpoints to synchronize at the command OR commit level (decide which is best).
+	[ ] Evaluate and consolidate runtimes/spawned threads.
 [ ] macOS/iOS client
 	[x] consume `FetchFeeds` query to drive feed, entry views
 	[x] Actually allow streaming of linked content.
-	[ ] Add ability to subscribe to and archive feeds.
-	[ ] Provide compile-time option for in-memory vs endpoint-driven application state.
+	[x] Add ability to subscribe feeds.
+	[ ] Add ability to archive feeds.
 	[ ] Add `episodeState` to `Entry` model corresponding to `Active`, `Archived`, or `Hidden`.
-	[ ] Flesh out error and failure states
+	[ ] Flesh out error and failure states.
 [ ] Infrastructure/Meta
 	[ ] Automated iOS/macOS builds
 	[ ] Continuous testing (using sourcehut builds)
@@ -106,7 +109,7 @@ Note what is not in this MVP:
 	[ ] Have better handling of text.
 ```
 
-# Expected next steps
+# Expected next steps after MVP
 
 * Authentication — should go down to commit-level.
 * Downloading + audio need fundamentally different cross-platform sharing solution than graphql can offer.
