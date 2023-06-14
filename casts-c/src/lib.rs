@@ -2,9 +2,16 @@
 
 use casts::graphql::{create_schema, create_sqlite_store, GraphQLStore, Schema};
 use core::ffi::c_void;
+use futures::stream::{Stream, StreamExt};
 use juniper::parser::{SourcePosition, Spanning};
-use juniper::{resolve_into_stream, DefaultScalarValue, InputValue};
-use juniper_swift::{GraphQLExecuteContext, GraphQLInputValue, GraphQLUnownedBuffer};
+use juniper::{
+    resolve_into_stream, DefaultScalarValue, ExecutionError, InputValue, SubscriptionConnection,
+    ValuesStream,
+};
+use juniper_subscriptions::Connection;
+use juniper_swift::{
+    GraphQLExecuteContext, GraphQLInputValue, GraphQLOwnedHandle, GraphQLUnownedBuffer,
+};
 use serde_json::{from_value, Value};
 use std::collections::HashMap;
 use tokio::runtime::{Builder, Runtime};
@@ -96,19 +103,25 @@ pub unsafe extern "C" fn gql_casts_subscribe(
     let _join_handle = RUNTIME.spawn(async move {
         println!("inside runtime.");
         let inner_context = context;
-        let value_stream = resolve_into_stream(
-            &document_str,
-            op_name_str.map(|s| s.as_str()),
-            &SCHEMA,
-            &variables,
-            &STORE,
-        );
-        println!("response: {:?}", response);
-        let response_body = serde_json::to_string(&response).unwrap();
-        println!("Response body: {:?}", response_body);
-        let response_buffer = GraphQLUnownedBuffer::from(response_body);
-        println!("got a response back! doing the callback");
-        callback(response_buffer, inner_context.context);
+        // let str_ref = op_name_str.map(|s| s.as_ref());
+        let (value_stream_value, errors): (
+            juniper::Value<ValuesStream>,
+            Vec<ExecutionError<DefaultScalarValue>>,
+        ) = resolve_into_stream(&document_str, None, &SCHEMA, &variables, &STORE)
+            .await
+            .unwrap();
+
+        let value_stream = value_stream_value.into();
+        let mut subscription_connection: Connection<'_, DefaultScalarValue> =
+            Connection::from_stream(value_stream, errors);
+        while let Some(update) = subscription_connection.next().await {
+            let serialized_response: String =
+                serde_json::to_string(&serde_json::to_value(update).unwrap()).unwrap();
+            println!("response emitted!: {:?}", serialized_response);
+            let serialized_response_buffer = GraphQLUnownedBuffer::from(serialized_response);
+            callback(serialized_response_buffer, inner_context.context);
+            println!("callback called");
+        }
     });
     println!("returning");
 }

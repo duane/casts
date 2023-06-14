@@ -82,7 +82,7 @@ pub struct DispatchedStore<S: AsyncClientStore + Send> {
 #[async_trait]
 impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
     async fn subscribe(&mut self, stream_id: &Uuid) -> CommitStream {
-        self.subscribe(stream_id).await
+        CommitStream::ReceiverBacked(self.dispatcher.subscribe(stream_id.to_owned()).into())
     }
 }
 

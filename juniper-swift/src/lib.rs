@@ -208,6 +208,15 @@ impl From<String> for GraphQLUnownedBuffer {
     }
 }
 
+#[repr(C)]
+#[derive(Clone, Debug)]
+pub struct GraphQLOwnedHandle {
+    pub pointee: *const c_void,
+}
+// unsafe impl Send for GraphQLOwnedHandle {}
+
+#[repr(C)]
+#[derive(Clone, Debug)]
 pub struct GraphQLExecuteContext {
     pub context: *const c_void,
 }

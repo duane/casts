@@ -18,10 +18,10 @@ lazy_static = "*"
 futures = "*"
 juniper = { path = "../../../sandbox/juniper/juniper" }
 juniper-swift = { path = "../juniper-swift" }
+juniper_subscriptions = { path = "../../../sandbox/juniper/juniper_subscriptions" }
 serde_json = "*"
 tokio = { version = "*", features = ["rt-multi-thread"] }
 commit-store = { path = "../commit-store" }
 rusqlite = "*"
-
 [build-dependencies]
 cbindgen = "*"
