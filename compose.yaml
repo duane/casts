@@ -7,6 +7,14 @@ services:
       dockerfile: ./deploy/commit-store/Dockerfile
     ports:
       - "5059:5059"
+  casts:
+    environment:
+      - COMMIT_STORE_ADDR="commit-store:5059"
+    build:
+      context: .
+      dockerfile: ./deploy/casts/Dockerfile
+    ports:
+      - "8243:8243"
   db:
     build:
       context: .
