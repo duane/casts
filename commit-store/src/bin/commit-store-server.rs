@@ -11,11 +11,11 @@ use commit_store::{
     postgres::PostgresStoreAsync,
     AsyncClientStore, StoreErrorType,
 };
-use futures::Stream;
+// use futures::Stream;
 use std::pin::Pin;
-use tokio_stream::StreamExt;
 
 use serde_json::Value;
+use tokio_stream::{Stream, StreamExt};
 use tonic::{transport::Server, Code, Request, Response, Status};
 use uuid::Uuid;
 
@@ -48,6 +48,7 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         &self,
         request: Request<Cursor>,
     ) -> Result<Response<Self::StreamStreamRangeStream>, Status> {
+        info!("stream_stream_range");
         let stream_id = match Uuid::parse_str(request.get_ref().stream_id.as_str()) {
             Ok(id) => id,
             Err(_) => return Err(Status::new(Code::InvalidArgument, "not a valid stream id")),

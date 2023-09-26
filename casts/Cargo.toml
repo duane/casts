@@ -14,17 +14,19 @@ serde_json = "*"
 serde_derive = "*"
 pretty_env_logger = "*"
 log = "*"
-uuid = "*"
+bson = "~2.7.0"
+uuid = { version = "~1.4.1", features = ["serde", "v4"] }
 commit-store = { path = "../commit-store" }
-juniper = { path = "../../../sandbox/juniper/juniper" }
-juniper_hyper = { path = "../../../sandbox/juniper/juniper_hyper" }
+juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
+juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
+juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
 lazy_static = "*"
 juniper-swift = { path = "../juniper-swift" }
 chrono = "*"
 url = { version = "*", features = ["serde"] }
 immutable-feed = { path = "../immutable-feed" }
 hyper = "*"
-tokio = { version = "~1.28.0", features = ["full"] }
+tokio = { version = "~1.32.0", features = ["full"] }
 futures = { version = "*", features = [
     "std",
     "async-await",
@@ -33,4 +35,3 @@ futures = { version = "*", features = [
 ] }
 reqwest = "*"
 futures-core = "*"
-juniper_subscriptions = "*"

@@ -5,7 +5,7 @@
 
 use std::collections::HashMap;
 use std::ffi::c_void;
-use std::mem;
+// use std::mem;
 
 use juniper::{DefaultScalarValue, InputValue};
 
@@ -178,7 +178,7 @@ impl Into<Option<Vec<u8>>> for GraphQLUnownedBuffer {
         let buffer_slice: &[u8] =
             unsafe { std::slice::from_raw_parts(self.buffer as *const u8, self.length) };
         // unimplemented!("memory leak");
-        mem::forget(buffer_slice);
+        // mem::forget(buffer_slice);
         let mut buffer_vec: Vec<u8> = Vec::with_capacity(buffer_slice.len());
         buffer_vec.extend_from_slice(buffer_slice);
         Some(buffer_vec)

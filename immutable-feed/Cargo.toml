@@ -18,8 +18,8 @@ url = { version = "*", features = ["serde"] }
 reqwest = "*"
 
 ## rss
-feed-rs = { path = "../../feed-rs/feed-rs" }
-quick-xml = "~0.28.2"
+feed-rs = "*"
+quick-xml = "~0.30.0"
 
 ## content handling
 htmlescape = "*"

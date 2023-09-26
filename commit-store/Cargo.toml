@@ -41,8 +41,9 @@ log = "~0.4.17"
 
 dotenv = { version = "0.15.0", optional = true }
 futures = { version = "~0.3.4", optional = true }
-tokio = { version = "~1.28.0", features = ["full"] }
-tokio-stream = "~0.1.14"
+tokio = { version = "~1.32.0", features = ["full"] }
+tokio-stream = "*"
+fallible-iterator = "*"
 
 postgres = { version = "~0.19.5", optional = true, features = [
   "with-chrono-0_4",
@@ -58,9 +59,9 @@ openssl = "*"
 openssl-sys = "*"
 toml = "*"
 
-url = "~2.3.1"
+url = "~2.4.1"
 
-tonic = "~0.9.1"
+tonic = "*"
 prost = "*"
 prost-types = "*"
 futures-core = "*"
@@ -70,7 +71,7 @@ version = "*"
 features = ["serde"]
 
 [dependencies.uuid]
-version = "~1.3.0"
+version = "~1.4.1"
 features = ["v4", "serde"]
 
 [dependencies.rusqlite]
@@ -79,4 +80,4 @@ features = ["bundled", "chrono", "serde_json", "trace"]
 optional = true
 
 [build-dependencies]
-tonic-build = "~0.9.1"
+tonic-build = "~0.10.1"

@@ -4,7 +4,8 @@ use crate::grpc_interface;
 use std::fmt;
 use std::fmt::Display;
 use std::pin::Pin;
-use tokio_stream::wrappers::ReceiverStream;
+use tokio_stream::StreamExt;
+use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tonic::Streaming;
 
 /// Wraps
@@ -14,7 +15,6 @@ pub enum CommitStream {
 }
 
 use serde::{Deserialize, Serialize};
-use tokio_stream::{Stream, StreamExt};
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum CommitStreamError {

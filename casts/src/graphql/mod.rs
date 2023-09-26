@@ -6,6 +6,7 @@ use chrono::Utc;
 use commit_store::dispatch::DispatchedStore;
 use commit_store::sqlite::SqliteStoreAsync;
 use commit_store::{commit::CommitAttempt, DispatchingAsyncClientStore, GrpcClient};
+use futures::stream::StreamExt;
 use futures_core::Stream;
 use juniper::graphql_subscription;
 use juniper::{graphql_object, FieldError, FieldResult, RootNode};
@@ -152,8 +153,10 @@ pub struct MediaObject {
     pub title: Option<String>,
     /// Collection of the media content elements
     pub content: Vec<MediaContent>,
-    /// Duration of the object
-    pub duration: Option<[i32; 2]>,
+    /// Duration of the object in seconds
+    pub duration_s: Option<i32>,
+    /// Duration of the object in milliseconds
+    pub duration_ms: Option<i32>,
     // Representative images for the object (from media:thumbnail elements)
     // pub thumbnails: Vec<MediaThumbnail>,
     // A text transcript, closed captioning or lyrics of the media content.
@@ -168,10 +171,12 @@ pub struct MediaObject {
 
 impl From<immutable_feed::MediaObject> for MediaObject {
     fn from(value: immutable_feed::MediaObject) -> Self {
+        let duration = value.duration.map(|d| [d.0 as i32, d.1 as i32]);
         MediaObject {
             title: value.title,
             content: value.content.into_iter().map(MediaContent::from).collect(),
-            duration: value.duration.map(|d| [d.0 as i32, d.1 as i32]),
+            duration_s: duration.map(|d| d[0]),
+            duration_ms: duration.map(|d| d[1]),
             description: value.description,
         }
     }
@@ -338,7 +343,6 @@ impl Query {
 }
 
 type FeedAggregateStream = Pin<Box<dyn Stream<Item = Result<Vec<Feed>, FieldError>> + Send>>;
-use futures::StreamExt;
 
 pub struct Subscription;
 

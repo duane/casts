@@ -1,4 +1,4 @@
-/* Generated with cbindgen:0.24.3 */
+/* Generated with cbindgen:0.26.0 */
 
 #include <stdarg.h>
 #include <stdbool.h>
@@ -13,7 +13,7 @@ void gql_casts(GraphQLUnownedBuffer document,
                void (*callback)(GraphQLUnownedBuffer, const void*));
 
 void gql_casts_subscribe(GraphQLUnownedBuffer document,
-                         GraphQLUnownedBuffer op_name,
+                         GraphQLUnownedBuffer _op_name,
                          GraphQLUnownedBuffer variables,
                          const void *context,
                          void (*callback)(GraphQLUnownedBuffer, const void*));

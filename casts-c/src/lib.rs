@@ -2,16 +2,10 @@
 
 use casts::graphql::{create_schema, create_sqlite_store, GraphQLStore, Schema};
 use core::ffi::c_void;
-use futures::stream::{Stream, StreamExt};
-use juniper::parser::{SourcePosition, Spanning};
-use juniper::{
-    resolve_into_stream, DefaultScalarValue, ExecutionError, InputValue, SubscriptionConnection,
-    ValuesStream,
-};
+use juniper::futures::StreamExt;
+use juniper::{resolve_into_stream, DefaultScalarValue, ExecutionError, InputValue, ValuesStream};
 use juniper_subscriptions::Connection;
-use juniper_swift::{
-    GraphQLExecuteContext, GraphQLInputValue, GraphQLOwnedHandle, GraphQLUnownedBuffer,
-};
+use juniper_swift::{GraphQLExecuteContext, GraphQLUnownedBuffer};
 use serde_json::{from_value, Value};
 use std::collections::HashMap;
 use tokio::runtime::{Builder, Runtime};
@@ -72,7 +66,7 @@ pub unsafe extern "C" fn gql_casts(
 #[no_mangle]
 pub unsafe extern "C" fn gql_casts_subscribe(
     document: GraphQLUnownedBuffer,
-    op_name: GraphQLUnownedBuffer,
+    _op_name: GraphQLUnownedBuffer,
     variables: GraphQLUnownedBuffer,
     context: *const c_void,
     callback: extern "C" fn(GraphQLUnownedBuffer, *const c_void),
@@ -84,7 +78,7 @@ pub unsafe extern "C" fn gql_casts_subscribe(
     let variables_json_opt: Option<serde_json::Value> = variables_opt
         .map(|s| serde_json::from_str(&s))
         .map(|r| r.unwrap());
-    let op_name_str: Option<String> = op_name.into();
+    // let op_name_str: Option<String> = op_name.into();
     let variables: HashMap<String, InputValue<DefaultScalarValue>> = variables_json_opt
         .map(|value| {
             if let Value::Object(obj) = value {

@@ -2,11 +2,9 @@
 
 use crate::commit::{Commit, CommitAttempt};
 use crate::{
-    AsyncClientStore, AsyncStore, ClientStore, StorageCommitConflict, Store, StoreError,
-    StoreErrorType,
+    AsyncClientStore, ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType,
 };
 use async_trait::async_trait;
-use futures::executor::block_on;
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
 use std::error::Error;
 use std::fmt;

@@ -1,0 +1,24 @@
+services:
+  commit-store:
+    environment:
+      - DATABASE_URL=postgresql://committer:committer@db:5432/committer
+    build:
+      context: .
+      dockerfile: ./deploy/commit-store/Dockerfile
+    ports:
+      - "5059:5059"
+  db:
+    build:
+      context: .
+      dockerfile: ./deploy/postgresql/Dockerfile
+    restart: always
+    environment:
+      POSTGRES_DB: committer
+      POSTGRES_USER: committer
+      POSTGRES_PASSWORD: committer
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+volumes:
+  pgdata:
