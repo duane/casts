@@ -1,4 +1,6 @@
+use anyhow::Result;
 use casts::graphql::{create_schema, GraphQLStore, Mutation, Query, Subscription};
+use casts::util::aretry3;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::GrpcClient;
 use hyper::{
@@ -13,19 +15,27 @@ lazy_static::lazy_static! {
     static ref ROOT_NODE: Arc<RootNode<'static, Query, Mutation, Subscription, DefaultScalarValue>> = Arc::new(create_schema());
 }
 
+async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {
+    Ok(GrpcClient::new(
+        CommitStoreClient::connect(commit_store_addr)
+            .await
+            .expect("Failed to connect to backend commit store"),
+    ))
+}
+
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
 
     let addr = ([127, 0, 0, 1], 8243).into();
+
     let commit_store_addr =
         env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
     log::info!("Connecting to commit store at {}", commit_store_addr);
-    let grpc_client = GrpcClient::new(
-        CommitStoreClient::connect(commit_store_addr)
-            .await
-            .expect("Failed to connect to backend commit store"),
-    );
+
+    let grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
+        .await
+        .unwrap();
 
     let async_wrapper_client = GraphQLStore::Grpc(grpc_client);
     let grpc_store1 = Arc::new(async_wrapper_client);
