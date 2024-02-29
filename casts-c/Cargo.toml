@@ -22,8 +22,8 @@ futures = "*"
 serde_json = "*"
 tokio = { version = "*", features = ["rt-multi-thread"] }
 commit-store = { path = "../commit-store" }
-rusqlite = "*"
-bson = "~2.7.0"
+rusqlite = "~0.31.0"
+bson = "~2.9.0"
 
 [build-dependencies]
 cbindgen = "*"

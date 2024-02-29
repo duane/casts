@@ -14,8 +14,8 @@ serde_json = "*"
 serde_derive = "*"
 pretty_env_logger = "*"
 log = "*"
-bson = "~2.7.0"
-uuid = { version = "~1.4.1", features = ["serde", "v4"] }
+bson = "~2.9.0"
+uuid = { version = "~1.7.0", features = ["serde", "v4"] }
 commit-store = { path = "../commit-store" }
 juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
 juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
@@ -26,8 +26,8 @@ chrono = "*"
 url = { version = "*", features = ["serde"] }
 immutable-feed = { path = "../immutable-feed" }
 hyper = "*"
-tokio = { version = "~1.32.0", features = ["full"] }
-futures = { version = "*", features = [
+tokio = { version = "~1.36.0", features = ["full"] }
+futures = { version = "0.3.17", features = [
     "std",
     "async-await",
     "executor",
