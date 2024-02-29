@@ -9,3 +9,8 @@ pub mod commands;
 pub mod events;
 pub mod graphql;
 pub mod util;
+
+pub mod grpc;
+pub mod grpc_interface {
+    tonic::include_proto!("grpc_interface");
+}

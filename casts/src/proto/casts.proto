@@ -1,0 +1,78 @@
+// Copyright (c) 2023 Duane R. Bailey. All rights reserved.
+
+syntax = "proto3";
+
+// import "google/protobuf/timestamp.proto";
+
+package GrpcInterface;
+
+service Casts {
+    rpc ListFeeds (FeedRequest) returns (Feeds);
+}
+
+message FeedRequest {
+    string requestId = 1;
+    string streamId = 2;
+}
+
+message Feed {
+    string feedId = 1;
+    string title = 2;
+    repeated string authors = 3;
+    string description = 4;
+    Image logo = 5;
+}
+
+message Image {
+    string url = 1;
+    string rawUrl = 2;
+    string title = 3;
+    Link link = 4;
+    int32 width = 5;
+    int32 height = 6;
+    string description = 7;
+}
+
+message Entry {
+    string title = 1;
+    string guid = 2;
+    string summary = 3;
+    repeated Link links = 4;
+    Content content = 5;
+    repeated MediaObject media = 6;
+}
+
+message MediaObject {
+    string title = 1;
+    repeated MediaContent content = 2;
+    repeated int32 duration = 3;
+    string description = 4;
+}
+
+message MediaContent {
+    string url = 1;
+    string contentType = 2;
+    int32 height = 3;
+    int32 width = 4;
+    int32 size = 5;
+}
+
+message Content {
+    string body = 1;
+    string contentType = 2;
+    int32 length = 3;
+    Link src = 4;
+}
+
+message Link {
+    string href = 1;
+    string rel = 2;
+    string mediaType = 3;
+    string hrefLang = 4;
+    string title = 5;
+    int32 length = 6;
+}
+
+message Feeds {
+    repeated Feed feeds = 1;
+}
