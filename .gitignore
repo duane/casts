@@ -2,3 +2,4 @@
 /Cargo.lock
 xcuserdata/
 .DS_Store
+casts-ios/casts-swift/.build/
