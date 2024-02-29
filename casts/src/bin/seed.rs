@@ -19,7 +19,7 @@ async fn main() {
         (
             uuid!["7490743d-d3e6-4e47-b2e8-7d34a15786bb"],
             FeedAggregateCommand::AddFeed {
-                stream_id: uuid!["cb0901a6-94a6-4fd2-8f26-709c7a6decfc"],
+                stream_id,
                 feed_id: uuid!["115639fa-58d7-4049-af21-c3336a136481"],
                 url: Url::parse("https://feeds.feedburner.com/MajorityReport").unwrap(),
             },
@@ -28,7 +28,7 @@ async fn main() {
         (
             uuid!["929e10d1-9159-478a-8baf-1c461a539fc0"],
             FeedAggregateCommand::AddFeed {
-                stream_id: uuid!["95c7ea17-4ebc-4ae0-b7fa-5a8da5f2e0f2"],
+                stream_id,
                 feed_id: uuid!["6a278a5d-8f37-4574-9622-c74585d02eb4"],
                 url: Url::parse("http://feeds.feedburner.com/dancarlin/history?format=xml")
                     .unwrap(),
@@ -38,7 +38,7 @@ async fn main() {
         (
             uuid!["5b6ec1c2-078d-4f1c-a09b-d8c59d2c71b0"],
             FeedAggregateCommand::AddFeed {
-                stream_id: uuid!["1b8fc6f0-5348-42f5-bac6-cf9bbdfbf620"],
+                stream_id,
                 feed_id: uuid!["47c2f2d3-86d9-4065-8745-9b88fd877148"],
                 url: Url::parse("https://historyofrome.libsyn.com/rss").unwrap(),
             },
