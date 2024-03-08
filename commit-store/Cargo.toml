@@ -16,6 +16,7 @@ psql = [
   "deadpool-postgres",
   "futures",
 ]
+rabbitmq = ["amqprs"]
 
 full = ["sqlite", "psql"]
 
@@ -27,6 +28,8 @@ name = "postgres-provision"
 required-features = ["psql"]
 
 [dependencies]
+
+amqprs = { version = "*", optional = true }
 
 anyhow = "*"
 bytes = "*"
