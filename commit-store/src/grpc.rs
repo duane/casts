@@ -99,19 +99,30 @@ impl AsyncClientStore for GrpcClient {
 
 #[async_trait]
 impl DispatchingAsyncClientStore for GrpcClient {
-    async fn subscribe(&mut self, stream_id: &Uuid) -> CommitStream {
-        let cursor = Cursor {
-            stream_id: stream_id.to_string(),
-            min_version: 0,
-            max_version: i64::MAX,
-        };
-        CommitStream::GrpcBacked(
-            self.client
-                .stream_stream_range(cursor)
-                .await
-                .unwrap()
-                .into_inner(),
-        )
+    async fn subscribe(&mut self, stream_id: Option<&Uuid>) -> CommitStream {
+        if let Some(stream_id) = stream_id {
+            let cursor = Cursor {
+                stream_id: stream_id.to_string(),
+                min_version: 0,
+                max_version: i64::MAX,
+            };
+            CommitStream::GrpcBacked(
+                self.client
+                    .stream_stream_range(cursor)
+                    .await
+                    .unwrap()
+                    .into_inner(),
+            )
+        } else {
+            // CommitStream::GrpcBacked(
+            //     self.client
+            //         .subscribe_all(stream::empty())
+            //         .await
+            //         .unwrap()
+            //         .into_inner(),
+            // )
+            unimplemented!("cannot subscribe to all streams yet")
+        }
     }
 }
 

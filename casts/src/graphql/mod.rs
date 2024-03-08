@@ -352,7 +352,7 @@ impl Subscription {
         let mut mutable_ctx = context.clone();
         let aggregate_stream = ApplicableStream::subscribe_aggregate(
             FeedAggregate::default(),
-            mutable_ctx.store().subscribe(&stream_id).await,
+            mutable_ctx.store().subscribe(Some(&stream_id)).await,
         );
         let gql_stream = aggregate_stream.map(|commit_result| match commit_result {
             Ok((_, agg)) => Ok(agg

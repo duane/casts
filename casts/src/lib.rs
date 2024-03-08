@@ -14,3 +14,5 @@ pub mod grpc;
 pub mod grpc_interface {
     tonic::include_proto!("grpc_interface");
 }
+
+pub mod model;

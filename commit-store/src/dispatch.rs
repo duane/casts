@@ -69,8 +69,12 @@ pub struct DispatchedStore<S: AsyncClientStore + Send> {
 
 #[async_trait]
 impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
-    async fn subscribe(&mut self, stream_id: &Uuid) -> CommitStream {
-        CommitStream::ReceiverBacked(self.dispatcher.subscribe(stream_id.to_owned()).into())
+    async fn subscribe(&mut self, stream_id: Option<&Uuid>) -> CommitStream {
+        if let Some(stream_id) = stream_id {
+            CommitStream::ReceiverBacked(self.dispatcher.subscribe(stream_id.to_owned()).into())
+        } else {
+            unimplemented!("cannot subscribe to all streams yet")
+        }
     }
 }
 
