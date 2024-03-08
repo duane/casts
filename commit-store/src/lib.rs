@@ -4,15 +4,10 @@ pub mod grpc_interface {
     tonic::include_proto!("grpc_interface");
 }
 
-/// The sqlite store
-#[cfg(feature = "sqlite")]
-pub mod sqlite;
+mod integrations;
+pub use integrations::*;
 
 pub mod dispatch;
-
-/// The postgres store
-#[cfg(feature = "psql")]
-pub mod postgres;
 
 /// load store config from file or whatever
 pub mod config;
