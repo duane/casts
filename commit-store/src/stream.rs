@@ -8,7 +8,6 @@ use tokio_stream::StreamExt;
 use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tonic::Streaming;
 
-/// Wraps
 pub enum CommitStream {
     ReceiverBacked(ReceiverStream<Commit>),
     GrpcBacked(Streaming<grpc_interface::Commit>),
