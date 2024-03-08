@@ -1,11 +1,7 @@
 use casts::grpc_interface::casts_client::CastsClient;
 use casts::grpc_interface::{FeedRequest, Feeds};
-use casts::{aggregate::FeedAggregate, applicable::EventApplicable};
-use commit_store::grpc_interface::{Commits, Cursor};
 
-use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
-use serde_json::Value;
-use uuid::{uuid, Uuid};
+use uuid::Uuid;
 
 #[tokio::main]
 async fn main() {
