@@ -14,20 +14,25 @@ use crate::{
     AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
 };
 
+#[async_trait]
+pub trait Dispatcher {
+    async fn dispatch(&self, commit: Commit);
+}
+
 #[derive(Clone, Debug)]
-struct Subscriber {
+struct LocalSubscriber {
     tx: Sender<Commit>,
     // commit_number: i64,
 }
 
 #[derive(Clone, Debug)]
-pub struct Dispatcher {
-    subscriptions: Arc<Mutex<HashMap<Uuid, Vec<Subscriber>>>>,
+pub struct LocalDispatcher {
+    subscriptions: Arc<Mutex<HashMap<Uuid, Vec<LocalSubscriber>>>>,
 }
 
-impl Dispatcher {
-    pub fn new() -> Dispatcher {
-        Dispatcher {
+impl LocalDispatcher {
+    pub fn new() -> LocalDispatcher {
+        LocalDispatcher {
             subscriptions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -37,7 +42,7 @@ impl Dispatcher {
         let mut subscriptions = self.subscriptions.lock().unwrap();
         match subscriptions.get_mut(&stream_id) {
             Some(list) => {
-                list.push(Subscriber {
+                list.push(LocalSubscriber {
                     tx,
                     // commit_number: 0,
                 });
@@ -45,7 +50,7 @@ impl Dispatcher {
             None => {
                 _ = subscriptions.insert(
                     stream_id,
-                    vec![Subscriber {
+                    vec![LocalSubscriber {
                         tx,
                         // commit_number: 0,
                     }],
@@ -76,7 +81,7 @@ impl Dispatcher {
 #[derive(Clone, Debug)]
 pub struct DispatchedStore<S: AsyncClientStore + Send> {
     store: S,
-    dispatcher: Dispatcher,
+    dispatcher: LocalDispatcher,
 }
 
 #[async_trait]
@@ -90,7 +95,7 @@ impl<S: AsyncClientStore + Send> DispatchedStore<S> {
     pub fn new(s: S) -> DispatchedStore<S> {
         DispatchedStore {
             store: s,
-            dispatcher: Dispatcher::new(),
+            dispatcher: LocalDispatcher::new(),
         }
     }
 

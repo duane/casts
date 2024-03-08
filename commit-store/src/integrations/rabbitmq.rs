@@ -3,8 +3,9 @@ use amqprs::{
     connection::Connection,
     BasicProperties,
 };
+use async_trait::async_trait;
 
-use crate::{Commit, StoreError};
+use crate::{dispatch::Dispatcher, Commit};
 
 pub struct RabbitMQDispatchBuilder {
     connection: Connection,
@@ -43,8 +44,10 @@ pub struct RabbitMQDispatcher {
     channel: Channel,
     // queue: (String, u32, u32),
 }
-impl RabbitMQDispatcher {
-    pub async fn dispatch(&mut self, commit: Commit) -> Result<(), Box<dyn StoreError>> {
+
+#[async_trait]
+impl Dispatcher for RabbitMQDispatcher {
+    async fn dispatch(&self, commit: Commit) {
         let props: BasicProperties = Default::default();
         let content = serde_json::to_string(&commit).unwrap().as_bytes().to_vec();
         let args: BasicPublishArguments = BasicPublishArguments::default();
@@ -52,6 +55,5 @@ impl RabbitMQDispatcher {
             .basic_publish(props, content, args)
             .await
             .unwrap();
-        Ok(())
     }
 }
