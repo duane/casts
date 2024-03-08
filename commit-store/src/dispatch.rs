@@ -59,23 +59,6 @@ impl LocalDispatcher {
         }
         rx
     }
-
-    pub async fn dispatch(&self, commit: Commit) {
-        let subscriptions = match self.subscriptions.lock() {
-            Ok(unlocked) => unlocked.get(&commit.stream_id).map(|v| v.to_owned()),
-            Err(_) => panic!(),
-        };
-        match subscriptions {
-            Some(subs) => {
-                println!("dispatching");
-                for sub in subs {
-                    sub.tx.send(commit.clone()).await.unwrap()
-                }
-                println!("dispatched");
-            }
-            None => (),
-        }
-    }
 }
 
 #[derive(Clone, Debug)]
@@ -138,5 +121,22 @@ impl<S: AsyncClientStore + Send> AsyncClientStore for DispatchedStore<S> {
 
     async fn get_commit(&mut self, commit_id: &Uuid) -> Result<Commit, Box<dyn StoreError>> {
         self.store.get_commit(commit_id).await
+    }
+}
+
+#[async_trait]
+impl Dispatcher for LocalDispatcher {
+    async fn dispatch(&self, commit: Commit) {
+        let subscribers = {
+            if let Some(subscribers) = self.subscriptions.lock().unwrap().get(&commit.stream_id) {
+                subscribers.clone()
+            } else {
+                return;
+            }
+        };
+        for subscriber in subscribers {
+            let commit = commit.clone();
+            let _ = subscriber.tx.send(commit).await;
+        }
     }
 }
