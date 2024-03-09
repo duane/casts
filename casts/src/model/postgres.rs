@@ -36,7 +36,7 @@ impl PostgresReadModel {
     }
 
     pub async fn initialize(&mut self) {
-        let _subscription = self.store.subscribe().await;
+        let _subscription = self.store.subscribe_all_commits().await;
     }
 
     pub async fn provision(&self) {

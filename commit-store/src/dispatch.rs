@@ -39,7 +39,7 @@ impl LocalDispatcher {
         }
     }
 
-    pub fn subscribe(&self) -> Receiver<Commit> {
+    pub fn subscribe_all_commits(&self) -> Receiver<Commit> {
         let (tx, rx) = channel(100);
         let mut subscriptions = self.global_subscriptions.lock().unwrap();
         _ = subscriptions.push(LocalSubscriber { tx });
@@ -78,8 +78,8 @@ pub struct DispatchedStore<S: AsyncClientStore + Send> {
 
 #[async_trait]
 impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
-    async fn subscribe(&mut self) -> CommitStream {
-        CommitStream::ReceiverBacked(self.dispatcher.subscribe().into())
+    async fn subscribe_all_commits(&mut self) -> CommitStream {
+        CommitStream::ReceiverBacked(self.dispatcher.subscribe_all_commits().into())
     }
 
     async fn subscribe_stream(&mut self, stream_id: &Uuid) -> CommitStream {
@@ -95,12 +95,13 @@ impl<S: AsyncClientStore + Send> DispatchedStore<S> {
         }
     }
 
-    pub fn subscribe_all_commits(&self) -> Receiver<Commit> {
-        self.dispatcher.subscribe()
+    pub fn subscribe_all_commits_async(&self) -> Receiver<Commit> {
+        self.dispatcher.subscribe_all_commits()
     }
 
-    pub fn subscribe(&self) -> Receiver<Commit> {
-        self.dispatcher.subscribe()
+    pub fn subscribe_stream_async(&self, stream_id: String) -> Receiver<Commit> {
+        self.dispatcher
+            .subscribe_stream(&Uuid::parse_str(&stream_id).unwrap())
     }
 }
 

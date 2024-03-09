@@ -31,8 +31,9 @@ async fn main() {
         .await
         .unwrap();
 
-    let mut commit_stream = grpc_client.subscribe().await;
+    let mut commit_stream = grpc_client.subscribe_all_commits().await;
     while let Some(commit) = commit_stream.next().await {
         log::info!("Received commit: {:?}", commit);
     }
+    panic!("exiting.");
 }

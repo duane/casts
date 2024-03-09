@@ -10,6 +10,7 @@ service CommitStore {
     rpc AppendCommit (CommitAttempt) returns (Commit);
     rpc GetStreamRange(StreamCursor) returns (Commits);
     rpc StreamStreamRange(StreamCursor) returns (stream Commit);
+    rpc StreamCommitRange(CommitCursor) returns (stream Commit);
 }
 
 message CommitAttempt {
@@ -45,6 +46,11 @@ message StreamCursor {
     string stream_id = 1;
     int64 min_version = 2;
     int64 max_version = 3;
+}
+
+message CommitCursor {
+    int64 min_commit = 1;
+    int64 max_commit = 2;
 }
 
 message Commits {

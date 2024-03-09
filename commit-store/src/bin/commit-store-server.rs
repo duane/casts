@@ -7,7 +7,7 @@ use chrono::Utc;
 use commit_store::{
     dispatch::DispatchedStore,
     domain_to_grpc_ts,
-    grpc_interface::{commit_store_server::CommitStoreServer, Commits, StreamCursor},
+    grpc_interface::{commit_store_server::CommitStoreServer, CommitCursor, Commits, StreamCursor},
     postgres::PostgresStoreAsync,
     AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
 };
@@ -44,6 +44,9 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
     type StreamStreamRangeStream =
         Pin<Box<dyn Stream<Item = Result<commit_store::grpc_interface::Commit, Status>> + Send>>;
 
+    type StreamCommitRangeStream =
+        Pin<Box<dyn Stream<Item = Result<commit_store::grpc_interface::Commit, Status>> + Send>>;
+
     async fn stream_stream_range(
         &self,
         request: Request<StreamCursor>,
@@ -51,7 +54,12 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         info!("stream_stream_range");
         let stream_id = match Uuid::parse_str(request.get_ref().stream_id.as_str()) {
             Ok(id) => id,
-            Err(_) => return Err(Status::new(Code::InvalidArgument, "not a valid stream id")),
+            Err(_) => {
+                return Err(Status::new(
+                    Code::InvalidArgument,
+                    "(stream_stream_range) not a valid stream id",
+                ))
+            }
         };
         let result = self
             .backing_store
@@ -83,6 +91,35 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         let output_stream = Box::pin(both);
         Ok(Response::new(
             output_stream as Self::StreamStreamRangeStream,
+        ))
+    }
+
+    async fn stream_commit_range(
+        &self,
+        request: Request<CommitCursor>,
+    ) -> Result<Response<Self::StreamCommitRangeStream>, Status> {
+        info!("stream_commit_range");
+        let result = self
+            .backing_store
+            .clone()
+            .get_range(request.get_ref().min_commit, request.get_ref().max_commit)
+            .await;
+        let existing_commits = match result {
+            Ok(domain_commits) => domain_commits,
+            Err(err) => return Err(Status::new(Code::Internal, err.to_string())),
+        };
+
+        let existing_stream = tokio_stream::iter(existing_commits.into_iter());
+        let receiver = match self.backing_store.clone().subscribe_all_commits().await {
+            CommitStream::ReceiverBacked(receiver) => receiver,
+            _ => panic!("expected receiver backed commit stream"),
+        };
+        let both = existing_stream
+            .chain(receiver)
+            .map(|e| Ok(domain_to_rpc_commit(e)));
+        let output_stream = Box::pin(both);
+        Ok(Response::new(
+            output_stream as Self::StreamCommitRangeStream,
         ))
     }
 
@@ -148,7 +185,12 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
     ) -> Result<Response<Commits>, Status> {
         let stream_id = match Uuid::parse_str(cursor.get_ref().stream_id.as_str()) {
             Ok(id) => id,
-            Err(_) => return Err(Status::new(Code::InvalidArgument, "not a valid stream id")),
+            Err(_) => {
+                return Err(Status::new(
+                    Code::InvalidArgument,
+                    "(get_stream_range) not a valid stream id",
+                ))
+            }
         };
         let result = self
             .backing_store

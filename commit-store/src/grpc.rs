@@ -3,7 +3,7 @@
 use crate::{
     grpc_interface::{
         commit_store_client::CommitStoreClient, Commit as GrpcCommit,
-        CommitAttempt as GrpcCommitAttempt, StreamCursor,
+        CommitAttempt as GrpcCommitAttempt, CommitCursor, StreamCursor,
     },
     AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
 };
@@ -99,15 +99,14 @@ impl AsyncClientStore for GrpcClient {
 
 #[async_trait]
 impl DispatchingAsyncClientStore for GrpcClient {
-    async fn subscribe(&mut self) -> CommitStream {
-        let cursor = StreamCursor {
-            stream_id: "".to_string(),
-            min_version: 0,
-            max_version: i64::MAX,
+    async fn subscribe_all_commits(&mut self) -> CommitStream {
+        let cursor = CommitCursor {
+            min_commit: 0,
+            max_commit: i64::MAX,
         };
         CommitStream::GrpcBacked(
             self.client
-                .stream_stream_range(cursor)
+                .stream_commit_range(cursor)
                 .await
                 .unwrap()
                 .into_inner(),

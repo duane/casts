@@ -7,7 +7,7 @@ use uuid::Uuid;
 #[async_trait]
 pub trait DispatchingAsyncClientStore: Send + AsyncClientStore {
     /// Receive updates with each new commit to the stream.
-    async fn subscribe(&mut self) -> CommitStream;
+    async fn subscribe_all_commits(&mut self) -> CommitStream;
     async fn subscribe_stream(&mut self, stream_id: &Uuid) -> CommitStream;
 }
 
