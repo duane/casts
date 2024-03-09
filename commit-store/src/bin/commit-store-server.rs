@@ -9,13 +9,13 @@ use commit_store::{
     domain_to_grpc_ts,
     grpc_interface::{commit_store_server::CommitStoreServer, Commits, Cursor},
     postgres::PostgresStoreAsync,
-    AsyncClientStore, StoreErrorType,
+    AsyncClientStore, Commit, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
 };
 // use futures::Stream;
 use std::pin::Pin;
 
 use serde_json::Value;
-use tokio_stream::{Stream, StreamExt};
+use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
 use tonic::{transport::Server, Code, Request, Response, Status};
 use uuid::Uuid;
 
@@ -68,10 +68,17 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         };
 
         let existing_stream = tokio_stream::iter(existing_commits.into_iter());
-        let future_stream =
-            tokio_stream::wrappers::ReceiverStream::new(self.backing_store.subscribe(&stream_id));
+        let receiver = match self
+            .backing_store
+            .clone()
+            .subscribe_stream(&stream_id)
+            .await
+        {
+            CommitStream::ReceiverBacked(receiver) => receiver,
+            _ => panic!("expected receiver backed commit stream"),
+        };
         let both = existing_stream
-            .chain(future_stream)
+            .chain(receiver)
             .map(|e| Ok(domain_to_rpc_commit(e)));
         let output_stream = Box::pin(both);
         Ok(Response::new(

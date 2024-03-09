@@ -27,19 +27,28 @@ struct LocalSubscriber {
 
 #[derive(Clone, Debug)]
 pub struct LocalDispatcher {
-    subscriptions: Arc<Mutex<HashMap<Uuid, Vec<LocalSubscriber>>>>,
+    global_subscriptions: Arc<Mutex<Vec<LocalSubscriber>>>,
+    stream_subscriptions: Arc<Mutex<HashMap<Uuid, Vec<LocalSubscriber>>>>,
 }
 
 impl LocalDispatcher {
     pub fn new() -> LocalDispatcher {
         LocalDispatcher {
-            subscriptions: Arc::new(Mutex::new(HashMap::new())),
+            global_subscriptions: Arc::new(Mutex::new(Vec::new())),
+            stream_subscriptions: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub fn subscribe(&self, stream_id: Uuid) -> Receiver<Commit> {
+    pub fn subscribe(&self) -> Receiver<Commit> {
         let (tx, rx) = channel(100);
-        let mut subscriptions = self.subscriptions.lock().unwrap();
+        let mut subscriptions = self.stream_subscriptions.lock().unwrap();
+        _ = subscriptions.insert(Uuid::nil(), vec![LocalSubscriber { tx }]);
+        rx
+    }
+
+    pub fn subscribe_stream(&self, stream_id: &Uuid) -> Receiver<Commit> {
+        let (tx, rx) = channel(100);
+        let mut subscriptions = self.stream_subscriptions.lock().unwrap();
         match subscriptions.get_mut(&stream_id) {
             Some(list) => {
                 list.push(LocalSubscriber {
@@ -49,7 +58,7 @@ impl LocalDispatcher {
             }
             None => {
                 _ = subscriptions.insert(
-                    stream_id,
+                    stream_id.clone(),
                     vec![LocalSubscriber {
                         tx,
                         // commit_number: 0,
@@ -69,12 +78,12 @@ pub struct DispatchedStore<S: AsyncClientStore + Send> {
 
 #[async_trait]
 impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
-    async fn subscribe(&mut self, stream_id: Option<&Uuid>) -> CommitStream {
-        if let Some(stream_id) = stream_id {
-            CommitStream::ReceiverBacked(self.dispatcher.subscribe(stream_id.to_owned()).into())
-        } else {
-            unimplemented!("cannot subscribe to all streams yet")
-        }
+    async fn subscribe(&mut self) -> CommitStream {
+        CommitStream::ReceiverBacked(self.dispatcher.subscribe().into())
+    }
+
+    async fn subscribe_stream(&mut self, stream_id: &Uuid) -> CommitStream {
+        CommitStream::ReceiverBacked(self.dispatcher.subscribe_stream(stream_id).into())
     }
 }
 
@@ -86,8 +95,12 @@ impl<S: AsyncClientStore + Send> DispatchedStore<S> {
         }
     }
 
-    pub fn subscribe(&self, stream_id: &Uuid) -> Receiver<Commit> {
-        self.dispatcher.subscribe(stream_id.clone())
+    pub fn subscribe_all_commits(&self) -> Receiver<Commit> {
+        self.dispatcher.subscribe()
+    }
+
+    pub fn subscribe(&self) -> Receiver<Commit> {
+        self.dispatcher.subscribe()
     }
 }
 
@@ -132,7 +145,12 @@ impl<S: AsyncClientStore + Send> AsyncClientStore for DispatchedStore<S> {
 impl Dispatcher for LocalDispatcher {
     async fn dispatch(&self, commit: Commit) {
         let subscribers = {
-            if let Some(subscribers) = self.subscriptions.lock().unwrap().get(&commit.stream_id) {
+            if let Some(subscribers) = self
+                .stream_subscriptions
+                .lock()
+                .unwrap()
+                .get(&commit.stream_id)
+            {
                 subscribers.clone()
             } else {
                 return;
