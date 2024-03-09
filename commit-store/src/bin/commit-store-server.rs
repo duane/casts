@@ -99,25 +99,27 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         request: Request<CommitCursor>,
     ) -> Result<Response<Self::StreamCommitRangeStream>, Status> {
         info!("stream_commit_range");
-        let result = self
+        let existing_commit_vec = match self
             .backing_store
             .clone()
             .get_range(request.get_ref().min_commit, request.get_ref().max_commit)
-            .await;
-        let existing_commits = match result {
+            .await
+        {
             Ok(domain_commits) => domain_commits,
             Err(err) => return Err(Status::new(Code::Internal, err.to_string())),
         };
 
-        let existing_stream = tokio_stream::iter(existing_commits.into_iter());
-        let receiver = match self.backing_store.clone().subscribe_all_commits().await {
+        let existing_commit_stream = tokio_stream::iter(existing_commit_vec.into_iter());
+
+        let ongoing_commit_receiver = match self.backing_store.clone().subscribe_all_commits().await
+        {
             CommitStream::ReceiverBacked(receiver) => receiver,
             _ => panic!("expected receiver backed commit stream"),
         };
-        let both = existing_stream
-            .chain(receiver)
+        let existing_and_ongoing = existing_commit_stream
+            .chain(ongoing_commit_receiver)
             .map(|e| Ok(domain_to_rpc_commit(e)));
-        let output_stream = Box::pin(both);
+        let output_stream = Box::pin(existing_and_ongoing);
         Ok(Response::new(
             output_stream as Self::StreamCommitRangeStream,
         ))
