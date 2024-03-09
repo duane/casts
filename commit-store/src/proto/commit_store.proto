@@ -8,8 +8,8 @@ package GrpcInterface;
 
 service CommitStore {
     rpc AppendCommit (CommitAttempt) returns (Commit);
-    rpc GetStreamRange(Cursor) returns (Commits);
-    rpc StreamStreamRange(Cursor) returns (stream Commit);
+    rpc GetStreamRange(StreamCursor) returns (Commits);
+    rpc StreamStreamRange(StreamCursor) returns (stream Commit);
 }
 
 message CommitAttempt {
@@ -41,7 +41,7 @@ message Commit {
     int32 dispatch = 9;
 }
 
-message Cursor {
+message StreamCursor {
     string stream_id = 1;
     int64 min_version = 2;
     int64 max_version = 3;

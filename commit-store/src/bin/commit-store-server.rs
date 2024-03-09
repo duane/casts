@@ -7,7 +7,7 @@ use chrono::Utc;
 use commit_store::{
     dispatch::DispatchedStore,
     domain_to_grpc_ts,
-    grpc_interface::{commit_store_server::CommitStoreServer, Commits, Cursor},
+    grpc_interface::{commit_store_server::CommitStoreServer, Commits, StreamCursor},
     postgres::PostgresStoreAsync,
     AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
 };
@@ -46,7 +46,7 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
 
     async fn stream_stream_range(
         &self,
-        request: Request<Cursor>,
+        request: Request<StreamCursor>,
     ) -> Result<Response<Self::StreamStreamRangeStream>, Status> {
         info!("stream_stream_range");
         let stream_id = match Uuid::parse_str(request.get_ref().stream_id.as_str()) {
@@ -142,7 +142,10 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
         }))
     }
 
-    async fn get_stream_range(&self, cursor: Request<Cursor>) -> Result<Response<Commits>, Status> {
+    async fn get_stream_range(
+        &self,
+        cursor: Request<StreamCursor>,
+    ) -> Result<Response<Commits>, Status> {
         let stream_id = match Uuid::parse_str(cursor.get_ref().stream_id.as_str()) {
             Ok(id) => id,
             Err(_) => return Err(Status::new(Code::InvalidArgument, "not a valid stream id")),

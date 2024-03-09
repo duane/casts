@@ -1,5 +1,5 @@
 use casts::{aggregate::FeedAggregate, applicable::EventApplicable};
-use commit_store::grpc_interface::{Commits, Cursor};
+use commit_store::grpc_interface::{Commits, StreamCursor};
 
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use serde_json::Value;
@@ -19,7 +19,7 @@ async fn main() {
         .expect("Failed to connect to backend commit store");
 
     let commits: Commits = grpc_client
-        .get_stream_range(Cursor {
+        .get_stream_range(StreamCursor {
             stream_id,
             min_version,
             max_version,
