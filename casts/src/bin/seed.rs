@@ -66,7 +66,7 @@ async fn main() {
             events_count,
         };
 
-        client.commit(&commit_attempt).await.unwrap();
+        let commit_result = client.commit(&commit_attempt).await.unwrap();
         aggregate = aggregate.apply_many(events_domain);
     }
     println!("ok");

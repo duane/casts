@@ -1,12 +1,14 @@
-use commit_store::{DispatchingAsyncClientStore, GrpcClient};
+use anyhow::Result;
+use commit_store::{CommitStream, DispatchingAsyncClientStore, GrpcClient};
 use url::Url;
 use uuid::Uuid;
 
 use super::{entry::Entry, feed::Feed};
 
 pub struct PostgresReadModel {
-    store: GrpcClient,
+    _store: GrpcClient,
     connection: String,
+    _commit_stream: CommitStream,
 }
 
 const SCHEMA: &'static str = "
@@ -29,22 +31,22 @@ const SCHEMA: &'static str = "
 ";
 
 impl PostgresReadModel {
-    pub fn new(store: GrpcClient, connection: String) -> PostgresReadModel {
-        let store = store;
+    pub async fn connect(store: GrpcClient, connection: String) -> PostgresReadModel {
+        let mut store = store;
         let connection = connection;
-        PostgresReadModel { store, connection }
+        let commit_stream = store.subscribe_all_commits().await;
+        PostgresReadModel {
+            _store: store,
+            connection,
+            _commit_stream: commit_stream,
+        }
     }
 
-    pub async fn initialize(&mut self) {
-        let _subscription = self.store.subscribe_all_commits().await;
-    }
-
-    pub async fn provision(&self) {
+    pub async fn provision(connection: &str) -> Result<()> {
         let (client, _connection) =
-            tokio_postgres::connect(&self.connection, tokio_postgres::NoTls)
-                .await
-                .unwrap();
-        client.batch_execute(SCHEMA).await.unwrap();
+            tokio_postgres::connect(connection, tokio_postgres::NoTls).await?;
+        client.batch_execute(SCHEMA).await?;
+        Ok(())
     }
 
     pub async fn list_feeds(&self, stream_id: &Uuid) -> Vec<Feed> {

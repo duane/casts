@@ -104,13 +104,14 @@ impl DispatchingAsyncClientStore for GrpcClient {
             min_commit: 0,
             max_commit: i64::MAX,
         };
-        CommitStream::GrpcBacked(
+        let commit_stream = CommitStream::GrpcBacked(
             self.client
                 .stream_commit_range(cursor)
                 .await
                 .unwrap()
                 .into_inner(),
-        )
+        );
+        commit_stream
     }
 
     async fn subscribe_stream(&mut self, stream_id: &Uuid) -> CommitStream {

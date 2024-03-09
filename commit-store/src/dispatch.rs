@@ -20,14 +20,14 @@ pub trait Dispatcher {
 }
 
 #[derive(Clone, Debug)]
-struct LocalSubscriber {
+pub struct LocalSubscriber {
     tx: Sender<Commit>,
     // commit_number: i64,
 }
 
 #[derive(Clone, Debug)]
 pub struct LocalDispatcher {
-    global_subscriptions: Arc<Mutex<Vec<LocalSubscriber>>>,
+    pub global_subscriptions: Arc<Mutex<Vec<LocalSubscriber>>>,
     stream_subscriptions: Arc<Mutex<HashMap<Uuid, Vec<LocalSubscriber>>>>,
 }
 
@@ -41,8 +41,10 @@ impl LocalDispatcher {
 
     pub fn subscribe_all_commits(&self) -> Receiver<Commit> {
         let (tx, rx) = channel(100);
-        let mut subscriptions = self.global_subscriptions.lock().unwrap();
-        _ = subscriptions.push(LocalSubscriber { tx });
+        {
+            let mut global_subscriptions = self.global_subscriptions.lock().unwrap();
+            (&mut *global_subscriptions).push(LocalSubscriber { tx });
+        }
         rx
     }
 
@@ -73,7 +75,7 @@ impl LocalDispatcher {
 #[derive(Clone, Debug)]
 pub struct DispatchedStore<S: AsyncClientStore + Send> {
     store: S,
-    dispatcher: LocalDispatcher,
+    pub dispatcher: LocalDispatcher,
 }
 
 #[async_trait]
@@ -145,7 +147,13 @@ impl<S: AsyncClientStore + Send> AsyncClientStore for DispatchedStore<S> {
 #[async_trait]
 impl Dispatcher for LocalDispatcher {
     async fn dispatch(&self, commit: Commit) {
-        let subscribers = {
+        let global_subscribers = self.global_subscriptions.lock().unwrap().clone();
+        for subscriber in global_subscribers {
+            subscriber.tx.send(commit.clone()).await.unwrap();
+        }
+
+
+        let stream_subscribers = {
             if let Some(subscribers) = self
                 .stream_subscriptions
                 .lock()
@@ -157,9 +165,10 @@ impl Dispatcher for LocalDispatcher {
                 return;
             }
         };
-        for subscriber in subscribers {
+
+        for subscriber in stream_subscribers {
             let commit = commit.clone();
-            let _ = subscriber.tx.send(commit).await;
+            subscriber.tx.send(commit).await.unwrap();
         }
     }
 }

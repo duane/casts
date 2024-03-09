@@ -156,8 +156,9 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
             events_count,
         };
 
-        match store.clone().commit(&domain_attempt).await {
-            Ok(_) => (),
+
+        let commit = match store.clone().commit(&domain_attempt).await {
+            Ok(commit) => commit,
             Err(err) => {
                 match err.error_type() {
                     StoreErrorType::UnknownError => {
@@ -166,19 +167,10 @@ impl commit_store::grpc_interface::commit_store_server::CommitStore for CommitSt
                     err @ _ => return Err(Status::new(Code::Internal, err.to_string())),
                 };
             }
-        }
+        };
 
-        Ok(Response::new(commit_store::grpc_interface::Commit {
-            stream_id: domain_attempt.stream_id.to_string(),
-            stream_version: domain_attempt.stream_version,
-            commit_id: domain_attempt.commit_id.to_string(),
-            commit_timestamp: Some(domain_to_grpc_ts(domain_attempt.commit_timestamp)),
-            commit_sequence: domain_attempt.commit_sequence,
-            metadata: serialized_request.metadata.clone(),
-            events: serialized_request.events.clone(),
-            events_count: domain_attempt.events_count,
-            dispatch: 0,
-        }))
+
+        Ok(Response::new(domain_to_rpc_commit(commit)))
     }
 
     async fn get_stream_range(
