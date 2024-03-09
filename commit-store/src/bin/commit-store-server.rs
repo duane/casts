@@ -9,13 +9,13 @@ use commit_store::{
     domain_to_grpc_ts,
     grpc_interface::{commit_store_server::CommitStoreServer, Commits, Cursor},
     postgres::PostgresStoreAsync,
-    AsyncClientStore, Commit, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
+    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
 };
 // use futures::Stream;
 use std::pin::Pin;
 
 use serde_json::Value;
-use tokio_stream::{wrappers::ReceiverStream, Stream, StreamExt};
+use tokio_stream::{Stream, StreamExt};
 use tonic::{transport::Server, Code, Request, Response, Status};
 use uuid::Uuid;
 

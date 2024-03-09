@@ -41,8 +41,8 @@ impl LocalDispatcher {
 
     pub fn subscribe(&self) -> Receiver<Commit> {
         let (tx, rx) = channel(100);
-        let mut subscriptions = self.stream_subscriptions.lock().unwrap();
-        _ = subscriptions.insert(Uuid::nil(), vec![LocalSubscriber { tx }]);
+        let mut subscriptions = self.global_subscriptions.lock().unwrap();
+        _ = subscriptions.push(LocalSubscriber { tx });
         rx
     }
 
