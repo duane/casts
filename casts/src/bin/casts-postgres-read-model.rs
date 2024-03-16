@@ -1,9 +1,9 @@
 use anyhow::Result;
 use casts::graphql::{create_schema, Mutation, Query, Subscription};
+use casts::model::postgres::PostgresReadModel;
 use casts::util::aretry3;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::{DispatchingAsyncClientStore, GrpcClient};
-use futures::StreamExt;
 use juniper::{DefaultScalarValue, RootNode};
 use std::{env, sync::Arc};
 
@@ -27,13 +27,14 @@ async fn main() {
         env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
     log::info!("Connecting to commit store at {}", commit_store_addr);
 
-    let mut grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
+    let grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
         .await
         .unwrap();
 
-    let mut commit_stream = grpc_client.subscribe_all_commits().await;
-    while let Some(commit) = commit_stream.next().await {
-        log::info!("Received commit: {:?}", commit);
-    }
-    panic!("exiting.");
+    let db_url = env::var("DATABASE_URL")
+        .map(|env_var| env_var)
+        .unwrap_or("postgresql://casts:casts@localhost/casts".to_string());
+
+    let mut read_model = PostgresReadModel::connect(grpc_client, db_url).await;
+    read_model.serve().await;
 }
