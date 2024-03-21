@@ -5,7 +5,7 @@ use crate::{
         commit_store_client::CommitStoreClient, Commit as GrpcCommit,
         CommitAttempt as GrpcCommitAttempt, CommitCursor, StreamCursor,
     },
-    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
+    AsyncReadWriteStore, CommitStream, DispatchingAsyncReadWriteStore, StoreError,
 };
 use crate::{Commit, CommitAttempt};
 use anyhow::Result;
@@ -31,7 +31,7 @@ impl GrpcClient {
 }
 
 #[async_trait]
-impl AsyncClientStore for GrpcClient {
+impl AsyncReadWriteStore for GrpcClient {
     /// Write a commit to a store.
     ///
     /// If the commit succeeds, this will return an immutable commit representing a set of events that have occurred.
@@ -98,7 +98,7 @@ impl AsyncClientStore for GrpcClient {
 }
 
 #[async_trait]
-impl DispatchingAsyncClientStore for GrpcClient {
+impl DispatchingAsyncReadWriteStore for GrpcClient {
     async fn subscribe_all_commits(&mut self) -> CommitStream {
         let cursor = CommitCursor {
             min_commit: 0,

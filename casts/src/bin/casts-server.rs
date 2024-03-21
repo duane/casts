@@ -2,7 +2,7 @@ use anyhow::Result;
 use casts::graphql::{create_schema, GraphQLStore, Mutation, Query, Subscription};
 use casts::util::aretry3;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
-use commit_store::GrpcClient;
+use commit_store::Client;
 use hyper::{
     server::Server,
     service::{make_service_fn, service_fn},
@@ -15,8 +15,8 @@ lazy_static::lazy_static! {
     static ref ROOT_NODE: Arc<RootNode<'static, Query, Mutation, Subscription, DefaultScalarValue>> = Arc::new(create_schema());
 }
 
-async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {
-    Ok(GrpcClient::new(
+async fn commit_store_connect(commit_store_addr: String) -> Result<Client> {
+    Ok(Client::new(
         CommitStoreClient::connect(commit_store_addr)
             .await
             .expect("Failed to connect to backend commit store"),

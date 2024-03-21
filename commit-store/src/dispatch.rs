@@ -11,7 +11,7 @@ use uuid::Uuid;
 
 use crate::{
     commit::{Commit, CommitAttempt},
-    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreError,
+    AsyncReadWriteStore, CommitStream, DispatchingAsyncReadWriteStore, StoreError,
 };
 
 #[async_trait]
@@ -73,13 +73,13 @@ impl LocalDispatcher {
 }
 
 #[derive(Clone, Debug)]
-pub struct DispatchedStore<S: AsyncClientStore + Send> {
+pub struct DispatchedStore<S: AsyncReadWriteStore + Send> {
     store: S,
     pub dispatcher: LocalDispatcher,
 }
 
 #[async_trait]
-impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore<S> {
+impl<S: AsyncReadWriteStore + Send> DispatchingAsyncReadWriteStore for DispatchedStore<S> {
     async fn subscribe_all_commits(&mut self) -> CommitStream {
         CommitStream::ReceiverBacked(self.dispatcher.subscribe_all_commits().into())
     }
@@ -89,7 +89,7 @@ impl<S: AsyncClientStore + Send> DispatchingAsyncClientStore for DispatchedStore
     }
 }
 
-impl<S: AsyncClientStore + Send> DispatchedStore<S> {
+impl<S: AsyncReadWriteStore + Send> DispatchedStore<S> {
     pub fn new(s: S) -> DispatchedStore<S> {
         DispatchedStore {
             store: s,
@@ -108,7 +108,7 @@ impl<S: AsyncClientStore + Send> DispatchedStore<S> {
 }
 
 #[async_trait]
-impl<S: AsyncClientStore + Send> AsyncClientStore for DispatchedStore<S> {
+impl<S: AsyncReadWriteStore + Send> AsyncReadWriteStore for DispatchedStore<S> {
     async fn commit(
         &mut self,
         commit_attempt: &CommitAttempt,

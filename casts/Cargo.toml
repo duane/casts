@@ -36,8 +36,8 @@ serde_derive = "*"
 pretty_env_logger = "*"
 log = "*"
 bson = "~2.9.0"
-uuid = { version = "~1.7.0", features = ["serde", "v4"] }
-commit-store = { path = "../commit-store" }
+uuid = { version = "~1.8.0", features = ["v4", "serde"] }
+commit-store = { path = "../../commit-store" }
 juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
 juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
 juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }

@@ -1,7 +1,7 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 use crate::commit::{Commit, CommitAttempt};
-use crate::{AsyncClientStore, AsyncStore, StorageCommitConflict, StoreError, StoreErrorType};
+use crate::{AsyncReadWriteStore, AsyncStore, StorageCommitConflict, StoreError, StoreErrorType};
 use anyhow::Result;
 use async_trait::async_trait;
 use deadpool_postgres::{Manager, Pool};
@@ -117,7 +117,7 @@ impl PostgresStoreAsync {
 }
 
 #[async_trait]
-impl AsyncClientStore for PostgresStoreAsync {
+impl AsyncReadWriteStore for PostgresStoreAsync {
     async fn commit(
         &mut self,
         commit_attempt: &CommitAttempt,

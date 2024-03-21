@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 use uuid::Uuid;
 
+#[allow(clippy::large_enum_variant)]
 /// Aggregate events!
 #[derive(Clone, Serialize, Deserialize, Debug)]
 pub enum FeedAggregateEvent {

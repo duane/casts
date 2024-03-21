@@ -1,8 +1,8 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use commit_store::{
-    dispatch::DispatchedStore, sqlite::SqliteStoreAsync, DispatchingAsyncClientStore, GrpcClient,
-};
+use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::Client as GrpcClient;
+use commit_store::{dispatch::DispatchedStore, sqlite::SqliteStoreAsync};
 
 // Store
 
@@ -14,7 +14,7 @@ pub enum Grpc2Store {
 }
 
 impl Grpc2Store {
-    pub fn store(&mut self) -> &mut dyn DispatchingAsyncClientStore {
+    pub fn store(&mut self) -> &mut dyn DispatchingAsyncReadWriteStore {
         match self {
             Grpc2Store::Sqlite(ref mut sqlite) => sqlite,
             // GraphQLStore::Postgres(ref mut postgres) => postgres,

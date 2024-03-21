@@ -4,9 +4,11 @@ use casts::{
     commands::{Command, FeedAggregateCommand},
 };
 use chrono::Utc;
+use commit_store::{commit::StreamMetadata, store::AsyncReadWriteStore};
 use commit_store::{
-    commit::CommitAttempt, grpc_interface::commit_store_client::CommitStoreClient,
-    AsyncClientStore, GrpcClient,
+    commit::{CommitAttempt, CommitMetadata},
+    grpc_interface::commit_store_client::CommitStoreClient,
+    Client,
 };
 use url::Url;
 use uuid::uuid;
@@ -24,28 +26,28 @@ async fn main() {
                 url: Url::parse("https://feeds.feedburner.com/MajorityReport").unwrap(),
             },
         ),
-        // Hardcore History
-        (
-            uuid!["929e10d1-9159-478a-8baf-1c461a539fc0"],
-            FeedAggregateCommand::AddFeed {
-                stream_id,
-                feed_id: uuid!["6a278a5d-8f37-4574-9622-c74585d02eb4"],
-                url: Url::parse("http://feeds.feedburner.com/dancarlin/history?format=xml")
-                    .unwrap(),
-            },
-        ),
-        // History of Rome
-        (
-            uuid!["5b6ec1c2-078d-4f1c-a09b-d8c59d2c71b0"],
-            FeedAggregateCommand::AddFeed {
-                stream_id,
-                feed_id: uuid!["47c2f2d3-86d9-4065-8745-9b88fd877148"],
-                url: Url::parse("https://historyofrome.libsyn.com/rss").unwrap(),
-            },
-        ),
+        // // Hardcore History
+        // (
+        //     uuid!["929e10d1-9159-478a-8baf-1c461a539fc0"],
+        //     FeedAggregateCommand::AddFeed {
+        //         stream_id,
+        //         feed_id: uuid!["6a278a5d-8f37-4574-9622-c74585d02eb4"],
+        //         url: Url::parse("http://feeds.feedburner.com/dancarlin/history?format=xml")
+        //             .unwrap(),
+        //     },
+        // ),
+        // // History of Rome
+        // (
+        //     uuid!["5b6ec1c2-078d-4f1c-a09b-d8c59d2c71b0"],
+        //     FeedAggregateCommand::AddFeed {
+        //         stream_id,
+        //         feed_id: uuid!["47c2f2d3-86d9-4065-8745-9b88fd877148"],
+        //         url: Url::parse("https://historyofrome.libsyn.com/rss").unwrap(),
+        //     },
+        // ),
     ];
     let mut aggregate = FeedAggregate::default();
-    let mut client = GrpcClient::new(
+    let mut client = Client::new(
         CommitStoreClient::connect("http://127.0.0.1:5059")
             .await
             .expect("Failed to connect to backend commit store"),
@@ -56,17 +58,21 @@ async fn main() {
         let events = serde_json::to_value(events_domain.clone()).unwrap();
 
         let commit_attempt = CommitAttempt {
-            stream_id,
-            stream_version: aggregate.version,
-            commit_id,
-            commit_sequence: aggregate.version,
-            commit_timestamp: Utc::now(),
+            stream_metadata: StreamMetadata {
+                stream_id,
+                stream_version: aggregate.version,
+            },
+            commit_metadata: CommitMetadata {
+                commit_id,
+                commit_sequence: aggregate.version,
+                commit_timestamp: Utc::now(),
+            },
             metadata: serde_json::to_value(cmd).unwrap(),
             events,
             events_count,
         };
 
-        let commit_result = client.commit(&commit_attempt).await.unwrap();
+        let _commit_result = client.commit(&commit_attempt).await.unwrap();
         aggregate = aggregate.apply_many(events_domain);
     }
     println!("ok");

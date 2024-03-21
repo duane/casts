@@ -11,6 +11,7 @@ use std::fmt::{Display, Formatter, Result as FmtResult};
 use url::Url;
 use uuid::Uuid;
 
+#[allow(clippy::large_enum_variant)]
 /// The commands available for the aggregate.
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub enum FeedAggregateCommand {
@@ -56,8 +57,8 @@ impl Error for FeedAggregateError {
 
     fn description(&self) -> &str {
         match self {
-            &FeedAggregateError::DuplicateFeedError => "This feed has already been added.",
-            &FeedAggregateError::BadFeedError => "The url does not point to a feed.",
+            FeedAggregateError::DuplicateFeedError => "This feed has already been added.",
+            FeedAggregateError::BadFeedError => "The url does not point to a feed.",
         }
     }
 }
@@ -79,12 +80,12 @@ impl Command for FeedAggregateCommand {
             // TODO:
             // add -> observe
             // subscribe command/event for added feed
-            &FeedAggregateCommand::AddFeed {
+            FeedAggregateCommand::AddFeed {
                 stream_id: ref inner_id,
                 feed_id: _,
                 url: _,
             } => inner_id,
-            &FeedAggregateCommand::ObserveFeed {
+            FeedAggregateCommand::ObserveFeed {
                 stream_id: ref inner_id,
                 feed_id: _,
                 feed: _,
@@ -97,7 +98,7 @@ impl Command for FeedAggregateCommand {
         aggregate: &FeedAggregate,
     ) -> Result<Vec<FeedAggregateEvent>, FeedAggregateError> {
         match self {
-            &FeedAggregateCommand::AddFeed {
+            FeedAggregateCommand::AddFeed {
                 ref stream_id,
                 ref feed_id,
                 ref url,
@@ -110,8 +111,7 @@ impl Command for FeedAggregateCommand {
                 if aggregate
                     .feeds_by_feed_id
                     .values()
-                    .find(|f| f.url.is_some() && f.url.as_ref().unwrap() == url)
-                    .is_some()
+                    .any(|f| f.url.is_some() && f.url.as_ref().unwrap() == url)
                 {
                     return Err(FeedAggregateError::DuplicateFeedError);
                 }
@@ -133,16 +133,16 @@ impl Command for FeedAggregateCommand {
                     entries: parsed_feed.entries.into_iter().map(Entry::from).collect(),
                 }])
             }
-            &FeedAggregateCommand::ObserveFeed {
+            FeedAggregateCommand::ObserveFeed {
                 stream_id,
                 feed_id,
                 ref feed,
-            } => match aggregate.feeds_by_feed_id.get(&feed_id) {
+            } => match aggregate.feeds_by_feed_id.get(feed_id) {
                 Some(existing_feed) => {
                     let changes = feed.diff(existing_feed);
                     Ok(vec![FeedAggregateEvent::ObservedChanges {
-                        stream_id,
-                        feed_id,
+                        stream_id: *stream_id,
+                        feed_id: *feed_id,
                         changes,
                     }])
                 }

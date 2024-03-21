@@ -80,7 +80,7 @@ impl EventApplicable for FeedAggregate {
                                 metadata,
                             };
 
-                            applied.feeds_by_feed_id.insert(feed_id.clone(), new_feed);
+                            applied.feeds_by_feed_id.insert(feed_id, new_feed);
                         }
                     };
                 }

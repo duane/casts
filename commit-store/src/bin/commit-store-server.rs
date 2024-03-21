@@ -9,7 +9,7 @@ use commit_store::{
     domain_to_grpc_ts,
     grpc_interface::{commit_store_server::CommitStoreServer, CommitCursor, Commits, StreamCursor},
     postgres::PostgresStoreAsync,
-    AsyncClientStore, CommitStream, DispatchingAsyncClientStore, StoreErrorType,
+    AsyncReadWriteStore, CommitStream, DispatchingAsyncReadWriteStore, StoreErrorType,
 };
 // use futures::Stream;
 use std::pin::Pin;

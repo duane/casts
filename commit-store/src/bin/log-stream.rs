@@ -4,7 +4,7 @@ use uuid::uuid;
 
 use anyhow::Result;
 use commit_store::{
-    grpc_interface::commit_store_client::CommitStoreClient, DispatchingAsyncClientStore, GrpcClient,
+    grpc_interface::commit_store_client::CommitStoreClient, DispatchingAsyncReadWriteStore, GrpcClient,
 };
 
 async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {

@@ -3,7 +3,7 @@ use casts::graphql::{create_schema, Mutation, Query, Subscription};
 use casts::model::postgres::PostgresReadModel;
 use casts::util::aretry3;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
-use commit_store::{DispatchingAsyncClientStore, GrpcClient};
+use commit_store::Client as GrpcClient;
 use juniper::{DefaultScalarValue, RootNode};
 use std::{env, sync::Arc};
 
@@ -31,9 +31,8 @@ async fn main() {
         .await
         .unwrap();
 
-    let db_url = env::var("DATABASE_URL")
-        .map(|env_var| env_var)
-        .unwrap_or("postgresql://casts:casts@localhost/casts".to_string());
+    let db_url =
+        env::var("DATABASE_URL").unwrap_or("postgresql://casts:casts@localhost/casts".to_string());
 
     let mut read_model = PostgresReadModel::connect(grpc_client, db_url).await;
     read_model.serve().await;

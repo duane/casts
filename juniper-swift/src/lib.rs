@@ -21,9 +21,9 @@ pub struct SourcePosition {
     pub col: usize,
 }
 
-impl Into<juniper::parser::SourcePosition> for SourcePosition {
-    fn into(self) -> juniper::parser::SourcePosition {
-        juniper::parser::SourcePosition::new(self.index, self.line, self.col)
+impl From<SourcePosition> for juniper::parser::SourcePosition {
+    fn from(val: SourcePosition) -> juniper::parser::SourcePosition {
+        juniper::parser::SourcePosition::new(val.index, val.line, val.col)
     }
 }
 
@@ -106,7 +106,7 @@ impl GraphQLInputValue {
             1 => {
                 let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
                 let string_value: String = unsafe {
-                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((*buf_ptr).clone())
                         .unwrap_or_default()
                 };
                 InputValue::Scalar(juniper::DefaultScalarValue::String(string_value))
@@ -115,7 +115,7 @@ impl GraphQLInputValue {
             2 => {
                 let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
                 let string_value: String = unsafe {
-                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((*buf_ptr).clone())
                         .unwrap_or_default()
                 };
                 InputValue::Enum(string_value)
@@ -124,7 +124,7 @@ impl GraphQLInputValue {
             3 => {
                 let buf_ptr = self.slot_b as *const GraphQLUnownedBuffer;
                 let string_value: String = unsafe {
-                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((&*buf_ptr).clone())
+                    <GraphQLUnownedBuffer as Into<Option<String>>>::into((*buf_ptr).clone())
                         .unwrap_or_default()
                 };
                 InputValue::Variable(string_value)
@@ -170,13 +170,13 @@ pub struct GraphQLUnownedBuffer {
 }
 
 unsafe impl Send for GraphQLUnownedBuffer {}
-impl Into<Option<Vec<u8>>> for GraphQLUnownedBuffer {
-    fn into(self) -> Option<Vec<u8>> {
-        if self.buffer.is_null() {
+impl From<GraphQLUnownedBuffer> for Option<Vec<u8>> {
+    fn from(val: GraphQLUnownedBuffer) -> Option<Vec<u8>> {
+        if val.buffer.is_null() {
             return None;
         }
         let buffer_slice: &[u8] =
-            unsafe { std::slice::from_raw_parts(self.buffer as *const u8, self.length) };
+            unsafe { std::slice::from_raw_parts(val.buffer as *const u8, val.length) };
         // unimplemented!("memory leak");
         // mem::forget(buffer_slice);
         let mut buffer_vec: Vec<u8> = Vec::with_capacity(buffer_slice.len());
@@ -184,16 +184,16 @@ impl Into<Option<Vec<u8>>> for GraphQLUnownedBuffer {
         Some(buffer_vec)
     }
 }
-impl Into<Option<String>> for GraphQLUnownedBuffer {
-    fn into(self) -> Option<String> {
-        let owned_vec: Option<Vec<u8>> = self.into();
+impl From<GraphQLUnownedBuffer> for Option<String> {
+    fn from(val: GraphQLUnownedBuffer) -> Option<String> {
+        let owned_vec: Option<Vec<u8>> = val.into();
         owned_vec.map(|vec| unsafe { String::from_utf8_unchecked(vec) })
     }
 }
 
-impl Into<String> for GraphQLUnownedBuffer {
-    fn into(self) -> String {
-        let o_string: Option<String> = self.into();
+impl From<GraphQLUnownedBuffer> for String {
+    fn from(val: GraphQLUnownedBuffer) -> String {
+        let o_string: Option<String> = val.into();
         o_string.unwrap_or_default()
     }
 }

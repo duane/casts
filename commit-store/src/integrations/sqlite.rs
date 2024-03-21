@@ -2,7 +2,7 @@
 
 use crate::commit::{Commit, CommitAttempt};
 use crate::{
-    AsyncClientStore, ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType,
+    AsyncReadWriteStore, ClientStore, StorageCommitConflict, Store, StoreError, StoreErrorType,
 };
 use async_trait::async_trait;
 use rusqlite::{Connection as RusqliteConnection, Error as RusqliteError, ToSql};
@@ -338,7 +338,7 @@ impl ClientStore for SqliteStore {
 }
 
 #[async_trait]
-impl AsyncClientStore for SqliteStoreAsync {
+impl AsyncReadWriteStore for SqliteStoreAsync {
     async fn commit(
         &mut self,
         commit_attempt: &CommitAttempt,

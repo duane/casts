@@ -15,9 +15,10 @@ use casts::{
     },
     util::aretry3,
 };
-use commit_store::{
-    grpc_interface::commit_store_client::CommitStoreClient, DispatchingAsyncClientStore, GrpcClient,
-};
+use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
+
+use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::Client as GrpcClient;
 // use futures::Stream;
 // use tokio_stream::{Stream, StreamExt};
 use anyhow::Result;
@@ -31,7 +32,7 @@ pub struct CastsImpl {
 }
 
 async fn hydrate_aggregate(
-    client: &mut dyn DispatchingAsyncClientStore,
+    client: &mut dyn DispatchingAsyncReadWriteStore,
     stream_id: &str,
 ) -> FeedAggregate {
     let stream_id: Uuid = Uuid::parse_str(stream_id).unwrap();

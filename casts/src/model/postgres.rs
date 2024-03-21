@@ -1,6 +1,8 @@
 use crate::events::FeedAggregateEvent;
 use anyhow::Result;
-use commit_store::{CommitStream, DispatchingAsyncClientStore, GrpcClient};
+use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::Client as GrpcClient;
+use commit_store::CommitStream;
 use deadpool_postgres::{Manager, Pool};
 use futures::StreamExt;
 use std::str::FromStr;
@@ -17,7 +19,7 @@ pub struct PostgresReadModel {
     commit_stream: CommitStream,
 }
 
-const SCHEMA: &'static str = "
+const SCHEMA: &str = "
     CREATE TABLE IF NOT EXISTS feeds (
         id UUID PRIMARY KEY,
         stream_id UUID NOT NULL,
@@ -39,8 +41,7 @@ const SCHEMA: &'static str = "
 impl PostgresReadModel {
     pub async fn connect(store: GrpcClient, connection: String) -> PostgresReadModel {
         let mut store = store;
-        let connection = connection;
-        let commit_stream = store.subscribe_all_commits().await;
+        let commit_stream: CommitStream = store.subscribe_all_commits().await;
         let config = Config::from_str(&connection).unwrap();
         let manager = Manager::new(config, NoTls);
         let pool = Pool::builder(manager).build().unwrap();
@@ -61,11 +62,9 @@ impl PostgresReadModel {
     pub async fn serve(&mut self) {
         while let Some(commit) = self.commit_stream.next().await {
             let commit = commit.unwrap();
-            match commit {
-                commit => {
-                    let events = commit.events;
-                    self.apply(&serde_json::from_value(events).unwrap()).await;
-                }
+            {
+                let events = commit.events;
+                self.apply(&serde_json::from_value(events).unwrap()).await;
             }
         }
     }

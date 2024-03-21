@@ -89,7 +89,7 @@ pub trait Store: ClientStore {
 
 #[async_trait]
 /// A store for reading and writing events.
-pub trait AsyncStore: AsyncClientStore {
+pub trait AsyncStore: AsyncReadWriteStore {
     /// Initialize the database to a usable state.
     async fn initialize(&mut self) -> Result<(), Box<dyn StoreError>>;
 

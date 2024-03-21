@@ -3,9 +3,11 @@
 use std::pin::Pin;
 
 use chrono::Utc;
+use commit_store::commit::{CommitAttempt, CommitMetadata, StreamMetadata};
 use commit_store::dispatch::DispatchedStore;
 use commit_store::sqlite::SqliteStoreAsync;
-use commit_store::{commit::CommitAttempt, DispatchingAsyncClientStore, GrpcClient};
+use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::Client as GrpcClient;
 use futures::stream::StreamExt;
 use futures_core::Stream;
 use juniper::graphql_subscription;
@@ -32,7 +34,7 @@ pub enum GraphQLStore {
 impl juniper::Context for GraphQLStore {}
 
 impl GraphQLStore {
-    fn store(&mut self) -> &mut dyn DispatchingAsyncClientStore {
+    fn store(&mut self) -> &mut dyn DispatchingAsyncReadWriteStore {
         match self {
             GraphQLStore::Sqlite(ref mut sqlite) => sqlite,
             // GraphQLStore::Postgres(ref mut postgres) => postgres,
@@ -250,7 +252,7 @@ impl Feed {
 pub struct Mutation;
 
 async fn hydrate_aggregate(
-    client: &mut dyn DispatchingAsyncClientStore,
+    client: &mut dyn DispatchingAsyncReadWriteStore,
     stream_id: Uuid,
 ) -> FeedAggregate {
     let mut aggregate = FeedAggregate::new();
@@ -274,11 +276,11 @@ async fn hydrate_aggregate(
 
 #[graphql_object(context = GraphQLStore)]
 impl Mutation {
-    async fn add_feed<'db>(
+    async fn add_feed(
         stream_id: Uuid,
         feed_id: Uuid,
         url: Url,
-        context: &'db GraphQLStore,
+        context: &GraphQLStore,
     ) -> FieldResult<Uuid> {
         println!("add feed");
         let command = FeedAggregateCommand::AddFeed {
@@ -287,7 +289,7 @@ impl Mutation {
             url,
         };
         let mut mutable_ctx = context.clone();
-        let client: &mut dyn DispatchingAsyncClientStore = mutable_ctx.store();
+        let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();
         let aggregate = hydrate_aggregate(client, stream_id).await;
 
         let events = command
@@ -299,11 +301,15 @@ impl Mutation {
             serde_json::to_value(events).expect("could not serialize events to json");
 
         let commit_attempt = CommitAttempt {
-            stream_id,
-            stream_version: aggregate.version + 1,
-            commit_id: Uuid::new_v4(),
-            commit_sequence: aggregate.version + 1,
-            commit_timestamp: Utc::now(),
+            stream_metadata: StreamMetadata {
+                stream_id,
+                stream_version: aggregate.version + 1,
+            },
+            commit_metadata: CommitMetadata {
+                commit_id: Uuid::new_v4(),
+                commit_sequence: aggregate.version + 1,
+                commit_timestamp: Utc::now(),
+            },
             metadata: serde_json::to_value(command)
                 .expect("could not serialize command to metadata"),
             events,
@@ -317,7 +323,7 @@ impl Mutation {
             .await
             .expect("failed to commit addFeed event");
 
-        FieldResult::Ok(committed.commit_id)
+        FieldResult::Ok(committed.commit_metadata.commit_id)
     }
 }
 
@@ -328,7 +334,7 @@ impl Query {
     async fn feeds(stream_id: Uuid, context: &GraphQLStore) -> Vec<Feed> {
         println!("inside feed accessor");
         let mut mutable_ctx = context.clone();
-        let client: &mut dyn DispatchingAsyncClientStore = mutable_ctx.store();
+        let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();
         println!("client");
         let aggregate = hydrate_aggregate(client, stream_id).await;
         println!("aggregate");

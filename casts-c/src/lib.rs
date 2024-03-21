@@ -1,5 +1,6 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
+#![allow(clippy::missing_safety_doc)]
 use casts::graphql::{create_schema, create_sqlite_store, GraphQLStore, Schema};
 use core::ffi::c_void;
 use juniper::futures::StreamExt;
@@ -105,9 +106,8 @@ pub unsafe extern "C" fn gql_casts_subscribe(
             .await
             .unwrap();
 
-        let value_stream = value_stream_value.into();
         let mut subscription_connection: Connection<'_, DefaultScalarValue> =
-            Connection::from_stream(value_stream, errors);
+            Connection::from_stream(value_stream_value, errors);
         while let Some(update) = subscription_connection.next().await {
             let serialized_response: String =
                 serde_json::to_string(&serde_json::to_value(update).unwrap()).unwrap();

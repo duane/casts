@@ -5,14 +5,14 @@ use async_trait::async_trait;
 use uuid::Uuid;
 
 #[async_trait]
-pub trait DispatchingAsyncClientStore: Send + AsyncClientStore {
+pub trait DispatchingAsyncReadWriteStore: Send + AsyncReadWriteStore {
     /// Receive updates with each new commit to the stream.
     async fn subscribe_all_commits(&mut self) -> CommitStream;
     async fn subscribe_stream(&mut self, stream_id: &Uuid) -> CommitStream;
 }
 
 #[async_trait]
-pub trait AsyncClientStore: Send {
+pub trait AsyncReadWriteStore: Send {
     /// Write a commit to a store.
     ///
     /// If the commit succeeds, this will return an immutable commit representing a set of events that have occurred.

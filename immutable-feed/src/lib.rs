@@ -286,7 +286,7 @@ impl Feed {
         let all_observed_guids: HashSet<&str> = existing_entry_by_guid
             .keys()
             .chain(remote_entry_by_guid.keys())
-            .map(|s| *s)
+            .copied()
             .collect();
         for guid in all_observed_guids.iter() {
             let existing_entry = existing_entry_by_guid.get(*guid);
@@ -433,7 +433,7 @@ impl From<RustEntry> for Entry {
             entry
                 .links
                 .first()
-                .expect(format!("Entry {:?} has no links", entry).as_str()),
+                .unwrap_or_else(|| panic!("Entry {:?} has no links", entry)),
         );
         Entry {
             guid: entry.id.clone(),
@@ -457,19 +457,17 @@ pub async fn fetch_body(url: &Url) -> Result<Vec<u8>> {
 
 /// Parse the document from a vector of bytes.
 pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
-    Ok(Feed::from_url_and_feed(
-        url.to_owned(),
-        parser::parse(doc)?.into(),
-    ))
+    Ok(Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?))
 }
 
 pub async fn fetch_feed(url: &Url) -> Result<Feed> {
     let body = fetch_body(url).await?;
-    Ok(parse_doc(url, body.as_slice())?)
+    parse_doc(url, body.as_slice())
 }
 
 // Delta bits
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// Feed delta: a struct representing changes to a feed.
 pub enum FeedMutation {
@@ -482,6 +480,7 @@ pub enum FeedMutation {
     EntryMutation(String, Vec<EntryMutation>),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FeedMetadataMutation {
     /// Stores the new title.
@@ -497,6 +496,7 @@ pub enum FeedMetadataMutation {
     ReplacedAuthors(Vec<String>),
 }
 
+#[allow(clippy::large_enum_variant)]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 /// A single change to an entry.
 pub enum EntryMutation {
