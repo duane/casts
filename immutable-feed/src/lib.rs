@@ -58,15 +58,14 @@ pub struct FeedMetadata {
 
     /// The description of the feed.
     pub description: Option<String>,
-
     // pub description_txt: Option<String>,
     // pub description_html: Option<String>,
     // pub description_content: Option<Content>,
-    /// When the feed was last updated.
-    pub updated_at: Option<DateTime<Utc>>,
+    // When the feed was last updated.
+    // pub updated_at: Option<DateTime<Utc>>,
 
-    /// When the feed was originally published.
-    pub published_at: Option<DateTime<Utc>>,
+    // When the feed was originally published.
+    // pub published_at: Option<DateTime<Utc>>,
 }
 
 impl FeedMetadata {
@@ -75,6 +74,9 @@ impl FeedMetadata {
         let mut mutations: Vec<FeedMetadataMutation> = vec![];
         if self.title != other.title {
             mutations.push(FeedMetadataMutation::ReplacedTitle(self.title.clone()))
+        }
+        if self.logo != other.logo {
+            mutations.push(FeedMetadataMutation::ReplacedLogo(self.logo.clone()))
         }
         if self.authors != other.authors {
             mutations.push(FeedMetadataMutation::ReplacedAuthors(self.authors.clone()))
@@ -113,8 +115,8 @@ impl From<RustFeed> for FeedMetadata {
                 .expect("All feeds must have titles"),
             authors: feed.authors.into_iter().map(|p| p.name).collect(),
             description: feed.description.map(|t| t.content),
-            updated_at: feed.updated,
-            published_at: feed.published,
+            // updated_at: feed.updated,
+            // published_at: feed.published,
             logo: feed.logo.map(Image::from),
         }
     }
@@ -399,9 +401,13 @@ impl Entry {
             mutations.push(EntryMutation::ReplacedSummary(other.summary.to_owned()));
         }
 
-        // if self.media != other.media {
-        //   mutations.push(EntryMutation::ReplacedContent(other.media.to_owned()));
-        // }
+        if self.content != other.content {
+            mutations.push(EntryMutation::ReplacedContent(other.content.to_owned()));
+        }
+
+        if self.media != other.media {
+            mutations.push(EntryMutation::ReplacedMedia(other.media.to_owned()));
+        }
 
         mutations
     }
@@ -415,6 +421,7 @@ impl Entry {
                 }
                 EntryMutation::RemovedEntry => return None,
                 EntryMutation::ReplacedContent(new_content) => applied.content = new_content,
+                EntryMutation::ReplacedMedia(new_media) => applied.media = new_media,
                 EntryMutation::ReplacedLinks(new_links) => applied.links = new_links,
                 EntryMutation::ReplacedSummary(new_summary) => applied.summary = new_summary,
                 EntryMutation::ReplacedTitle(new_title) => applied.title = new_title,
@@ -511,6 +518,9 @@ pub enum EntryMutation {
 
     /// Stores the new content.
     ReplacedContent(Option<Content>),
+
+    /// Stores the new media vector
+    ReplacedMedia(Vec<MediaObject>),
 
     /// Stores the new links.
     ReplacedLinks(Vec<Link>),
