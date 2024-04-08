@@ -23,7 +23,7 @@ serde_json = "*"
 tokio = { version = "*", features = ["rt-multi-thread"] }
 commit-store = { path = "../../commit-store" }
 rusqlite = "~0.31.0"
-bson = "~2.9.0"
+bson = "~2.10.0"
 
 [build-dependencies]
 cbindgen = "*"
