@@ -3,11 +3,7 @@ use casts::graphql::{create_schema, GraphQLStore, Mutation, Query, Subscription}
 use casts::util::aretry3;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::Client;
-use hyper::{
-    server::Server,
-    service::{make_service_fn, service_fn},
-    Method, Response, StatusCode,
-};
+use hyper::{service::service_fn, Method, Response, StatusCode};
 use juniper::{DefaultScalarValue, RootNode};
 use std::{convert::Infallible, env, sync::Arc};
 

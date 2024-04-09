@@ -7,12 +7,17 @@ syntax = "proto3";
 package GrpcInterface;
 
 service Casts {
-    rpc ListFeeds (FeedRequest) returns (Feeds);
+    rpc ListFeeds (ListFeedsRequest) returns (Feeds);
+    rpc GetFeed (GetFeedRequest) returns (Feed);
 }
 
-message FeedRequest {
-    string requestId = 1;
+message GetFeedRequest {
+    string feedId = 1;
     string streamId = 2;
+}
+
+message ListFeedsRequest {
+    string streamId = 1;
 }
 
 message Feed {
@@ -37,8 +42,8 @@ message Entry {
     string title = 1;
     string guid = 2;
     string summary = 3;
-    repeated Link links = 4;
-    Content content = 5;
+    Content content = 4;
+    repeated Link links = 5;
     repeated MediaObject media = 6;
 }
 

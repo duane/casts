@@ -1,9 +1,4 @@
-use casts::{
-    aggregate::FeedAggregate,
-    applicable::EventApplicable,
-    commands::{Command, FeedAggregateCommand},
-    events::FeedAggregateEvent,
-};
+use casts::{aggregate::FeedAggregate, applicable::EventApplicable, events::FeedAggregateEvent};
 use chrono::Utc;
 use commit_store::{commit::StreamMetadata, store::AsyncReadWriteStore};
 use commit_store::{
@@ -11,9 +6,7 @@ use commit_store::{
     grpc_interface::commit_store_client::CommitStoreClient,
     Client,
 };
-use futures::Stream;
 use serde_json::json;
-use url::Url;
 use uuid::uuid;
 
 #[tokio::main]

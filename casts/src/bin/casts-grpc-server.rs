@@ -11,7 +11,8 @@ use casts::{
     events::FeedAggregateEvent,
     grpc::Grpc2Store,
     grpc_interface::{
-        casts_server::CastsServer, Feed as GrpcFeed, FeedRequest, Feeds as GrpcFeeds,
+        casts_server::CastsServer, Feed as GrpcFeed, Feeds as GrpcFeeds, GetFeedRequest,
+        ListFeedsRequest,
     },
     util::aretry3,
 };
@@ -60,7 +61,7 @@ async fn hydrate_aggregate(
 impl casts::grpc_interface::casts_server::Casts for CastsImpl {
     async fn list_feeds(
         &self,
-        request: Request<FeedRequest>,
+        request: Request<ListFeedsRequest>,
     ) -> Result<Response<GrpcFeeds>, Status> {
         info!("list_feeds");
         let mut lock = self.backing_store.lock().await;
@@ -74,6 +75,13 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
         println!("returning result...");
 
         Ok(Response::new(feed_result))
+    }
+
+    async fn get_feed(
+        &self,
+        _request: Request<GetFeedRequest>,
+    ) -> Result<Response<GrpcFeed>, Status> {
+        unimplemented!()
     }
 }
 

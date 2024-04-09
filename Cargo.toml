@@ -2,10 +2,10 @@
 resolver = "2"
 members = [
     "casts",
-    "casts-c",
+    # "casts-c",
     # "casts-ios", # xcode project
     # "commit-store",
     # "commit-store-macos", # xcode project
     "immutable-feed",
-    "juniper-swift",
+    # "juniper-swift",
 ]

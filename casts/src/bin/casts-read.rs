@@ -14,7 +14,7 @@ async fn main() {
     let min_version = 0;
     let max_version = i64::MAX;
 
-    let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:5059")
+    let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:7392")
         .await
         .expect("Failed to connect to backend commit store");
 

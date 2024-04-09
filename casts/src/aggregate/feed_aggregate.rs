@@ -89,8 +89,17 @@ impl EventApplicable for FeedAggregate {
                     feed_id,
                     changes,
                 } => {
+                    println!("feed_id: {}", feed_id.to_string());
                     let feed = applied.feeds_by_feed_id.get_mut(&feed_id).unwrap();
-                    *feed = feed.apply_diff(changes);
+                    let before = feed.clone();
+                    let after = before.apply_diff(changes.clone());
+                    println!(
+                        "{} before, {} after, {} applied",
+                        before.entries.len(),
+                        after.entries.len(),
+                        changes.len()
+                    );
+                    *feed = after;
                 }
             }
         }
@@ -134,8 +143,8 @@ mod tests {
                 authors: vec!["Cindy Yoo-Hoo".to_string()],
                 logo: None,
                 description: None,
-                updated_at: None,
-                published_at: None,
+                // updated_at: None,
+                // published_at: None,
             },
             entries: vec![],
         };

@@ -293,18 +293,30 @@ impl Feed {
         for guid in all_observed_guids.iter() {
             let existing_entry = existing_entry_by_guid.get(*guid);
             let remote_entry = remote_entry_by_guid.get(*guid);
-            let entry_mutations: Vec<EntryMutation> = match (existing_entry, remote_entry) {
-                (Some(existing_entry), Some(remote_entry)) => existing_entry.diff(remote_entry),
-                (Some(_), None) => vec![EntryMutation::RemovedEntry],
-                (None, Some(remote_entry)) => {
-                    vec![EntryMutation::AddedEntry((*remote_entry).to_owned())]
-                }
-                _ => unreachable!("iterating over a guid not in either set should not be possible"),
-            };
-            mutations.push(FeedMutation::EntryMutation(
-                guid.to_string(),
-                entry_mutations,
-            ));
+            let (feed_mutations, entry_mutations): (Vec<FeedMutation>, Vec<EntryMutation>) =
+                match (existing_entry, remote_entry) {
+                    (Some(existing_entry), Some(remote_entry)) => {
+                        (vec![], existing_entry.diff(remote_entry))
+                    }
+                    (Some(entry), None) => (
+                        vec![FeedMutation::EntryRemoved(entry.guid.to_owned())],
+                        vec![],
+                    ),
+                    (None, Some(remote_entry)) => (
+                        vec![FeedMutation::EntryAdded(remote_entry.to_owned().clone())],
+                        vec![],
+                    ),
+                    _ => unreachable!(
+                        "iterating over a guid not in either set should not be possible"
+                    ),
+                };
+            mutations.extend(feed_mutations);
+            if !entry_mutations.is_empty() {
+                mutations.push(FeedMutation::EntryChanged(
+                    guid.to_string(),
+                    entry_mutations,
+                ));
+            }
         }
         mutations
     }
@@ -312,24 +324,39 @@ impl Feed {
     pub fn apply_diff(&self, mutations: Vec<FeedMutation>) -> Feed {
         let mut applied = self.to_owned();
         let mut entry_mutations_by_guid = HashMap::new();
+        let mut new_entries: HashMap<String, Entry> = HashMap::new();
+        let mut removed_entries: HashSet<String> = HashSet::new();
         for mutation in mutations {
             match mutation {
                 FeedMutation::MetadataChange(metadata_mutation) => {
                     applied.metadata = applied.metadata.apply_diff(vec![metadata_mutation]);
                 }
-                FeedMutation::EntryMutation(guid, entry_mutations) => {
+                FeedMutation::EntryChanged(guid, entry_mutations) => {
                     entry_mutations_by_guid.insert(guid, entry_mutations);
+                }
+                FeedMutation::EntryAdded(entry) => {
+                    new_entries.insert(entry.guid.clone(), entry);
+                }
+                FeedMutation::EntryRemoved(guid) => {
+                    removed_entries.insert(guid);
                 }
             }
         }
-        applied.entries = applied
+        let entries: Vec<Entry> = applied
             .entries
             .into_iter()
             .flat_map(|entry| match entry_mutations_by_guid.remove(&entry.guid) {
+                _ if removed_entries.contains(&entry.guid)
+                    || new_entries.contains_key(&entry.guid) =>
+                {
+                    None
+                }
                 Some(mutations) => entry.apply(mutations),
                 None => Some(entry),
             })
+            .chain(new_entries.values().cloned())
             .collect();
+        applied.entries = entries;
         applied
     }
 }
@@ -416,10 +443,6 @@ impl Entry {
         let mut applied = self.clone();
         for mutation in mutations {
             match mutation {
-                EntryMutation::AddedEntry(_) => {
-                    unreachable!("this should be prevented by only calling apply on extant entries")
-                }
-                EntryMutation::RemovedEntry => return None,
                 EntryMutation::ReplacedContent(new_content) => applied.content = new_content,
                 EntryMutation::ReplacedMedia(new_media) => applied.media = new_media,
                 EntryMutation::ReplacedLinks(new_links) => applied.links = new_links,
@@ -481,10 +504,16 @@ pub enum FeedMutation {
     /// Stores changes to metadata.
     MetadataChange(FeedMetadataMutation),
 
+    /// New entry added to feed.
+    EntryAdded(Entry),
+
+    /// Entry disappeared from feed.
+    EntryRemoved(String),
+
     /// Indicates a modified entry.
     /// The first parameter is the guid of the entry that was changed.
     /// the second parameter is the change in question.
-    EntryMutation(String, Vec<EntryMutation>),
+    EntryChanged(String, Vec<EntryMutation>),
 }
 
 #[allow(clippy::large_enum_variant)]
@@ -524,10 +553,4 @@ pub enum EntryMutation {
 
     /// Stores the new links.
     ReplacedLinks(Vec<Link>),
-
-    /// Used when an entirely new entry is introduced
-    AddedEntry(Entry),
-
-    /// Used when the entry is removed
-    RemovedEntry,
 }

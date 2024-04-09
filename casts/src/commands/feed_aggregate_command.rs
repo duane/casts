@@ -139,7 +139,15 @@ impl Command for FeedAggregateCommand {
                 ref feed,
             } => match aggregate.feeds_by_feed_id.get(feed_id) {
                 Some(existing_feed) => {
-                    let changes = feed.diff(existing_feed);
+                    println!(
+                        "comparing feeds... {} vs {}",
+                        existing_feed.entries.len(),
+                        feed.entries.len()
+                    );
+                    let changes = existing_feed.diff(feed);
+                    if changes.is_empty() {
+                        return Ok(vec![]);
+                    }
                     Ok(vec![FeedAggregateEvent::ObservedChanges {
                         stream_id: *stream_id,
                         feed_id: *feed_id,

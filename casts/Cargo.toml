@@ -4,49 +4,110 @@ version = "0.1.0"
 edition = "2021"
 
 [features]
+graphql = ["juniper", "juniper_hyper", "juniper_subscriptions", "juniper-swift"]
+grpc = ["tonic", "prost"]
 server = [
     "postgres",
     "tokio-postgres",
     "deadpool-postgres",
     "postgres-native-tls",
 ]
-# client = ["rusqlite"]
-default = ["server"]
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+default = ["server", "grpc"]
+
+[[bin]]
+name = "casts-grpc-client"
+path = "src/bin/casts-grpc-client.rs"
+required-features = ["grpc"]
+
+[[bin]]
+name = "casts-grpc-server"
+path = "src/bin/casts-grpc-server.rs"
+required-features = ["grpc"]
+
+[[bin]]
+name = "casts-poll"
+path = "src/bin/casts-poll.rs"
+required-features = ["grpc"]
+
+[[bin]]
+name = "casts-postgres-provision"
+path = "src/bin/casts-postgres-provision.rs"
+required-features = ["server"]
+
+[[bin]]
+name = "casts-read"
+path = "src/bin/casts-read.rs"
+required-features = ["grpc"]
+
+[[bin]]
+name = "casts-postgres-read-model"
+path = "src/bin/casts-postgres-read-model.rs"
+required-features = ["graphql"]
+
+[[bin]]
+name = "casts"
+path = "src/bin/casts.rs"
+required-features = ["grpc"]
+
+[[bin]]
+name = "introspect"
+path = "src/bin/introspect.rs"
+required-features = ["graphql"]
+
+[[bin]]
+name = "casts-server"
+path = "src/bin/casts-server.rs"
+required-features = ["graphql"]
+
+[[bin]]
+name = "seed"
+path = "src/bin/seed.rs"
+required-features = ["grpc"]
 
 [dependencies]
+# internal
+immutable-feed = { path = "../immutable-feed" }
+
+# basic util
+async-trait = "~0.1.79"
+bytes = "~1.6.0"
+chrono = "~0.4.37"
+lazy_static = "~1.4.0"
+url = { version = "~2.5.0", features = ["serde"] }
+uuid = { version = "~1.8.0", features = ["v4", "serde"] }
 
 
+# logging
+log = "~0.4.21"
+pretty_env_logger = "~0.5.0"
+
+# serde
+bson = "~2.10.0"
+serde = { version = "~1.0.197", features = ["derive"] }
+serde_json = "~1.0.115"
+serde_derive = "~1.0.197"
+
+# errors
+anyhow = "~1.0.81"
+
+# commit-store
+commit-store = { path = "../../commit-store" }
+
+# Postgres
 postgres = { version = "~0.19.5", optional = true, features = [
     "with-chrono-0_4",
     "with-uuid-1",
     "with-serde_json-1",
 ] }
-postgres-native-tls = { version = "*", optional = true }
+postgres-native-tls = { version = "~0.5.0", optional = true }
 tokio-postgres = { version = "~0.7.8", optional = true }
-deadpool-postgres = { version = "*", optional = true }
+deadpool-postgres = { version = "~0.13.0", optional = true }
 
-anyhow = "*"
-bytes = "*"
-async-trait = "*"
-serde = { version = "1.0", features = ["derive"] }
-serde_json = "*"
-serde_derive = "*"
-pretty_env_logger = "*"
-log = "*"
-bson = "~2.10.0"
-uuid = { version = "~1.8.0", features = ["v4", "serde"] }
-commit-store = { path = "../../commit-store" }
-juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
-juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
-juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161" }
-lazy_static = "*"
-juniper-swift = { path = "../juniper-swift" }
-chrono = "*"
-url = { version = "*", features = ["serde"] }
-immutable-feed = { path = "../immutable-feed" }
-hyper = "*"
+# http server and client libs
+hyper = "~1.2.0"
+
+# futures stuff
 tokio = { version = "~1.37.0", features = ["full"] }
 futures = { version = "0.3.17", features = [
     "std",
@@ -54,12 +115,21 @@ futures = { version = "0.3.17", features = [
     "executor",
     "thread-pool",
 ] }
-reqwest = "*"
-futures-core = "*"
+futures-core = "~0.3.30"
 
-tonic = "*"
-prost = "*"
-prost-types = "*"
+# reqwest http client
+reqwest = "~0.12.3"
+
+# grpc
+tonic = { version = "~0.11.0", optional = true }
+prost = { version = "~0.12.4", optional = true }
+
+# Juniper
+juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161", optional = true }
+juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161", optional = true }
+juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161", optional = true }
+juniper-swift = { path = "../juniper-swift", optional = true }
+
 
 [build-dependencies]
 tonic-build = "~0.11.0"
