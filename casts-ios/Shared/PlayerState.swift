@@ -137,7 +137,7 @@ class PlayerState: NSObject, ObservableObject {
                            options: [.old, .new],
                            context: &self.playerItemContext)
     self.player = AVPlayer(playerItem: playerItem)
-    self.player.seek(to: CMTime(seconds: 10, preferredTimescale: 1))
+    self.player.seek(to: CMTime(seconds: 0, preferredTimescale: 1))
     self.player.volume = 0
     self.volume = self.player.volume
     

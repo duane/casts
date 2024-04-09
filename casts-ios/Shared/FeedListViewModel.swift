@@ -20,18 +20,6 @@ final class FeedListViewModel: ObservableObject {
                 fatalError("could not call into casts server: \(err)")
             }
         }
-//        let query = Casts.FetchFeedsQuery(streamId: playApp.STREAM_ID.uuidString)
-//        let subscription = Casts.WatchFeedsSubscription(streamId: playApp.STREAM_ID.uuidString)
-//        let subscribed = EmbeddedClient.shared.apollo.subscribe(subscription: subscription) { result in
-//            do {
-//                let data = try result.get().data
-//                DispatchQueue.main.async {
-//                    self.feeds = data?.watchFeeds ?? []
-//                }
-//            } catch {
-//                fatalError("could not call into gql server: \(error)")
-//            }
-//        }
     }
     
     init() {

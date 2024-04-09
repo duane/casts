@@ -17,7 +17,7 @@ struct playApp: App {
     #if os(iOS)
     var body: some Scene {
         WindowGroup {
-            Text("Hello, world")
+            ContentView()
         }
     }
     #endif
@@ -39,17 +39,22 @@ struct playApp: App {
 
 #if os(iOS)
 class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject {
-    static private(set) var client: GrpcInterface_CastsNIOClient! = nil
+    static private(set) var _client: GrpcInterface_CastsNIOClient? = nil
     
-    func applicationDidFinishLaunching(_ aNotification: Notification) {
-        let group = PlatformSupport.makeEventLoopGroup(loopCount: 1)
-        var logger = Logger(label: "gRPC", factory: StreamLogHandler.standardOutput(label:))
-        logger.logLevel = .info
-        let channel = ClientConnection
-            .insecure(group: group)
-            .withBackgroundActivityLogger(logger)
-            .connect(host: "127.0.0.1", port: 5059)
-        AppDelegate.client = GrpcInterface_CastsNIOClient(channel: channel)
+    static var client: GrpcInterface_CastsNIOClient! {
+        get {
+            if self._client == nil {
+                let group = PlatformSupport.makeEventLoopGroup(loopCount: 1)
+                var logger = Logger(label: "gRPC", factory: StreamLogHandler.standardOutput(label:))
+                logger.logLevel = .info
+                let channel = ClientConnection
+                    .insecure(group: group)
+                    .withBackgroundActivityLogger(logger)
+                    .connect(host: "127.0.0.1", port: 8243)
+                self._client = GrpcInterface_CastsNIOClient(channel: channel)
+            }
+            return self._client!
+        }
     }
 }
 #endif

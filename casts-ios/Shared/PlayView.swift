@@ -23,10 +23,8 @@ struct PlayView: View {
     
     var body: some View {
         VStack {
-            if self.feed.logo != nil && self.feed.logo.url != "" && self.feed.logo.url != nil {
-#if os(iOS)
-                Image(uiImage: UIImage(contentsOfFile: Bundle.main.path(forResource: "sample", ofType: "jpg")!)!).resizable().scaledToFit()
-#endif
+            if self.feed.hasLogo && self.feed.logo.url != "" {
+                SquareImageView(feedId: UUID(uuidString: self.feed.feedID)!, url: URL(string: self.feed.logo.url)!)
             } else {
                 Image(systemName: "mic.circle").imageScale(.large).font(.system(size: 100))
             }
