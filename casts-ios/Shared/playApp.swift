@@ -65,20 +65,8 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let channel = ClientConnection
             .insecure(group: group)
             .withBackgroundActivityLogger(logger)
-            .connect(host: "127.0.0.1", port: 7392)
+            .connect(host: "127.0.0.1", port: 8243)
         AppDelegate.client = GrpcInterface_CastsNIOClient(channel: channel)
-        var request = GrpcInterface_ListFeedsRequest();
-        request.streamID="34c3c08d-0d55-4af4-a126-170c1380f07e";
-        _ = AppDelegate.client.listFeeds(request).response.always { result in
-            print("woah result is \(result)")
-            switch result {
-            case let .success(feeds):
-                let count = feeds.feeds.count
-                print("found \(count)")
-            case let .failure(err):
-                print("err: \(err)")
-            }
-        }
     }
 }
 #endif

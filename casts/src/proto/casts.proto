@@ -26,16 +26,16 @@ message Feed {
     repeated string authors = 3;
     string description = 4;
     Image logo = 5;
+    repeated Entry entries = 6;
 }
 
 message Image {
     string url = 1;
-    string rawUrl = 2;
-    string title = 3;
-    Link link = 4;
-    int32 width = 5;
-    int32 height = 6;
-    string description = 7;
+    string title = 2;
+    Link link = 3;
+    int32 width = 4;
+    int32 height = 5;
+    string description = 6;
 }
 
 message Entry {
@@ -50,8 +50,9 @@ message Entry {
 message MediaObject {
     string title = 1;
     repeated MediaContent content = 2;
-    repeated int32 duration = 3;
-    string description = 4;
+    int32 duration_secs = 3;
+    int32 duration_nsecs = 4;
+    string description = 5;
 }
 
 message MediaContent {

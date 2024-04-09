@@ -4,16 +4,16 @@ import SwiftUI
 
 
 struct FeedDetailView: View {
-    var feed: DummyFeed
+    var feed: GrpcInterface_Feed
     @State var isShowingDetailView: Bool = false
 
     var body: some View {
         VStack {
-            if let logoUrl = feed.logo?.url {
-                SquareImageView(feedId: UUID(uuidString: feed.feedId)!, url:URL(string:logoUrl)!)
+            if feed.hasLogo {
+                SquareImageView(feedId: UUID(uuidString: feed.feedID)!, url:URL(string:feed.logo.url)!)
             }
             Text(feed.title)
-            Text(feed.description)
+            Text(feed.description_p)
             List(feed.entries, id: \.guid) { entry in
                 NavigationLink(entry.title, destination: PlayView(feed: feed, entry: entry))
             }.navigationTitle(feed.title)

@@ -11,8 +11,9 @@ use casts::{
     events::FeedAggregateEvent,
     grpc::Grpc2Store,
     grpc_interface::{
-        casts_server::CastsServer, Feed as GrpcFeed, Feeds as GrpcFeeds, GetFeedRequest,
-        ListFeedsRequest,
+        casts_server::CastsServer, Content as GrpcContent, Entry as GrpcEntry, Feed as GrpcFeed,
+        Feeds as GrpcFeeds, GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListFeedsRequest,
+        MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject,
     },
     util::aretry3,
 };
@@ -24,8 +25,8 @@ use commit_store::Client as GrpcClient;
 // use tokio_stream::{Stream, StreamExt};
 use anyhow::Result;
 use futures::lock::Mutex;
-use immutable_feed::Feed;
-use tonic::{transport::Server, Request, Response, Status};
+use immutable_feed::{Content, Entry, Feed, Image, Link, MediaContent, MediaObject};
+use tonic::{client::Grpc, transport::Server, Request, Response, Status};
 use uuid::Uuid;
 
 pub struct CastsImpl {
@@ -100,7 +101,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = ([127, 0, 0, 1], 8243).into();
 
     let commit_store_addr =
-        env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
+        env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:7392".to_string());
     log::info!("Connecting to commit store at {}", commit_store_addr);
 
     let grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
@@ -123,13 +124,94 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 // Conversion stuff
 
+fn media_content_to_grpc_media_content(media_content: MediaContent) -> GrpcMediaContent {
+    GrpcMediaContent {
+        url: media_content.url.map(|s| s.to_string()).unwrap_or_default(),
+        content_type: media_content.content_type.unwrap_or_default(),
+        width: media_content.width.map(|i| i as i32).unwrap_or_default(),
+        height: media_content.height.map(|i| i as i32).unwrap_or_default(),
+        size: media_content.size.map(|i| i as i32).unwrap_or_default(),
+    }
+}
+
+fn media_object_to_grpc_media_object(media_object: MediaObject) -> GrpcMediaObject {
+    GrpcMediaObject {
+        title: media_object.title.unwrap_or_default(),
+        content: media_object
+            .content
+            .into_iter()
+            .map(media_content_to_grpc_media_content)
+            .collect(),
+        duration_secs: media_object
+            .duration
+            .map(|i| i.0 as i32)
+            .unwrap_or_default(),
+        duration_nsecs: media_object
+            .duration
+            .map(|i| i.1 as i32)
+            .unwrap_or_default(),
+        description: media_object.description.unwrap_or_default(),
+    }
+}
+
+fn link_to_grpc_link(link: Link) -> GrpcLink {
+    GrpcLink {
+        title: link.title.unwrap_or_default(),
+        href: link.href,
+        href_lang: link.href_lang.unwrap_or_default(),
+        length: link.length.map(|i| i as i32).unwrap_or_default(),
+        media_type: link.media_type.unwrap_or_default(),
+        rel: link.rel.unwrap_or_default(),
+    }
+}
+
+fn image_to_grpc_image(image: Image) -> GrpcImage {
+    GrpcImage {
+        title: image.title.unwrap_or_default(),
+        url: image.raw_url,
+        link: image.link.map(link_to_grpc_link),
+        width: image.width.map(|w| w as i32).unwrap_or_default(),
+        height: image.height.map(|h| h as i32).unwrap_or_default(),
+        description: image.description.unwrap_or_default(),
+    }
+}
+
+fn content_to_grpc_content(content: Content) -> GrpcContent {
+    GrpcContent {
+        body: content.body.unwrap_or_default(),
+        content_type: content.content_type,
+        length: content.length.map(|i| i as i32).unwrap_or_default(),
+        src: content.src.map(link_to_grpc_link),
+    }
+}
+
+fn entry_to_grpc_entry(entry: Entry) -> GrpcEntry {
+    GrpcEntry {
+        guid: entry.guid,
+        title: entry.title.unwrap_or_default(),
+        summary: entry.summary.unwrap_or_default(),
+        links: entry.links.into_iter().map(link_to_grpc_link).collect(),
+        media: entry
+            .media
+            .into_iter()
+            .map(media_object_to_grpc_media_object)
+            .collect(),
+        content: entry.content.map(content_to_grpc_content),
+    }
+}
+
 fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
     GrpcFeed {
         feed_id: feed_id.to_string(),
         title: feed.metadata.title,
         authors: feed.metadata.authors,
         description: feed.metadata.description.unwrap_or_default(),
-        logo: None,
+        logo: feed.metadata.logo.map(image_to_grpc_image),
+        entries: feed
+            .entries
+            .into_iter()
+            .map(|entry| entry_to_grpc_entry(entry))
+            .collect(),
     }
 }
 

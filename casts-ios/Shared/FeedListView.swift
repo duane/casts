@@ -9,7 +9,7 @@ struct FeedListView: View {
     var body: some View {
         NavigationStack {
             VStack {
-                List(feedsModel.feeds, id: \.feedId) { feed in
+                List(feedsModel.feeds, id: \.feedID) { feed in
                     NavigationLink(feed.title, destination: FeedDetailView(feed: feed))
                 }
                 Button("+") {

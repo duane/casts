@@ -4,16 +4,16 @@ import SwiftUI
 import AVFoundation
 
 struct PlayView: View {
-    let feed: DummyFeed
-    let entry: DummyEntry
+    let feed: GrpcInterface_Feed
+    let entry: GrpcInterface_Entry
     
     private let formatter = DateFormatter()
     
     @State private var playing = false
     @ObservedObject private var state: PlayerState
     
-    init(feed: DummyFeed,
-         entry: DummyEntry) {
+    init(feed: GrpcInterface_Feed,
+         entry: GrpcInterface_Entry) {
         self.formatter.dateStyle = .long
         self.formatter.timeStyle = .none
         self.feed = feed
@@ -23,7 +23,7 @@ struct PlayView: View {
     
     var body: some View {
         VStack {
-            if self.feed.logo?.url != nil {
+            if self.feed.logo != nil && self.feed.logo.url != "" && self.feed.logo.url != nil {
 #if os(iOS)
                 Image(uiImage: UIImage(contentsOfFile: Bundle.main.path(forResource: "sample", ofType: "jpg")!)!).resizable().scaledToFit()
 #endif
@@ -82,8 +82,8 @@ struct PlayView: View {
                 RoutePicker().frame(maxWidth: 40, maxHeight: 40)
             }
         }.onAppear {
-            let mediaObjects: [DummyMediaObject] = entry.media;
-            let audioObject: DummyMediaObject? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
+            let mediaObjects: [GrpcInterface_MediaObject] = entry.media;
+            let audioObject: GrpcInterface_MediaObject? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
             let url = URL(string: (audioObject?.content[0].url)!)!
             self.state.prepareToPlay(url: url)
         }

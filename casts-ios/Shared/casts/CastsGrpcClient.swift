@@ -10,3 +10,7 @@ import Foundation
 class CastsGrpcClient {
     static let shared = CastsGrpcClient()
 }
+
+extension GrpcInterface_Feed: Identifiable {
+    public var id: String { feedID }
+}
