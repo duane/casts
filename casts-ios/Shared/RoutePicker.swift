@@ -10,7 +10,7 @@ import AVKit
 struct RoutePicker: UIViewRepresentable {
     func makeUIView(context: Context) -> UIView {
         let view = AVRoutePickerView();
-        view.isRoutePickerButtonBordered = false;
+//        view.isRoutePickerButtonBordered = false;
         return view;
     }
 

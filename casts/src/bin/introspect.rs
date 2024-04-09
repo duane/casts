@@ -6,6 +6,6 @@ fn main() {
     match std::env::args().nth(1).expect(USAGE).as_str() {
         "schema" => println!("{}", create_schema().as_schema_language()),
         "parser" => println!("{}", create_schema().as_parser_document()),
-        _ => unimplemented!("{}", USAGE),
+        _ => unimplemented!("unimplemented {}", USAGE),
     }
 }

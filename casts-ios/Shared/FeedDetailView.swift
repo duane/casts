@@ -1,10 +1,10 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import SwiftUI
-import Casts
+
 
 struct FeedDetailView: View {
-    var feed: Casts.WatchFeedsSubscription.Data.WatchFeed
+    var feed: DummyFeed
     @State var isShowingDetailView: Bool = false
 
     var body: some View {
@@ -15,7 +15,7 @@ struct FeedDetailView: View {
             Text(feed.title)
             Text(feed.description)
             List(feed.entries, id: \.guid) { entry in
-                NavigationLink(entry.title, destination: PlayView(feed: feed.fragments.feedMetadata, entry: entry.fragments.entryMetadata))
+                NavigationLink(entry.title, destination: PlayView(feed: feed, entry: entry))
             }.navigationTitle(feed.title)
         }
     }

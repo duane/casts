@@ -2,19 +2,18 @@
 
 import SwiftUI
 import AVFoundation
-import Casts
 
 struct PlayView: View {
-    let feed: Casts.FeedMetadata!
-    let entry: Casts.EntryMetadata!
+    let feed: DummyFeed
+    let entry: DummyEntry
     
     private let formatter = DateFormatter()
     
     @State private var playing = false
     @ObservedObject private var state: PlayerState
     
-    init(feed: Casts.FeedMetadata,
-         entry: Casts.EntryMetadata) {
+    init(feed: DummyFeed,
+         entry: DummyEntry) {
         self.formatter.dateStyle = .long
         self.formatter.timeStyle = .none
         self.feed = feed
@@ -83,8 +82,8 @@ struct PlayView: View {
                 RoutePicker().frame(maxWidth: 40, maxHeight: 40)
             }
         }.onAppear {
-            let mediaObjects: [Casts.EntryMetadata.Medium] = entry.media;
-            let audioObject: Casts.EntryMetadata.Medium? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
+            let mediaObjects: [DummyMediaObject] = entry.media;
+            let audioObject: DummyMediaObject? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
             let url = URL(string: (audioObject?.content[0].url)!)!
             self.state.prepareToPlay(url: url)
         }

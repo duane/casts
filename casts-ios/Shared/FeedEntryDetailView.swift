@@ -1,10 +1,9 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
 import SwiftUI
-import Casts
 
 struct FeedEntryDetailView: View {
-    var entry: Casts.FetchFeedsQuery.Data.Feed.Entry!
+    var entry: DummyEntry
     
     var body: some View {
         Text(entry.title).navigationTitle(entry.title)

@@ -157,7 +157,7 @@ impl GraphQLInputValue {
                 }
                 InputValue::Object(buf)
             }
-            _ => todo!("unimplemented"),
+            _ => unimplemented!("unimplemented input value"),
         }
     }
 }

@@ -366,7 +366,7 @@ impl Subscription {
                 .into_iter()
                 .map(|(feed_id, immutable_feed)| Feed::with_feed_id(immutable_feed, feed_id))
                 .collect()),
-            Err(_) => unimplemented!(),
+            Err(_) => unimplemented!("no error handling yet"),
         });
         Box::pin(gql_stream)
     }

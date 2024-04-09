@@ -81,7 +81,7 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
         &self,
         _request: Request<GetFeedRequest>,
     ) -> Result<Response<GrpcFeed>, Status> {
-        unimplemented!()
+        unimplemented!("get_feed");
     }
 }
 
