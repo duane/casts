@@ -20,6 +20,9 @@ pub struct FeedAggregate {
 
     /// The feeds associated with the aggregate by feed id.
     pub feeds_by_feed_id: HashMap<Uuid, Feed>,
+
+    /// Playtime
+    pub playtime_by_feed_and_guid: HashMap<(Uuid, String), (i64, i32)>,
 }
 
 impl FeedAggregate {
@@ -35,6 +38,7 @@ impl Aggregate for FeedAggregate {
             stream_id: uuid,
             version: 0,
             feeds_by_feed_id: HashMap::new(),
+            playtime_by_feed_and_guid: HashMap::new(),
         }
     }
 
@@ -100,6 +104,17 @@ impl EventApplicable for FeedAggregate {
                         changes.len()
                     );
                     *feed = after;
+                }
+                FeedAggregateEvent::FeedEntryListenedTo {
+                    stream_id: _,
+                    feed_id,
+                    entry_guid,
+                    elapsed_secs,
+                    elapsed_nanos,
+                } => {
+                    applied
+                        .playtime_by_feed_and_guid
+                        .insert((feed_id, entry_guid), (elapsed_secs, elapsed_nanos));
                 }
             }
         }

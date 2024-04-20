@@ -436,6 +436,12 @@ impl Entry {
             mutations.push(EntryMutation::ReplacedMedia(other.media.to_owned()));
         }
 
+        if self.published_at != other.published_at {
+            mutations.push(EntryMutation::ReplacedPublished(
+                other.published_at.to_owned(),
+            ));
+        }
+
         mutations
     }
 
@@ -448,6 +454,9 @@ impl Entry {
                 EntryMutation::ReplacedLinks(new_links) => applied.links = new_links,
                 EntryMutation::ReplacedSummary(new_summary) => applied.summary = new_summary,
                 EntryMutation::ReplacedTitle(new_title) => applied.title = new_title,
+                EntryMutation::ReplacedPublished(new_published) => {
+                    applied.published_at = new_published
+                }
                 EntryMutation::ReplacedUrl(new_url) => {
                     applied.url = new_url.expect("failed to parse URL")
                 }
@@ -550,6 +559,9 @@ pub enum EntryMutation {
 
     /// Stores the new media vector
     ReplacedMedia(Vec<MediaObject>),
+
+    /// Stores the new published date
+    ReplacedPublished(Option<DateTime<Utc>>),
 
     /// Stores the new links.
     ReplacedLinks(Vec<Link>),
