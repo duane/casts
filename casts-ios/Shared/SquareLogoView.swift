@@ -10,25 +10,43 @@ struct SquareImageView: View {
     #if os(macOS)
     @State var image: NSImage? = nil
     #endif
+    
+    @State var appeared: Bool = false
 
     var feedId: UUID
     var url: URL
 
     var body: some View {
         VStack {
-            if image != nil {
+            if self.image == nil {
+                Image(systemName: "antenna.radiowaves.left.and.right.circle.fill")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+            } else {
                 #if os(iOS)
-                Image(uiImage: FeedLogoManager.shared.image(feedId: feedId, url: url)).resizable().aspectRatio(contentMode: .fill)
+                Image(uiImage: self.image!)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                 #endif
                 #if os(macOS)
-                Image(nsImage: FeedLogoManager.shared.image(feedId: feedId, url: url)).resizable().aspectRatio(contentMode: .fit)
+                Image(nsImage: self.image!)
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
                 #endif
-            } else {
-                Spacer()
             }
         }.onAppear {
-            ImageLoader.loadImage(withUrl: self.url) { image in
-                self.image = image
+            Task {
+                var components = URLComponents(url: self.url, resolvingAgainstBaseURL: true)
+                if components != nil {
+                    components!.scheme = "https"
+                    let url = components!.url
+                    if url != nil {
+                        let data = await ImageLoader.loadImage(url: url!);
+                        if data != nil {
+                            self.image = NSImage(data: data!)
+                        }
+                    }
+                }
             }
         }
     }
