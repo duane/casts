@@ -18,8 +18,9 @@ url = { version = "*", features = ["serde"] }
 reqwest = "*"
 
 ## rss
-feed-rs = "*"
-quick-xml = "~0.30.0"
+
+feed-rs = { path = "/Users/duane/sandbox/feed-rs/feed-rs" }
+quick-xml = "~0.31.0"
 
 ## content handling
 htmlescape = "*"

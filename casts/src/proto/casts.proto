@@ -2,7 +2,7 @@
 
 syntax = "proto3";
 
-// import "google/protobuf/timestamp.proto";
+import "google/protobuf/timestamp.proto";
 
 package GrpcInterface;
 
@@ -45,6 +45,7 @@ message Entry {
     Content content = 4;
     repeated Link links = 5;
     repeated MediaObject media = 6;
+    google.protobuf.Timestamp published = 7;
 }
 
 message MediaObject {

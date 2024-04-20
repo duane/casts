@@ -3,22 +3,24 @@
 #[macro_use]
 extern crate log;
 
-use std::{env, sync::Arc};
+use chrono::{DateTime, Utc};
+use prost_types::Timestamp as GrpcTimestamp;
+use std::sync::Arc;
 
 use casts::{
     aggregate::FeedAggregate,
     applicable::EventApplicable,
     events::FeedAggregateEvent,
-    grpc::Grpc2Store,
     grpc_interface::{
         casts_server::CastsServer, Content as GrpcContent, Entry as GrpcEntry, Feed as GrpcFeed,
         Feeds as GrpcFeeds, GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListFeedsRequest,
         MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject,
     },
+    server::Grpc2Store,
     util::aretry3,
 };
-use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 
+use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::store::DispatchingAsyncReadWriteStore;
 use commit_store::Client as GrpcClient;
 // use futures::Stream;
@@ -26,7 +28,7 @@ use commit_store::Client as GrpcClient;
 use anyhow::Result;
 use futures::lock::Mutex;
 use immutable_feed::{Content, Entry, Feed, Image, Link, MediaContent, MediaObject};
-use tonic::{client::Grpc, transport::Server, Request, Response, Status};
+use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
 
 pub struct CastsImpl {
@@ -94,31 +96,31 @@ async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {
     ))
 }
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    pretty_env_logger::init();
+pub async fn serve() -> Result<()> {
+    let config = casts::config::ServerConfig::load()?;
 
-    let addr = ([127, 0, 0, 1], 8243).into();
-
-    let commit_store_addr =
-        env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:7392".to_string());
-    log::info!("Connecting to commit store at {}", commit_store_addr);
-
-    let grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
-        .await
-        .unwrap();
+    let grpc_client = aretry3(
+        || commit_store_connect(config.commit_store_addr.to_string()),
+        3,
+    )
+    .await?;
 
     let commit_store_impl = CastsImpl {
         backing_store: Arc::new(Mutex::new(Grpc2Store::Grpc(grpc_client))),
     };
-
-    info!("Started server at {:?}", addr);
+    info!("Started server at {:?}", config.listen);
     Server::builder()
         .add_service(CastsServer::new(commit_store_impl))
-        .serve(addr)
+        .serve(config.listen)
         .await?;
+    Ok(())
+}
 
-    info!("Server stopped.");
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    pretty_env_logger::init();
+
+    serve().await?;
     Ok(())
 }
 
@@ -196,30 +198,47 @@ fn entry_to_grpc_entry(entry: Entry) -> GrpcEntry {
             .into_iter()
             .map(media_object_to_grpc_media_object)
             .collect(),
+        published: entry.published_at.map(domain_to_grpc_ts),
         content: entry.content.map(content_to_grpc_content),
     }
 }
 
+fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
+    let seconds = datetime.timestamp();
+    let onanos_i64 = datetime.timestamp_nanos_opt().expect("cannot fetch nanos");
+    let nanos_i64 = onanos_i64 - seconds * 1_000_000_000;
+    let nanos = i32::try_from(nanos_i64).expect("nanos is too large to downcast to i32");
+    GrpcTimestamp { seconds, nanos }
+}
+
 fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
+    let mut entries: Vec<GrpcEntry> = feed
+        .entries
+        .into_iter()
+        .map(|entry| entry_to_grpc_entry(entry))
+        .collect();
+    entries.sort_by(|a, b| match (&a.published, &b.published) {
+        (Some(a_ts), Some(b_ts)) => b_ts.seconds.cmp(&a_ts.seconds),
+        (None, Some(_)) => std::cmp::Ordering::Less,
+        (Some(_), None) => std::cmp::Ordering::Greater,
+        (None, None) => std::cmp::Ordering::Equal,
+    });
     GrpcFeed {
         feed_id: feed_id.to_string(),
         title: feed.metadata.title,
         authors: feed.metadata.authors,
         description: feed.metadata.description.unwrap_or_default(),
         logo: feed.metadata.logo.map(image_to_grpc_image),
-        entries: feed
-            .entries
-            .into_iter()
-            .map(|entry| entry_to_grpc_entry(entry))
-            .collect(),
+        entries,
     }
 }
 
 fn aggregate_to_feeds(aggregate: FeedAggregate) -> GrpcFeeds {
-    let feeds = aggregate
+    let mut feeds: Vec<GrpcFeed> = aggregate
         .feeds_by_feed_id
         .into_iter()
         .map(|(feed_id, feed)| feed_to_grpc_feed(feed, feed_id))
         .collect();
+    feeds.sort_by(|a, b| a.title.cmp(&b.title));
     GrpcFeeds { feeds }
 }

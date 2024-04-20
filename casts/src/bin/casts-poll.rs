@@ -24,9 +24,10 @@ async fn main() -> Result<()> {
     let min_version = 0;
     let max_version = i64::MAX;
 
-    let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:7392")
-        .await
-        .expect("Failed to connect to backend commit store");
+    let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
+        CommitStoreClient::connect("http://127.0.0.1:7392")
+            .await
+            .expect("Failed to connect to backend commit store");
 
     let commits: Commits = grpc_client
         .get_stream_range(StreamCursor {
