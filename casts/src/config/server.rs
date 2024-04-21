@@ -9,6 +9,7 @@ use std::{
 };
 use url::Url;
 
+#[derive(Debug)]
 /// Define where the server listens and where it sources its state.
 pub struct ServerConfig {
     /// The backing commit store address.
@@ -24,7 +25,7 @@ pub struct ServerConfig {
 impl ServerConfig {
     /// Load the server configuration from the environment and the config file.
     pub fn load() -> Result<ServerConfig> {
-        ServerConfigBuilder::load().map(|builder| builder.build())
+        ServerConfigBuilder::load().and_then(|builder| builder.build())
     }
 }
 
@@ -54,13 +55,12 @@ impl ServerConfigBuilder {
         Ok(builder)
     }
 
-    pub fn build(self) -> ServerConfig {
+    pub fn build(self) -> Result<ServerConfig> {
         let server_url =
             Url::from_str(&std::env::var("COMMIT_STORE_SERVER").unwrap_or_else(|_| {
                 self.commit_store_endpoint
                     .unwrap_or_else(|| DEFAULT_COMMIT_STORE_URL.to_string())
-            }))
-            .unwrap();
+            }))?;
 
         let listen_port = std::env::var("CASTS_PORT")
             .map(|s| s.parse().unwrap())
@@ -82,10 +82,10 @@ impl ServerConfigBuilder {
         let tls_key_path = std::env::var("CASTS_TLS_KEY_PATH")
             .ok()
             .or_else(move || self.tls_key_path);
-        match (tls_cert_path, tls_key_path) {
+        let server_cfg = match (tls_cert_path, tls_key_path) {
             (Some(cert_path), Some(key_path)) => {
-                let cert = std::fs::read_to_string(cert_path).unwrap();
-                let key = std::fs::read_to_string(key_path).unwrap();
+                let cert = std::fs::read_to_string(cert_path)?;
+                let key = std::fs::read_to_string(key_path)?;
                 let tls_identity = Some((cert, key));
                 ServerConfig {
                     commit_store_endpoint: server_url,
@@ -98,6 +98,7 @@ impl ServerConfigBuilder {
                 listen,
                 tls_identity: None,
             },
-        }
+        };
+        Ok(server_cfg)
     }
 }

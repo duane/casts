@@ -8,6 +8,7 @@ use uuid::Uuid;
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
+    let config = commit_store::ClientConfigBuilder::default();
     let stream_id = Uuid::parse_str(&std::env::args().nth(1).expect("USAGE: read STREAM_ID"))
         .unwrap()
         .to_string();
@@ -16,7 +17,7 @@ async fn main() {
 
     let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:7392")
         .await
-        .expect("Failed to connect to backend commit store");
+        .expect("bruh I swear this was working a second ago");
 
     let commits: Commits = grpc_client
         .get_stream_range(StreamCursor {

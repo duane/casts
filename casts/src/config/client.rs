@@ -1,4 +1,4 @@
-use super::DEFAULT_COMMIT_STORE_URL;
+use crate::config::DEFAULT_LISTEN_ADDR;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -28,7 +28,7 @@ impl ClientConfigBuilder {
 
     /// Construct a client configuration from the parameters passed to the builder.
     pub fn build(self) -> Result<ClientConfig> {
-        let url = Url::parse(&self.url.unwrap_or(DEFAULT_COMMIT_STORE_URL.to_string()))?;
+        let url = Url::parse(&self.url.unwrap_or(DEFAULT_LISTEN_ADDR.to_string()))?;
         Ok(ClientConfig {
             url,
             ca_cert: self.ca_cert,

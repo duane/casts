@@ -1,6 +1,6 @@
 use anyhow::Result;
 use casts::graphql::{create_schema, GraphQLStore, Mutation, Query, Subscription};
-use casts::util::aretry3;
+use casts::retry_future_n_times;
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::Client;
 use hyper::{service::service_fn, Method, Response, StatusCode};
@@ -11,14 +11,6 @@ lazy_static::lazy_static! {
     static ref ROOT_NODE: Arc<RootNode<'static, Query, Mutation, Subscription, DefaultScalarValue>> = Arc::new(create_schema());
 }
 
-async fn commit_store_connect(COMMIT_STORE_SERVER: String) -> Result<Client> {
-    Ok(Client::new(
-        CommitStoreClient::connect(COMMIT_STORE_SERVER)
-            .await
-            .expect("Failed to connect to backend commit store"),
-    ))
-}
-
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
@@ -26,10 +18,10 @@ async fn main() {
     let addr = ([127, 0, 0, 1], 8243).into();
 
     let COMMIT_STORE_SERVER =
-        env::var("COMMIT_STORE_SERVER").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
+        env::var("COMMIT_STORE_SERVER").unwrap_or_else(|_| "http://[127.0.0.1]:5059".to_string());
     log::info!("Connecting to commit store at {}", COMMIT_STORE_SERVER);
 
-    let grpc_client = aretry3(|| commit_store_connect(COMMIT_STORE_SERVER.clone()), 3)
+    let grpc_client = retry_future_n_times(|| commit_store_connect(COMMIT_STORE_SERVER.clone()), 3)
         .await
         .unwrap();
 

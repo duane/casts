@@ -7,7 +7,6 @@ pub mod aggregate;
 pub mod applicable;
 pub mod commands;
 pub mod events;
-pub mod util;
 
 #[cfg(feature = "grpc")]
 pub mod grpc;

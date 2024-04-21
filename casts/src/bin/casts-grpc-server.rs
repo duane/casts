@@ -5,7 +5,8 @@ extern crate log;
 
 use chrono::{DateTime, Utc};
 use prost_types::Timestamp as GrpcTimestamp;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
+use url::Url;
 
 use casts::{
     aggregate::FeedAggregate,
@@ -17,12 +18,10 @@ use casts::{
         Feeds as GrpcFeeds, GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListFeedsRequest,
         MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject,
     },
-    retry_future_n_times as aretry3,
 };
 
-use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
 use commit_store::store::DispatchingAsyncReadWriteStore;
-use commit_store::Client as GrpcClient;
+use commit_store::{grpc_interface::commit_store_client::CommitStoreClient, Client};
 // use futures::Stream;
 // use tokio_stream::{Stream, StreamExt};
 use anyhow::Result;
@@ -75,6 +74,7 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
         let aggregate = hydrate_aggregate(client, &request.get_ref().stream_id).await;
         println!("aggregate");
         let feed_result = aggregate_to_feeds(aggregate);
+
         println!("returning result...");
 
         Ok(Response::new(feed_result))
@@ -88,33 +88,51 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
     }
 }
 
-async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {
-    Ok(GrpcClient::new(
-        CommitStoreClient::connect(commit_store_addr)
-            .await
-            .expect("Failed to connect to backend commit store"),
-    ))
-}
+// const CA_PEM: &str = include_str!("../../data/tls/ca.pem");
 
 pub async fn serve() -> Result<()> {
-    let server_cfg = casts::config::ServerConfigBuilder::default().build();
+    let server_config = casts::config::ServerConfigBuilder::default().build()?;
 
     let commit_store_cfg = commit_store::config::ClientConfigBuilder::default().build();
 
-    let client = aretry3(
-        || commit_store_connect(commit_store_cfg.addr.to_string()),
-        3,
-    )
-    .await?;
+    println!("Connecting to address {:?}", commit_store_cfg.addr);
+
+    log::info!("Connecting to commit store at {}", commit_store_cfg.addr);
+    let commit_store_addr: Url = commit_store_cfg.addr;
+
+    let endpoint = tonic::transport::Uri::from_str(&commit_store_addr.clone().to_string()).unwrap();
+
+    let client: CommitStoreClient<tonic::transport::Channel> =
+        CommitStoreClient::connect(endpoint).await?;
+
+    // let addr = hyper::Uri::from_str(&commit_store_cfg.addr.as_str()).unwrap();
+    // let host: String = addr.host().unwrap().to_string();
+    // let tls_config: ClientTlsConfig = ClientTlsConfig::new()
+    // .ca_certificate(Certificate::from_pem(CA_PEM))
+    // .domain_name(host);
+    // let channel = tonic::transport::Channel::from_shared(addr.to_string())
+    // .unwrap()
+    // .tls_config(tls_config.clone())
+    // .unwrap()
+    // .connect()
+    // .await
+    // .unwrap();
+    let grpc_client = Client::new(client);
 
     let commit_store_impl = CastsImpl {
-        backing_store: Arc::new(Mutex::new(Grpc2Store::Grpc(client))),
+        backing_store: Arc::new(Mutex::new(Grpc2Store::Grpc(grpc_client))),
     };
 
-    info!("Started server at {:?}", server_cfg.listen);
-    Server::builder()
-        .add_service(CastsServer::new(commit_store_impl))
-        .serve(server_cfg.listen)
+    let service = CastsServer::new(commit_store_impl);
+
+    // println!("tls identity is {:?}", tls_config);
+
+    info!("Started server at {:?}", server_config.listen);
+    let mut builder = Server::builder();
+
+    builder
+        .add_service(service)
+        .serve(server_config.listen)
         .await?;
     Ok(())
 }
@@ -124,6 +142,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     pretty_env_logger::init();
 
     serve().await?;
+
     Ok(())
 }
 
@@ -237,11 +256,10 @@ fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
 }
 
 fn aggregate_to_feeds(aggregate: FeedAggregate) -> GrpcFeeds {
-    let mut feeds: Vec<GrpcFeed> = aggregate
-        .feeds_by_feed_id
-        .into_iter()
-        .map(|(feed_id, feed)| feed_to_grpc_feed(feed, feed_id))
-        .collect();
-    feeds.sort_by(|a, b| a.title.cmp(&b.title));
+    let mut feeds: Vec<GrpcFeed> = Vec::new();
+    for feed in aggregate.feeds_by_feed_id.values() {
+        let feed_id = uuid::Uuid::new_v4();
+        feeds.push(feed_to_grpc_feed(feed.clone(), feed_id));
+    }
     GrpcFeeds { feeds }
 }
