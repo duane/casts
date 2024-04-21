@@ -2,8 +2,6 @@
 
 extern crate url;
 
-use std::io::BufRead;
-
 use feed_rs::parser::parse;
 use url::Url;
 
@@ -18,7 +16,7 @@ pub struct Feed {
 
 pub fn list() {}
 // const PODCAST: &str = include_str!("../../MajorityReport");
-const PODCAST: &str = include_str!("../../history-of-rome");
+const PODCAST: &str = include_str!("../../../data/feeds/history-of-rome.xml");
 
 fn main() {
     let feed = parse(PODCAST.as_bytes()).unwrap();

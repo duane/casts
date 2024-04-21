@@ -39,6 +39,22 @@ pub enum FeedAggregateEvent {
         /// The changes that occurred to the feed since last observation.
         changes: Vec<FeedMutation>,
     },
+    FeedEntryListenedTo {
+        /// The stream in which the feed updates were seen.
+        stream_id: Uuid,
+
+        /// The feed that changed.
+        feed_id: Uuid,
+
+        /// The entry that was listened to.
+        entry_guid: String,
+
+        /// The time the entry was listened to.
+        elapsed_seconds: i64,
+
+        /// The playtime of the entry.
+        elapsed_nanos: i32,
+    },
 }
 
 impl Event for FeedAggregateEvent {}

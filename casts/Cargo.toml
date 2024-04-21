@@ -15,10 +15,10 @@ server = [
 
 default = ["server", "grpc"]
 
-[[bin]]
-name = "casts-grpc-client"
-path = "src/bin/casts-grpc-client.rs"
-required-features = ["grpc"]
+# [[bin]]
+# name = "casts-grpc-client"
+# path = "src/bin/casts-grpc-client.rs"
+# required-features = ["grpc"]
 
 [[bin]]
 name = "casts-grpc-server"

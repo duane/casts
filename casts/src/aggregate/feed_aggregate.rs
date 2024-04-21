@@ -22,7 +22,7 @@ pub struct FeedAggregate {
     pub feeds_by_feed_id: HashMap<Uuid, Feed>,
 
     /// Playtime
-    pub playtime_by_feed_and_guid: HashMap<(Uuid, String), (i64, i32)>,
+    pub playtime_by_feed_and_guid: HashMap<(String, String), (i64, i32)>,
 }
 
 impl FeedAggregate {
@@ -109,12 +109,13 @@ impl EventApplicable for FeedAggregate {
                     stream_id: _,
                     feed_id,
                     entry_guid,
-                    elapsed_secs,
+                    elapsed_seconds,
                     elapsed_nanos,
                 } => {
-                    applied
-                        .playtime_by_feed_and_guid
-                        .insert((feed_id, entry_guid), (elapsed_secs, elapsed_nanos));
+                    applied.playtime_by_feed_and_guid.insert(
+                        (feed_id.to_string(), entry_guid),
+                        (elapsed_seconds, elapsed_nanos),
+                    );
                 }
             }
         }

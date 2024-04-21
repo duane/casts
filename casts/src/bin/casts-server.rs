@@ -11,9 +11,9 @@ lazy_static::lazy_static! {
     static ref ROOT_NODE: Arc<RootNode<'static, Query, Mutation, Subscription, DefaultScalarValue>> = Arc::new(create_schema());
 }
 
-async fn commit_store_connect(commit_store_addr: String) -> Result<Client> {
+async fn commit_store_connect(COMMIT_STORE_SERVER: String) -> Result<Client> {
     Ok(Client::new(
-        CommitStoreClient::connect(commit_store_addr)
+        CommitStoreClient::connect(COMMIT_STORE_SERVER)
             .await
             .expect("Failed to connect to backend commit store"),
     ))
@@ -25,11 +25,11 @@ async fn main() {
 
     let addr = ([127, 0, 0, 1], 8243).into();
 
-    let commit_store_addr =
-        env::var("COMMIT_STORE_ADDR").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
-    log::info!("Connecting to commit store at {}", commit_store_addr);
+    let COMMIT_STORE_SERVER =
+        env::var("COMMIT_STORE_SERVER").unwrap_or_else(|_| "http://127.0.0.1:5059".to_string());
+    log::info!("Connecting to commit store at {}", COMMIT_STORE_SERVER);
 
-    let grpc_client = aretry3(|| commit_store_connect(commit_store_addr.clone()), 3)
+    let grpc_client = aretry3(|| commit_store_connect(COMMIT_STORE_SERVER.clone()), 3)
         .await
         .unwrap();
 

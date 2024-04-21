@@ -11,13 +11,13 @@ use casts::{
     aggregate::FeedAggregate,
     applicable::EventApplicable,
     events::FeedAggregateEvent,
+    grpc::Grpc2Store,
     grpc_interface::{
         casts_server::CastsServer, Content as GrpcContent, Entry as GrpcEntry, Feed as GrpcFeed,
         Feeds as GrpcFeeds, GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListFeedsRequest,
         MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject,
     },
-    server::Grpc2Store,
-    util::aretry3,
+    retry_future_n_times as aretry3,
 };
 
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
@@ -97,21 +97,24 @@ async fn commit_store_connect(commit_store_addr: String) -> Result<GrpcClient> {
 }
 
 pub async fn serve() -> Result<()> {
-    let config = casts::config::ServerConfig::load()?;
+    let server_cfg = casts::config::ServerConfigBuilder::default().build();
 
-    let grpc_client = aretry3(
-        || commit_store_connect(config.commit_store_addr.to_string()),
+    let commit_store_cfg = commit_store::config::ClientConfigBuilder::default().build();
+
+    let client = aretry3(
+        || commit_store_connect(commit_store_cfg.addr.to_string()),
         3,
     )
     .await?;
 
     let commit_store_impl = CastsImpl {
-        backing_store: Arc::new(Mutex::new(Grpc2Store::Grpc(grpc_client))),
+        backing_store: Arc::new(Mutex::new(Grpc2Store::Grpc(client))),
     };
-    info!("Started server at {:?}", config.listen);
+
+    info!("Started server at {:?}", server_cfg.listen);
     Server::builder()
         .add_service(CastsServer::new(commit_store_impl))
-        .serve(config.listen)
+        .serve(server_cfg.listen)
         .await?;
     Ok(())
 }
