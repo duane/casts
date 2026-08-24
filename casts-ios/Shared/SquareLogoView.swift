@@ -43,7 +43,12 @@ struct SquareImageView: View {
                     if url != nil {
                         let data = await ImageLoader.loadImage(url: url!);
                         if data != nil {
+                            #if os(iOS)
+                            self.image = UIImage(data: data!)
+                            #endif
+                            #if os(macOS)
                             self.image = NSImage(data: data!)
+                            #endif
                         }
                     }
                 }

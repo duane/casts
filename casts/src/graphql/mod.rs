@@ -4,9 +4,8 @@ use std::pin::Pin;
 
 use chrono::Utc;
 use commit_store::commit::{CommitAttempt, CommitMetadata, StreamMetadata};
-use commit_store::dispatch::DispatchedStore;
-use commit_store::sqlite::SqliteStoreAsync;
-use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::dispatch::{DispatchedStore, DispatchingAsyncReadWriteStore};
+use commit_store::sqlite::SqliteStore;
 use commit_store::Client as GrpcClient;
 use futures::stream::StreamExt;
 use futures_core::Stream;
@@ -26,7 +25,7 @@ use crate::{
 
 #[derive(Clone, Debug)]
 pub enum GraphQLStore {
-    Sqlite(DispatchedStore<SqliteStoreAsync>),
+    Sqlite(DispatchedStore<SqliteStore>),
     // Postgres(DispatchedStore<PostgresStoreAsync>),
     Grpc(GrpcClient),
 }
@@ -251,26 +250,36 @@ impl Feed {
 
 pub struct Mutation;
 
+/// One page of commits per round trip; the server clamps to its own maximum
+/// page size anyway, so this only bounds client-side memory.
+const HYDRATE_PAGE_SIZE: i64 = 1000;
+
 async fn hydrate_aggregate(
     client: &mut dyn DispatchingAsyncReadWriteStore,
     stream_id: Uuid,
 ) -> FeedAggregate {
     let mut aggregate = FeedAggregate::new();
-    println!("empty aggregate");
-    let commits = client
-        .get_stream_range(stream_id, 0, i64::MAX)
-        .await
-        .expect("failed to make upstream grpc call");
-    println!("commits in hand");
-    for commit in commits.into_iter() {
-        let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
-            .expect("unable to deserialize events to FeedAggregateEvent");
-        for event in events.into_iter() {
-            aggregate = aggregate.apply(event);
-            println!("applied event");
+    let mut cursor = Some(commit_store::store::ScanStreamCursor {
+        stream_id,
+        min_version: 0,
+        max_version: None,
+        reverse: false,
+    });
+    while let Some(current) = cursor {
+        let (commits, next) = client
+            .get_stream_range(current, HYDRATE_PAGE_SIZE)
+            .await
+            .expect("failed to make upstream grpc call");
+        for commit in commits {
+            let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
+                .expect("unable to deserialize events to FeedAggregateEvent");
+            // One commit advances the aggregate by exactly one version, no
+            // matter how many events it carries; `apply_many` is the only
+            // application path so every hydration agrees on the version.
+            aggregate = aggregate.apply_many(events);
         }
+        cursor = next;
     }
-    println!("returning aggregate");
     aggregate
 }
 
@@ -282,11 +291,16 @@ impl Mutation {
         url: Url,
         context: &GraphQLStore,
     ) -> FieldResult<Uuid> {
-        println!("add feed");
+        // Fetch and parse before issuing the command; command application
+        // itself is pure validation and performs no I/O.
+        let feed = immutable_feed::fetch_feed(&url)
+            .await
+            .map_err(|err| FieldError::from(format!("failed to fetch feed: {err}")))?;
         let command = FeedAggregateCommand::AddFeed {
             stream_id,
             feed_id,
             url,
+            feed,
         };
         let mut mutable_ctx = context.clone();
         let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();
@@ -295,7 +309,7 @@ impl Mutation {
         let events = command
             .async_apply(&aggregate)
             .await
-            .expect("failed to execute addFeed command");
+            .map_err(|err| FieldError::from(format!("addFeed was rejected: {err}")))?;
         let events_count = events.len() as i64;
         let events: serde_json::Value =
             serde_json::to_value(events).expect("could not serialize events to json");
@@ -316,12 +330,10 @@ impl Mutation {
             events_count,
         };
 
-        println!("commit attempt: {:?}", commit_attempt);
-
         let committed = client
             .commit(&commit_attempt)
             .await
-            .expect("failed to commit addFeed event");
+            .map_err(|err| FieldError::from(format!("failed to commit addFeed event: {err}")))?;
 
         FieldResult::Ok(committed.commit_metadata.commit_id)
     }
@@ -332,18 +344,14 @@ pub struct Query;
 #[graphql_object(context = GraphQLStore)]
 impl Query {
     async fn feeds(stream_id: Uuid, context: &GraphQLStore) -> Vec<Feed> {
-        println!("inside feed accessor");
         let mut mutable_ctx = context.clone();
         let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();
-        println!("client");
         let aggregate = hydrate_aggregate(client, stream_id).await;
-        println!("aggregate");
         let feed_result = aggregate
             .feeds_by_feed_id
             .into_iter()
             .map(|(feed_id, feed)| Feed::with_feed_id(feed, feed_id))
             .collect();
-        println!("returning result...");
         feed_result
     }
 }
@@ -366,7 +374,9 @@ impl Subscription {
                 .into_iter()
                 .map(|(feed_id, immutable_feed)| Feed::with_feed_id(immutable_feed, feed_id))
                 .collect()),
-            Err(_) => unimplemented!("no error handling yet"),
+            Err(err) => Err(FieldError::from(format!(
+                "subscription stream error: {err}"
+            ))),
         });
         Box::pin(gql_stream)
     }
@@ -375,9 +385,13 @@ impl Subscription {
 pub type Schema = RootNode<'static, Query, Mutation, Subscription>;
 
 pub async fn create_grpc_store() -> GraphQLStore {
+    // One config mechanism for every commit-store client: the address comes
+    // from COMMIT_STORE_ADDR (default http://localhost:7392), not a literal.
+    let commit_store_cfg = commit_store::config::ClientConfigBuilder::default().build();
     let grpc_client =
         commit_store::grpc_interface::commit_store_client::CommitStoreClient::connect(
-            "http://127.0.0.1:5059",
+            tonic::transport::Uri::try_from(commit_store_cfg.addr.clone())
+                .expect("COMMIT_STORE_ADDR is not a valid URI"),
         )
         .await
         .expect("Failed to connect to backend commit store");
@@ -387,7 +401,7 @@ pub async fn create_grpc_store() -> GraphQLStore {
 
 pub fn create_sqlite_store() -> GraphQLStore {
     GraphQLStore::Sqlite(DispatchedStore::new(
-        SqliteStoreAsync::with_new_in_memory_connection(),
+        SqliteStore::with_new_in_memory_connection(),
     ))
 }
 

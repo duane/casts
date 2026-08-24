@@ -39,20 +39,21 @@ pub enum FeedAggregateEvent {
         /// The changes that occurred to the feed since last observation.
         changes: Vec<FeedMutation>,
     },
+    /// Playback progress was recorded for one entry. Last write wins.
     FeedEntryListenedTo {
-        /// The stream in which the feed updates were seen.
+        /// The stream in which the playback was recorded.
         stream_id: Uuid,
 
-        /// The feed that changed.
+        /// The feed holding the entry.
         feed_id: Uuid,
 
         /// The entry that was listened to.
         entry_guid: String,
 
-        /// The time the entry was listened to.
+        /// Whole seconds of playback position reached.
         elapsed_seconds: i64,
 
-        /// The playtime of the entry.
+        /// Sub-second remainder of the playback position, in nanoseconds.
         elapsed_nanos: i32,
     },
 }

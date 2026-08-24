@@ -1,11 +1,9 @@
 [workspace]
 resolver = "2"
+# The commit store lives in its own repository, checked out as a sibling of
+# this one (../commit-store); casts depends on it by relative path.
+# casts-ios is an Xcode project, not a cargo crate.
 members = [
     "casts",
-    # "casts-c",
-    # "casts-ios", # xcode project
-    # "commit-store",
-    # "commit-store-macos", # xcode project
     "immutable-feed",
-    # "juniper-swift",
 ]

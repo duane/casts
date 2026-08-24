@@ -1,8 +1,0 @@
-query FetchFeeds($streamId:Uuid!) {
-  feeds(streamId:$streamId) {
-    ...FeedMetadata
-    entries {
-      ...EntryMetadata
-    }
-  }
-}

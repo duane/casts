@@ -4,24 +4,45 @@ import Foundation
 
 final class FeedListViewModel: ObservableObject {
     @Published var feeds: [GrpcInterface_Feed] = []
-    
+    @Published var errorMessage: String? = nil
+
+    static let streamID = playApp.STREAM_ID.uuidString.lowercased()
+
     func fetch() {
         let client = AppDelegate.client!
-        var request = GrpcInterface_ListFeedsRequest();
-        request.streamID="34c3c08d-0d55-4af4-a126-170c1380f07e";
+        var request = GrpcInterface_ListFeedsRequest()
+        request.streamID = Self.streamID
         _ = client.listFeeds(request).response.always { result in
-            switch result {
-            case let .success(feeds):
-                let data = feeds
-                DispatchQueue.main.async {
-                    self.feeds = data.feeds
+            DispatchQueue.main.async {
+                switch result {
+                case let .success(feeds):
+                    self.feeds = feeds.feeds
+                    self.errorMessage = nil
+                case let .failure(err):
+                    self.errorMessage = "Could not reach the casts server: \(err)"
                 }
-            case let .failure(err):
-                fatalError("could not call into casts server: \(err)")
             }
         }
     }
-    
+
+    func addFeed(urlString: String) {
+        let client = AppDelegate.client!
+        var request = GrpcInterface_AddFeedRequest()
+        request.streamID = Self.streamID
+        request.url = urlString
+        _ = client.addFeed(request).response.always { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success:
+                    self.errorMessage = nil
+                    self.fetch()
+                case let .failure(err):
+                    self.errorMessage = "Could not add feed: \(err)"
+                }
+            }
+        }
+    }
+
     init() {
         fetch()
     }

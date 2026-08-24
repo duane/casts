@@ -4,11 +4,22 @@ import SwiftUI
 
 struct FeedListView: View {
     @StateObject var feedsModel: FeedListViewModel = FeedListViewModel()
-    @Environment(\.openWindow) private var openWindow
-    
+    @State private var isAddingFeed = false
+    @State private var newFeedURL = ""
+
     var body: some View {
         NavigationStack {
             VStack(alignment: .center, spacing: 0) {
+                if let message = feedsModel.errorMessage {
+                    VStack(spacing: 8) {
+                        Text(message)
+                            .font(.callout)
+                            .multilineTextAlignment(.center)
+                        Button("Retry") {
+                            feedsModel.fetch()
+                        }
+                    }.padding(10)
+                }
                 List(feedsModel.feeds, id: \.feedID) { feed in
                     NavigationLink(destination: FeedDetailView(feed: feed)) {
                         HStack(alignment: .center, spacing: 0) {
@@ -20,9 +31,24 @@ struct FeedListView: View {
                     }.buttonStyle(.borderless)
                 }.listStyle(.plain)
                 Button("+") {
-                    openWindow(id: "add-feed-by-url-prompt")
+                    isAddingFeed = true
                 }.font(.system(size: 30)).buttonStyle(.borderless)
             }.navigationTitle("Browse Feeds").padding(0)
+        }
+        .alert("Add feed", isPresented: $isAddingFeed) {
+            TextField("Feed URL", text: $newFeedURL)
+            Button("Add") {
+                let url = newFeedURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                newFeedURL = ""
+                if !url.isEmpty {
+                    feedsModel.addFeed(urlString: url)
+                }
+            }
+            Button("Cancel", role: .cancel) {
+                newFeedURL = ""
+            }
+        } message: {
+            Text("The URL of an RSS or Atom feed.")
         }
     }
 }
@@ -35,7 +61,7 @@ struct FeedListView_Previews: PreviewProvider {
                 var feed = GrpcInterface_Feed()
                 var image = GrpcInterface_Image()
                 image.url = "https://placehold.co/400.png"
-                
+
                 feed.title = "Example Feed"
                 feed.authors = ["Cindy", "Yi"]
                 feed.feedID = UUID().uuidString
@@ -43,11 +69,11 @@ struct FeedListView_Previews: PreviewProvider {
                 feed.logo = image
 
                 _feeds.append(feed)
-                
+
                 feed = GrpcInterface_Feed()
                 image = GrpcInterface_Image()
                 image.url = "https://placehold.co/400.png"
-                
+
                 feed.title = "Example Feed 2"
                 feed.authors = ["Cindy", "Yi"]
                 feed.feedID = UUID().uuidString
@@ -59,7 +85,7 @@ struct FeedListView_Previews: PreviewProvider {
             return _feeds
         }
     }
-    
+
     static var previews: some View {
         FeedListView()
     }

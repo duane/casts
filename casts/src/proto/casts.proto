@@ -10,6 +10,35 @@ service Casts {
     rpc ListFeeds (ListFeedsRequest) returns (Feeds);
     rpc ListEntries (ListEntriesRequest) returns (Entries);
     rpc GetFeed (GetFeedRequest) returns (Feed);
+    // Record the playback position reached for one entry. Last write wins.
+    rpc RecordPlayback (RecordPlaybackRequest) returns (RecordPlaybackResponse);
+    // Fetch the feed at a url and add it to the stream.
+    rpc AddFeed (AddFeedRequest) returns (AddFeedResponse);
+}
+
+message AddFeedRequest {
+    string streamId = 1;
+    string url = 2;
+}
+
+message AddFeedResponse {
+    string feedId = 1;
+    string commitId = 2;
+}
+
+message RecordPlaybackRequest {
+    string streamId = 1;
+    string feedId = 2;
+    string entryGuid = 3;
+    // Playback position reached: whole seconds plus sub-second remainder.
+    int64 elapsedSeconds = 4;
+    int32 elapsedNanos = 5;
+}
+
+message RecordPlaybackResponse {
+    // The commit that recorded the playback, empty when the position was
+    // unchanged and nothing needed committing.
+    string commitId = 1;
 }
 
 message GetFeedRequest {
@@ -52,6 +81,9 @@ message Entry {
     repeated Link links = 5;
     repeated MediaObject media = 6;
     google.protobuf.Timestamp published = 7;
+    // Last recorded playback position (zero when never listened to).
+    int64 elapsedSeconds = 8;
+    int32 elapsedNanos = 9;
 }
 
 message MediaObject {

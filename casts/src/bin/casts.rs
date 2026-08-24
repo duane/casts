@@ -1,6 +1,6 @@
 use anyhow::Result;
 use casts::{
-    aggregate::{self, FeedAggregate},
+    aggregate::FeedAggregate,
     applicable::EventApplicable,
     commands::{Command, FeedAggregateCommand},
     config::{
@@ -28,7 +28,51 @@ use futures::StreamExt;
 fn usage() {
     println!("USAGE: casts add FEED_URL");
     println!("USAGE: casts show FEED_ID");
+    println!("USAGE: casts mark-listened FEED_ID ENTRY_GUID ELAPSED_SECONDS");
     std::process::exit(1);
+}
+
+async fn mark_listened(
+    mut client: CommitStoreClient<tonic::transport::Channel>,
+    stream_id: Uuid,
+    feed_id: Uuid,
+    entry_guid: String,
+    elapsed_seconds: i64,
+) -> Result<()> {
+    let aggregate = hydrated_client(&mut client, &stream_id).await?;
+    let command = FeedAggregateCommand::MarkEntryListened {
+        stream_id,
+        feed_id,
+        entry_guid,
+        elapsed_seconds,
+        elapsed_nanos: 0,
+    };
+    let events = command.async_apply(&aggregate).await?;
+    if events.is_empty() {
+        println!("position unchanged; nothing committed");
+        return Ok(());
+    }
+    let events_count = events.len() as i64;
+    let commit_attempt = CommitAttempt {
+        stream_metadata: StreamMetadata {
+            stream_id,
+            stream_version: aggregate.version + 1,
+        },
+        commit_metadata: CommitMetadata {
+            commit_id: Uuid::new_v4(),
+            commit_sequence: aggregate.version + 1,
+            commit_timestamp: Utc::now(),
+        },
+        metadata: serde_json::to_value(&command)?,
+        events: serde_json::to_value(events)?,
+        events_count,
+    };
+    let commit_result = client
+        .append_commit(domain_to_grpc_commit_attempt(&commit_attempt))
+        .await?;
+    let commit = grpc_to_domain_commit(commit_result.get_ref());
+    println!("commit: {:?}", commit.commit_metadata.commit_id);
+    Ok(())
 }
 
 const STREAM_ID: Uuid = uuid!["34c3c08d-0d55-4af4-a126-170c1380f07e"];
@@ -47,10 +91,13 @@ async fn add(
     feed_url: Url,
 ) -> Result<()> {
     let aggregate = hydrated_client(&mut client, stream_id).await?;
+    // Fetch and parse before issuing the command; command application is pure.
+    let feed = fetch_feed(&feed_url).await?;
     let add_feed_cmd: FeedAggregateCommand = FeedAggregateCommand::AddFeed {
         stream_id: STREAM_ID,
         feed_id: Uuid::new_v4(),
         url: feed_url,
+        feed,
     };
 
     let events = add_feed_cmd.async_apply(&aggregate).await?;
@@ -106,7 +153,7 @@ async fn poll(stream_id: Uuid) -> Result<()> {
     }
     for (feed_id, existing_feed) in aggregate.feeds_by_feed_id.clone().into_iter() {
         let observed_feed = fetch_feed(&existing_feed.url.clone().expect("requires url")).await?;
-        let diff = observed_feed.diff(&existing_feed);
+        let diff = existing_feed.diff(&observed_feed);
         println!("found {} changes", diff.len());
         let observed_feed_cmd = FeedAggregateCommand::ObserveFeed {
             stream_id,
@@ -176,11 +223,11 @@ async fn hydrated_client(
 }
 
 fn client_config() -> ClientConfig {
-    return ClientConfigBuilder::default().build().unwrap();
+    ClientConfigBuilder::default().build().unwrap()
 }
 
 fn server_config() -> ServerConfig {
-    return ServerConfigBuilder::default().build().unwrap();
+    ServerConfigBuilder::default().build().unwrap()
 }
 
 #[tokio::main]
@@ -219,6 +266,19 @@ async fn main() -> Result<()> {
             }
             add(grpc_client, &stream_id, Url::parse(&args[2])?).await?
         }
+        "mark-listened" => {
+            if args.len() != 5 {
+                usage();
+            }
+            mark_listened(
+                grpc_client,
+                stream_id,
+                Uuid::parse_str(&args[2])?,
+                args[3].clone(),
+                args[4].parse()?,
+            )
+            .await?
+        }
         "list-commits-events-json" => {
             let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
                 CommitStoreClient::connect("http://127.0.0.1:7392")
@@ -226,24 +286,22 @@ async fn main() -> Result<()> {
                     .expect("Failed to connect to backend commit store")
                     .max_encoding_message_size(8 * 1024 * 1024);
 
+            let response_result = grpc_client
+                .get_stream_range(StreamCursor {
+                    stream_id: stream_id.to_string(),
+                    min_version: 0,
+                    max_version: i64::MAX,
+                    limit: i64::MAX,
+                })
+                .await;
+
+            let mut response: tonic::Response<Commits> = response_result.unwrap();
+            let commits = response.get_mut().to_owned();
+
             println!("[");
-            for version_num in 5..=5 {
-                let response_result = grpc_client
-                    .get_stream_range(StreamCursor {
-                        stream_id: stream_id.to_string(),
-                        min_version: version_num,
-                        max_version: version_num,
-                        limit: i64::MAX,
-                    })
-                    .await;
-
-                let mut response: tonic::Response<Commits> = response_result.unwrap();
-                let commits = response.get_mut().to_owned();
-
-                for commit in commits.commits.iter() {
-                    let domain_commit = grpc_to_domain_commit(commit);
-                    println!("{},", serde_json::to_string(&domain_commit.events).unwrap());
-                }
+            for commit in commits.commits.iter() {
+                let domain_commit = grpc_to_domain_commit(commit);
+                println!("{},", serde_json::to_string(&domain_commit.events).unwrap());
             }
             println!("]");
         }
@@ -311,7 +369,7 @@ async fn main() -> Result<()> {
                 for (feed_id, existing_feed) in aggregate.feeds_by_feed_id.clone().into_iter() {
                     let observed_feed =
                         fetch_feed(&existing_feed.url.clone().expect("requires url")).await?;
-                    let diff = observed_feed.diff(&existing_feed);
+                    let diff = existing_feed.diff(&observed_feed);
                     println!("found {} changes", diff.len());
                     let observed_feed_cmd = FeedAggregateCommand::ObserveFeed {
                         stream_id,

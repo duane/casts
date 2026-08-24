@@ -12,16 +12,14 @@ final class ImageLoader {
     }
     
     static func loadImage(url: URL) async -> Data? {
-        let result = (try? await URLSession.shared.data(from: url))
-        if result == nil {
+        guard let (data, response) = try? await URLSession.shared.data(from: url) else {
             return nil
         }
-        let (data, response) = result!
         guard let httpResponse = response as? HTTPURLResponse,
-                  httpResponse.statusCode == 200 else {
-            assert(false);
-            }
-        return data;
+              httpResponse.statusCode == 200 else {
+            return nil
+        }
+        return data
     }
 #if os(iOS)
     static func loadImage(withUrl url: URL, onComplete: @escaping (UIImage) -> Void) {

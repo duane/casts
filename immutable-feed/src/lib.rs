@@ -69,21 +69,26 @@ pub struct FeedMetadata {
 }
 
 impl FeedMetadata {
-    /// Produce a delta between two feeds.
+    /// Produce the delta that moves `self` toward `other`.
+    ///
+    /// Same convention as `Entry::diff` and `Feed::diff`: `self` is the
+    /// existing state, `other` is the observation, and every mutation carries
+    /// the observed value. (It used to carry `self`'s values -- the opposite
+    /// direction from the other two diff impls -- and nothing called it.)
     pub fn diff(&self, other: &FeedMetadata) -> Vec<FeedMetadataMutation> {
         let mut mutations: Vec<FeedMetadataMutation> = vec![];
         if self.title != other.title {
-            mutations.push(FeedMetadataMutation::ReplacedTitle(self.title.clone()))
+            mutations.push(FeedMetadataMutation::ReplacedTitle(other.title.clone()))
         }
         if self.logo != other.logo {
-            mutations.push(FeedMetadataMutation::ReplacedLogo(self.logo.clone()))
+            mutations.push(FeedMetadataMutation::ReplacedLogo(other.logo.clone()))
         }
         if self.authors != other.authors {
-            mutations.push(FeedMetadataMutation::ReplacedAuthors(self.authors.clone()))
+            mutations.push(FeedMetadataMutation::ReplacedAuthors(other.authors.clone()))
         }
         if self.description != other.description {
             mutations.push(FeedMetadataMutation::ReplacedDescription(
-                self.description.clone(),
+                other.description.clone(),
             ));
         }
         mutations
@@ -271,9 +276,19 @@ impl Feed {
         }
     }
 
-    /// Produce an arbitrarily ordered list of changes between two feeds.
+    /// Produce an arbitrarily ordered list of changes that move `self`
+    /// (the existing state) toward `other` (the observation).
     pub fn diff(&self, other: &Feed) -> Vec<FeedMutation> {
         let mut mutations: Vec<FeedMutation> = vec![];
+
+        // Metadata changes (title, logo, authors, description) sync through
+        // the same delta stream as entries; they used to be silently dropped.
+        mutations.extend(
+            self.metadata
+                .diff(&other.metadata)
+                .into_iter()
+                .map(FeedMutation::MetadataChange),
+        );
 
         let existing_entry_by_guid: HashMap<&str, &Entry> = self
             .entries

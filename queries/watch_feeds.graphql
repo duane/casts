@@ -1,8 +1,0 @@
-subscription WatchFeeds($streamId:Uuid!) {
-  watchFeeds(streamId:$streamId) {
-    ...FeedMetadata
-    entries {
-      ...EntryMetadata
-    }
-  }
-}

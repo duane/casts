@@ -10,6 +10,7 @@ struct PlayView: View {
     private let formatter = DateFormatter()
     
     @State private var playing = false
+    @State private var mediaError: String? = nil
     @ObservedObject private var state: PlayerState
     
     init(feed: GrpcInterface_Feed,
@@ -37,9 +38,14 @@ struct PlayView: View {
                 Image(systemName: "mic.circle").imageScale(.large).font(.system(size: 100))
             }
             Text(self.feed.title)
-            Text(self.feed.authors[0])
+            if let author = self.feed.authors.first {
+                Text(author)
+            }
             Text(formatter.string(from: Date.now))
-            
+            if let message = mediaError ?? state.playbackError {
+                Text(message).font(.callout).foregroundColor(.red)
+            }
+
             HTMLView(content: self.entry.summary)
             
             Spacer()
@@ -64,6 +70,9 @@ struct PlayView: View {
                 Spacer()
                 Button(action: {
                     self.state.togglePlayState()
+                    if !self.state.isPlaying {
+                        self.reportPlayback()
+                    }
                 }) {
                     Image(systemName: self.state.isPlaying ? "pause.circle" : "play.circle").imageScale(.large).font(.system(size: 40))
                 }.buttonStyle(.borderless)
@@ -88,10 +97,34 @@ struct PlayView: View {
                 RoutePicker().frame(maxWidth: 40, maxHeight: 40)
             }
         }.onAppear {
-            let mediaObjects: [GrpcInterface_MediaObject] = entry.media;
-            let audioObject: GrpcInterface_MediaObject? = mediaObjects.first(where: {$0.content[0].contentType == "audio/mpeg"})
-            let url = URL(string: (audioObject?.content[0].url)!)!
+            let audioContent = entry.media
+                .flatMap { $0.content }
+                .first { $0.contentType.hasPrefix("audio/") }
+            guard let audioContent, let url = URL(string: audioContent.url) else {
+                self.mediaError = "This entry has no playable audio."
+                return
+            }
             self.state.prepareToPlay(url: url)
+        }.onDisappear {
+            if self.state.isPlaying {
+                self.state.togglePlayState()
+            }
+            self.reportPlayback()
         }
+    }
+
+    /// Report the position reached to the server; last write wins.
+    private func reportPlayback() {
+        let seconds = self.state.currentTime
+        guard seconds.isFinite, seconds > 0 else {
+            return
+        }
+        var request = GrpcInterface_RecordPlaybackRequest()
+        request.streamID = FeedListViewModel.streamID
+        request.feedID = self.feed.feedID
+        request.entryGuid = self.entry.guid
+        request.elapsedSeconds = Int64(seconds)
+        request.elapsedNanos = Int32((seconds - seconds.rounded(.down)) * 1_000_000_000)
+        _ = AppDelegate.client.recordPlayback(request)
     }
 }

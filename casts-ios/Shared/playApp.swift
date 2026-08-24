@@ -27,9 +27,6 @@ struct playApp: App {
         Window("Casts", id: "main-window") {
             ContentView()
         }
-//        Window("Add feed", id: "add-feed-by-url-prompt") {
-//            AddFeedWindow().fixedSize(horizontal: false, vertical: true)
-//        }
         .windowToolbarStyle(.unifiedCompact)
         .windowResizability(.contentSize)
         .windowStyle(.hiddenTitleBar)

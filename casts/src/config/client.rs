@@ -1,4 +1,4 @@
-use crate::config::DEFAULT_LISTEN_ADDR;
+use crate::config::DEFAULT_COMMIT_STORE_URL;
 use anyhow::Result;
 use serde::{Deserialize, Serialize};
 use url::Url;
@@ -28,7 +28,10 @@ impl ClientConfigBuilder {
 
     /// Construct a client configuration from the parameters passed to the builder.
     pub fn build(self) -> Result<ClientConfig> {
-        let url = Url::parse(&self.url.unwrap_or(DEFAULT_LISTEN_ADDR.to_string()))?;
+        // The default is the commit store's URL, not `DEFAULT_LISTEN_ADDR`: a
+        // bare listen address like `::` is not a parseable URL, so the old
+        // default made `ClientConfigBuilder::default().build()` always fail.
+        let url = Url::parse(&self.url.unwrap_or(DEFAULT_COMMIT_STORE_URL.to_string()))?;
         Ok(ClientConfig {
             url,
             ca_cert: self.ca_cert,

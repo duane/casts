@@ -32,9 +32,20 @@ impl<E: EventApplicable + Unpin> ApplicableStream<E> {
     }
 }
 
+#[derive(Debug)]
 pub enum AggregateStreamError {
     CommitStream(CommitStreamError),
 }
+
+impl std::fmt::Display for AggregateStreamError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AggregateStreamError::CommitStream(err) => write!(f, "commit stream error: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for AggregateStreamError {}
 
 impl<E: EventApplicable + Unpin + Clone> Stream for ApplicableStream<E> {
     type Item = Result<(Commit, E), AggregateStreamError>;

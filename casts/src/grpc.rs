@@ -1,14 +1,14 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
-use commit_store::store::DispatchingAsyncReadWriteStore;
+use commit_store::dispatch::DispatchingAsyncReadWriteStore;
 use commit_store::Client as GrpcClient;
-use commit_store::{dispatch::DispatchedStore, sqlite::SqliteStoreAsync};
+use commit_store::{dispatch::DispatchedStore, sqlite::SqliteStore};
 
 // Store
 
 #[derive(Clone, Debug)]
 pub enum Grpc2Store {
-    Sqlite(DispatchedStore<SqliteStoreAsync>),
+    Sqlite(DispatchedStore<SqliteStore>),
     // Postgres(DispatchedStore<PostgresStoreAsync>),
     Grpc(GrpcClient),
 }

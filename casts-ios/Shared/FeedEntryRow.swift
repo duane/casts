@@ -17,7 +17,9 @@ struct FeedEntryRow: View {
                 Text(entry.title)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                Text(casualDuration(elapsed: TimeInterval(entry.media[0].durationSecs)))
+                if let media = entry.media.first {
+                    Text(casualDuration(elapsed: TimeInterval(media.durationSecs)))
+                }
             }.padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
             Divider()
                 .frame(height: 1)

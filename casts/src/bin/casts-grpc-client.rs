@@ -5,10 +5,9 @@ use tonic::transport::{Certificate, ClientTlsConfig};
 use uuid::uuid;
 
 use commit_store::{
-    grpc_interface::commit_store_client::CommitStoreClient, store::DispatchingAsyncReadWriteStore,
-    Client,
+    dispatch::DispatchingAsyncReadWriteStore,
+    grpc_interface::commit_store_client::CommitStoreClient, Client,
 };
-// use tokio_stream::StreamExt;
 
 #[tokio::main]
 async fn main() {

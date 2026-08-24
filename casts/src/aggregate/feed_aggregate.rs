@@ -69,41 +69,39 @@ impl EventApplicable for FeedAggregate {
                     metadata,
                     entries,
                 } => {
-                    let found_feed = applied.feeds_by_feed_id.get(&feed_id);
-                    match found_feed {
-                        Some(_feed) => {
-                            println!("feed already added, doing nothing.");
-                            return self;
-                        }
-                        None => {
-                            let raw_url = url.to_string();
-                            let new_feed = Feed {
-                                url: Some(url),
-                                raw_url,
-                                entries,
-                                metadata,
-                            };
-
-                            applied.feeds_by_feed_id.insert(feed_id, new_feed);
-                        }
+                    // A duplicate Added is a defect in the history, not in
+                    // this fold: skip the one event and keep going. The old
+                    // `return self` here silently discarded every event
+                    // already applied in this batch and the version bump.
+                    if applied.feeds_by_feed_id.contains_key(&feed_id) {
+                        log::warn!("feed {feed_id} already added; skipping duplicate Added event");
+                        continue;
+                    }
+                    let raw_url = url.to_string();
+                    let new_feed = Feed {
+                        url: Some(url),
+                        raw_url,
+                        entries,
+                        metadata,
                     };
+
+                    let _ = applied.feeds_by_feed_id.insert(feed_id, new_feed);
                 }
                 FeedAggregateEvent::ObservedChanges {
                     stream_id: _,
                     feed_id,
                     changes,
                 } => {
-                    println!("feed_id: {}", feed_id.to_string());
-                    let feed = applied.feeds_by_feed_id.get_mut(&feed_id).unwrap();
-                    let before = feed.clone();
-                    let after = before.apply_diff(changes.clone());
-                    println!(
-                        "{} before, {} after, {} applied",
-                        before.entries.len(),
-                        after.entries.len(),
-                        changes.len()
-                    );
-                    *feed = after;
+                    // Same policy as the duplicate Added above: corrupt
+                    // history must not panic a read path.
+                    let Some(feed) = applied.feeds_by_feed_id.get_mut(&feed_id) else {
+                        log::warn!(
+                            "ObservedChanges for unknown feed {feed_id}; skipping {} changes",
+                            changes.len()
+                        );
+                        continue;
+                    };
+                    *feed = feed.clone().apply_diff(changes);
                 }
                 FeedAggregateEvent::FeedEntryListenedTo {
                     stream_id: _,
@@ -133,7 +131,7 @@ mod tests {
     #[test]
     fn creates_new_aggregate() {
         let uuid = Uuid::new_v4();
-        let aggregate = FeedAggregate::with_id(uuid.clone());
+        let aggregate = FeedAggregate::with_id(uuid);
         assert_eq!(uuid, aggregate.stream_id);
         assert_eq!(0, aggregate.version);
     }
@@ -141,9 +139,97 @@ mod tests {
     #[test]
     fn works_with_sentinel_uuid() {
         let uuid = Uuid::parse_str("00000000-0000-0000-0000-000000000000").unwrap();
-        let aggregate = FeedAggregate::with_id(uuid.clone());
+        let aggregate = FeedAggregate::with_id(uuid);
         assert_eq!(uuid, aggregate.stream_id);
         assert_eq!(0, aggregate.version);
+    }
+
+    fn added_event(stream_id: Uuid, feed_id: Uuid, title: &str) -> FeedAggregateEvent {
+        FeedAggregateEvent::Added {
+            stream_id,
+            feed_id,
+            url: Url::parse("http://example.com/examplecast.xml").unwrap(),
+            metadata: FeedMetadata {
+                title: String::from(title),
+                authors: vec![],
+                logo: None,
+                description: None,
+            },
+            entries: vec![],
+        }
+    }
+
+    #[test]
+    fn duplicate_added_does_not_abort_the_batch() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let feed_a = Uuid::new_v4();
+        let feed_b = Uuid::new_v4();
+        // The duplicate sits between two good events; both must apply.
+        let applied = aggregate.apply_many(vec![
+            added_event(stream_id, feed_a, "A"),
+            added_event(stream_id, feed_a, "A duplicate"),
+            added_event(stream_id, feed_b, "B"),
+        ]);
+        assert_eq!(applied.feeds_by_feed_id.len(), 2);
+        assert_eq!(applied.feeds_by_feed_id[&feed_a].metadata.title, "A");
+        assert_eq!(applied.feeds_by_feed_id[&feed_b].metadata.title, "B");
+        assert_eq!(applied.version(), 1);
+    }
+
+    #[test]
+    fn one_commit_advances_the_version_by_one() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        // A commit carrying many events still advances the version by exactly
+        // one; per-event application would disagree with this and corrupt the
+        // optimistic-concurrency expectation derived from `version`.
+        let applied = aggregate.apply_many(vec![
+            added_event(stream_id, Uuid::new_v4(), "A"),
+            added_event(stream_id, Uuid::new_v4(), "B"),
+            added_event(stream_id, Uuid::new_v4(), "C"),
+        ]);
+        assert_eq!(applied.version(), 1);
+        assert_eq!(applied.feeds_by_feed_id.len(), 3);
+    }
+
+    #[test]
+    fn observed_changes_for_unknown_feed_is_skipped() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let feed_a = Uuid::new_v4();
+        let applied = aggregate.apply_many(vec![
+            FeedAggregateEvent::ObservedChanges {
+                stream_id,
+                feed_id: Uuid::new_v4(),
+                changes: vec![],
+            },
+            added_event(stream_id, feed_a, "A"),
+        ]);
+        assert_eq!(applied.feeds_by_feed_id.len(), 1);
+        assert_eq!(applied.version(), 1);
+    }
+
+    #[test]
+    fn listened_to_keeps_the_last_write() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let feed_id = Uuid::new_v4();
+        let listened = |seconds, nanos| FeedAggregateEvent::FeedEntryListenedTo {
+            stream_id,
+            feed_id,
+            entry_guid: String::from("guid-1"),
+            elapsed_seconds: seconds,
+            elapsed_nanos: nanos,
+        };
+        let applied = aggregate
+            .apply_many(vec![added_event(stream_id, feed_id, "A"), listened(10, 0)])
+            .apply(listened(90, 500));
+        assert_eq!(
+            applied.playtime_by_feed_and_guid[&(feed_id.to_string(), String::from("guid-1"))],
+            (90, 500)
+        );
+        assert_eq!(applied.version(), 2);
     }
 
     #[test]
@@ -152,7 +238,7 @@ mod tests {
         let feed_id = Uuid::new_v4();
         let event = FeedAggregateEvent::Added {
             stream_id: aggregate.stream_id,
-            feed_id: feed_id.clone(),
+            feed_id,
             url: Url::parse("http://example.com/examplecast.xml").unwrap(),
             metadata: FeedMetadata {
                 title: String::from("Examplecast"),

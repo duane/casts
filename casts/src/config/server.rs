@@ -78,10 +78,10 @@ impl ServerConfigBuilder {
 
         let tls_cert_path = std::env::var("CASTS_TLS_CERT_PATH")
             .ok()
-            .or_else(|| self.tls_cert_path);
+            .or(self.tls_cert_path);
         let tls_key_path = std::env::var("CASTS_TLS_KEY_PATH")
             .ok()
-            .or_else(move || self.tls_key_path);
+            .or(self.tls_key_path);
         let server_cfg = match (tls_cert_path, tls_key_path) {
             (Some(cert_path), Some(key_path)) => {
                 let cert = std::fs::read_to_string(cert_path)?;

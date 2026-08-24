@@ -1,0 +1,88 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# casts depends on commit-store by relative path (../../commit-store from the
+# casts crate), so every job checks out both repositories as siblings:
+#   $GITHUB_WORKSPACE/casts         <- this repository
+#   $GITHUB_WORKSPACE/commit-store  <- github.com/duane/commit-store
+defaults:
+  run:
+    working-directory: casts
+
+jobs:
+  test:
+    name: Build and test (default features)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: casts
+      - uses: actions/checkout@v4
+        with:
+          repository: duane/commit-store
+          path: commit-store
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: casts
+      - name: Build all targets
+        run: cargo build --workspace --all-targets
+      - name: Test
+        run: cargo test --workspace
+
+  graphql:
+    name: Check (graphql feature)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: casts
+      - uses: actions/checkout@v4
+        with:
+          repository: duane/commit-store
+          path: commit-store
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: casts
+      - name: Check with graphql
+        run: cargo check -p casts --features graphql --all-targets
+
+  fmt:
+    name: rustfmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: casts
+      - uses: actions/checkout@v4
+        with:
+          repository: duane/commit-store
+          path: commit-store
+      - name: Check formatting
+        run: cargo fmt --check
+
+  clippy:
+    name: clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: casts
+      - uses: actions/checkout@v4
+        with:
+          repository: duane/commit-store
+          path: commit-store
+      - name: Install protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: casts
+      - name: Clippy (deny warnings)
+        run: cargo clippy --workspace --all-targets -- -D warnings

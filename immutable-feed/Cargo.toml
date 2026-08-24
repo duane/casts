@@ -8,24 +8,24 @@ readme = "README.md"
 
 [dependencies]
 ## Time
-chrono = { version = "*", features = ["serde"] }
+chrono = { version = "~0.4.37", features = ["serde"] }
 
 ## error handling
-anyhow = "*"
+anyhow = "~1.0.81"
 
 ## net
-url = { version = "*", features = ["serde"] }
-reqwest = "*"
+url = { version = "~2.5.0", features = ["serde"] }
+reqwest = "~0.12.3"
 
 ## rss
 
-feed-rs = { path = "/Users/duane/sandbox/feed-rs/feed-rs" }
+feed-rs = "~1.4.0"
 quick-xml = "~0.31.0"
 
 ## content handling
-htmlescape = "*"
+htmlescape = "~0.3.1"
 
 ## serialization
-serde = "*"
+serde = "~1.0.197"
 
-mime = "*"
+mime = "~0.3.17"

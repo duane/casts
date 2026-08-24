@@ -1,6 +1,6 @@
 use casts::{aggregate::FeedAggregate, applicable::EventApplicable, events::FeedAggregateEvent};
 use chrono::Utc;
-use commit_store::{commit::StreamMetadata, store::AsyncReadWriteStore};
+use commit_store::{commit::StreamMetadata, store::Store};
 use commit_store::{
     commit::{CommitAttempt, CommitMetadata},
     grpc_interface::commit_store_client::CommitStoreClient,

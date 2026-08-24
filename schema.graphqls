@@ -29,8 +29,10 @@ type MediaObject {
   title: String
   "Collection of the media content elements"
   content: [MediaContent!]!
-  "Duration of the object"
-  duration: [Int!]
+  "Duration of the object in seconds"
+  durationS: Int
+  "Duration of the object in milliseconds"
+  durationMs: Int
   "Short description of the media object (from the media:description element)"
   description: String
 }

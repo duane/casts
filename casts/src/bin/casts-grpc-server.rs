@@ -1,32 +1,40 @@
 // Copyright (c) 2023 Duane R. Bailey. All rights reserved.
 
+// Every tonic handler returns `Result<_, tonic::Status>` and Status is large;
+// the signature is fixed by the generated service trait.
+#![allow(clippy::result_large_err)]
+
 #[macro_use]
 extern crate log;
 
 use chrono::{DateTime, Utc};
-use commit_store::{commit, store::StreamCursor};
+use commit_store::store::ScanStreamCursor;
 use prost_types::Timestamp as GrpcTimestamp;
-use std::{pin::pin, str::FromStr, sync::Arc};
-use url::Url;
+use std::{str::FromStr, sync::Arc};
 
 use casts::{
     aggregate::FeedAggregate,
     applicable::EventApplicable,
+    commands::{Command, FeedAggregateCommand, FeedAggregateError},
     events::FeedAggregateEvent,
     grpc::Grpc2Store,
     grpc_interface::{
-        casts_server::CastsServer, Content as GrpcContent, Entry as GrpcEntry, Feed as GrpcFeed,
-        Feeds as GrpcFeeds, GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListFeedsRequest,
-        MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject,
+        casts_server::CastsServer, AddFeedRequest, AddFeedResponse, Content as GrpcContent,
+        Entries as GrpcEntries, Entry as GrpcEntry, Feed as GrpcFeed, Feeds as GrpcFeeds,
+        GetFeedRequest, Image as GrpcImage, Link as GrpcLink, ListEntriesRequest, ListFeedsRequest,
+        MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject, RecordPlaybackRequest,
+        RecordPlaybackResponse,
     },
 };
+use commit_store::commit::{CommitMetadata, StreamMetadata};
+use commit_store::store::StoreError;
+use commit_store::CommitAttempt;
+use std::collections::HashMap;
 
-use commit_store::store::DispatchingAsyncReadWriteStore;
-use commit_store::{grpc_interface::commit_store_client::CommitStoreClient, Client};
-// use futures::Stream;
-// use tokio_stream::{Stream, StreamExt};
 use anyhow::Result;
-use futures::{lock::Mutex, StreamExt};
+use commit_store::dispatch::DispatchingAsyncReadWriteStore;
+use commit_store::{grpc_interface::commit_store_client::CommitStoreClient, Client};
+use futures::lock::Mutex;
 use immutable_feed::{Content, Entry, Feed, Image, Link, MediaContent, MediaObject};
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
@@ -35,29 +43,38 @@ pub struct CastsImpl {
     backing_store: Arc<Mutex<Grpc2Store>>,
 }
 
-async fn hydrate_aggregate<S: DispatchingAsyncReadWriteStore>(
-    client: &mut S,
+/// One page of commits per round trip; the server clamps to its own
+/// `MAX_PAGE_SIZE` anyway, so this only bounds client-side memory.
+const HYDRATE_PAGE_SIZE: i64 = 1000;
+
+async fn hydrate_aggregate(
+    client: &mut dyn DispatchingAsyncReadWriteStore,
     stream_id: &str,
-) -> FeedAggregate
-where
-    S: Clone + 'static,
-{
-    let stream_id: Uuid = Uuid::parse_str(stream_id).unwrap();
+) -> Result<FeedAggregate, Status> {
+    let stream_id: Uuid = Uuid::parse_str(stream_id)
+        .map_err(|err| Status::invalid_argument(format!("stream_id is not a UUID: {err}")))?;
     let mut aggregate = FeedAggregate::new();
-    let cursor = StreamCursor {
+    let mut cursor = Some(ScanStreamCursor {
         stream_id,
         min_version: 0,
         max_version: None,
-    };
-    let mut commits = pin!(client.stream_commits(cursor));
-    while let Some(commit) = commits.next().await {
-        let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
-            .expect("unable to deserialize events to FeedAggregateEvent");
-        for event in events.into_iter() {
-            aggregate = aggregate.apply(event);
+        reverse: false,
+    });
+    while let Some(current) = cursor {
+        let (commits, next) = client
+            .get_stream_range(current, HYDRATE_PAGE_SIZE)
+            .await
+            .map_err(|err| Status::unavailable(format!("commit store read failed: {err}")))?;
+        for commit in commits {
+            let events: Vec<FeedAggregateEvent> =
+                serde_json::from_value(commit.events).map_err(|err| {
+                    Status::internal(format!("stored events failed to deserialize: {err}"))
+                })?;
+            aggregate = aggregate.apply_many(events);
         }
+        cursor = next;
     }
-    aggregate
+    Ok(aggregate)
 }
 
 #[tonic::async_trait]
@@ -68,56 +85,209 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
     ) -> Result<Response<GrpcFeeds>, Status> {
         info!("list_feeds");
         let mut lock = self.backing_store.lock().await;
-        let client: &mut Grpc2Store = &mut lock;
 
-        println!("inside feed accessor");
-        println!("client");
-        let aggregate = hydrate_aggregate(client, &request.get_ref().stream_id).await;
-        println!("aggregate");
+        let aggregate = hydrate_aggregate(lock.store(), &request.get_ref().stream_id).await?;
         let feed_result = aggregate_to_feeds(aggregate);
-
-        println!("returning result...");
 
         Ok(Response::new(feed_result))
     }
 
+    async fn list_entries(
+        &self,
+        request: Request<ListEntriesRequest>,
+    ) -> Result<Response<GrpcEntries>, Status> {
+        info!("list_entries");
+        let mut lock = self.backing_store.lock().await;
+
+        let aggregate = hydrate_aggregate(lock.store(), &request.get_ref().stream_id).await?;
+        let playtimes = &aggregate.playtime_by_feed_and_guid;
+        let entries: Vec<GrpcEntry> = aggregate
+            .feeds_by_feed_id
+            .iter()
+            .flat_map(|(feed_id, feed)| {
+                feed.entries
+                    .iter()
+                    .map(|entry| entry_to_grpc_entry(entry.clone(), *feed_id, playtimes))
+            })
+            .collect();
+
+        Ok(Response::new(GrpcEntries { entries }))
+    }
+
     async fn get_feed(
         &self,
-        _request: Request<GetFeedRequest>,
+        request: Request<GetFeedRequest>,
     ) -> Result<Response<GrpcFeed>, Status> {
-        unimplemented!("get_feed");
+        info!("get_feed");
+        let feed_id: Uuid = Uuid::parse_str(&request.get_ref().feed_id)
+            .map_err(|err| Status::invalid_argument(format!("feed_id is not a UUID: {err}")))?;
+        let mut lock = self.backing_store.lock().await;
+
+        let aggregate = hydrate_aggregate(lock.store(), &request.get_ref().stream_id).await?;
+        let feed = aggregate
+            .feeds_by_feed_id
+            .get(&feed_id)
+            .ok_or_else(|| Status::not_found(format!("no feed with id {feed_id}")))?;
+
+        Ok(Response::new(feed_to_grpc_feed(
+            feed.clone(),
+            feed_id,
+            &aggregate.playtime_by_feed_and_guid,
+        )))
+    }
+
+    async fn add_feed(
+        &self,
+        request: Request<AddFeedRequest>,
+    ) -> Result<Response<AddFeedResponse>, Status> {
+        info!("add_feed");
+        let req = request.get_ref();
+        let stream_id: Uuid = Uuid::parse_str(&req.stream_id)
+            .map_err(|err| Status::invalid_argument(format!("stream_id is not a UUID: {err}")))?;
+        let url = url::Url::parse(&req.url)
+            .map_err(|err| Status::invalid_argument(format!("url is not a valid URL: {err}")))?;
+
+        // Fetch before taking the store lock; the fetch is the slow part and
+        // needs nothing from the store.
+        let feed = immutable_feed::fetch_feed(&url)
+            .await
+            .map_err(|err| Status::failed_precondition(format!("could not fetch feed: {err}")))?;
+
+        let mut lock = self.backing_store.lock().await;
+        let store = lock.store();
+        let aggregate = hydrate_aggregate(store, &req.stream_id).await?;
+
+        let feed_id = Uuid::new_v4();
+        let command = FeedAggregateCommand::AddFeed {
+            stream_id,
+            feed_id,
+            url,
+            feed,
+        };
+        let events = command
+            .async_apply(&aggregate)
+            .await
+            .map_err(|err| match err {
+                FeedAggregateError::DuplicateFeedError => Status::already_exists(err.to_string()),
+                _ => Status::failed_precondition(err.to_string()),
+            })?;
+
+        let events_count = events.len() as i64;
+        let commit_attempt = CommitAttempt {
+            stream_metadata: StreamMetadata {
+                stream_id,
+                stream_version: aggregate.version + 1,
+            },
+            commit_metadata: CommitMetadata {
+                commit_id: Uuid::new_v4(),
+                commit_sequence: aggregate.version + 1,
+                commit_timestamp: Utc::now(),
+            },
+            metadata: serde_json::to_value(&command)
+                .map_err(|err| Status::internal(format!("could not serialize command: {err}")))?,
+            events: serde_json::to_value(events)
+                .map_err(|err| Status::internal(format!("could not serialize events: {err}")))?,
+            events_count,
+        };
+        let committed = store
+            .commit(&commit_attempt)
+            .await
+            .map_err(|err| match err {
+                StoreError::DuplicateWriteError(conflict) => {
+                    Status::aborted(format!("conflicting concurrent write, retry: {conflict}"))
+                }
+                other => Status::unavailable(format!("commit store write failed: {other}")),
+            })?;
+
+        Ok(Response::new(AddFeedResponse {
+            feed_id: feed_id.to_string(),
+            commit_id: committed.commit_metadata.commit_id.to_string(),
+        }))
+    }
+
+    async fn record_playback(
+        &self,
+        request: Request<RecordPlaybackRequest>,
+    ) -> Result<Response<RecordPlaybackResponse>, Status> {
+        info!("record_playback");
+        let req = request.get_ref();
+        let stream_id: Uuid = Uuid::parse_str(&req.stream_id)
+            .map_err(|err| Status::invalid_argument(format!("stream_id is not a UUID: {err}")))?;
+        let feed_id: Uuid = Uuid::parse_str(&req.feed_id)
+            .map_err(|err| Status::invalid_argument(format!("feed_id is not a UUID: {err}")))?;
+
+        let mut lock = self.backing_store.lock().await;
+        let store = lock.store();
+        let aggregate = hydrate_aggregate(store, &req.stream_id).await?;
+
+        let command = FeedAggregateCommand::MarkEntryListened {
+            stream_id,
+            feed_id,
+            entry_guid: req.entry_guid.clone(),
+            elapsed_seconds: req.elapsed_seconds,
+            elapsed_nanos: req.elapsed_nanos,
+        };
+        let events = command
+            .async_apply(&aggregate)
+            .await
+            .map_err(|err| match err {
+                FeedAggregateError::UnknownFeedError | FeedAggregateError::UnknownEntryError => {
+                    Status::not_found(err.to_string())
+                }
+                _ => Status::failed_precondition(err.to_string()),
+            })?;
+        if events.is_empty() {
+            // Position unchanged; nothing to commit.
+            return Ok(Response::new(RecordPlaybackResponse {
+                commit_id: String::new(),
+            }));
+        }
+
+        let events_count = events.len() as i64;
+        let commit_attempt = CommitAttempt {
+            stream_metadata: StreamMetadata {
+                stream_id,
+                stream_version: aggregate.version + 1,
+            },
+            commit_metadata: CommitMetadata {
+                commit_id: Uuid::new_v4(),
+                commit_sequence: aggregate.version + 1,
+                commit_timestamp: Utc::now(),
+            },
+            metadata: serde_json::to_value(&command)
+                .map_err(|err| Status::internal(format!("could not serialize command: {err}")))?,
+            events: serde_json::to_value(events)
+                .map_err(|err| Status::internal(format!("could not serialize events: {err}")))?,
+            events_count,
+        };
+        let committed = store
+            .commit(&commit_attempt)
+            .await
+            .map_err(|err| match err {
+                StoreError::DuplicateWriteError(conflict) => {
+                    Status::aborted(format!("conflicting concurrent write, retry: {conflict}"))
+                }
+                other => Status::unavailable(format!("commit store write failed: {other}")),
+            })?;
+
+        Ok(Response::new(RecordPlaybackResponse {
+            commit_id: committed.commit_metadata.commit_id.to_string(),
+        }))
     }
 }
-
-// const CA_PEM: &str = include_str!("../../data/tls/ca.pem");
 
 pub async fn serve() -> Result<()> {
     let server_config = casts::config::ServerConfigBuilder::default().build()?;
 
     let commit_store_cfg = commit_store::config::ClientConfigBuilder::default().build();
 
-    println!("Connecting to address {:?}", commit_store_cfg.addr);
-
     log::info!("Connecting to commit store at {}", commit_store_cfg.addr);
-    let commit_store_addr: Url = commit_store_cfg.addr;
 
-    let endpoint = tonic::transport::Uri::from_str(&commit_store_addr.clone().to_string()).unwrap();
+    let endpoint = tonic::transport::Uri::from_str(&commit_store_cfg.addr)?;
 
     let client: CommitStoreClient<tonic::transport::Channel> =
         CommitStoreClient::connect(endpoint).await?;
 
-    // let addr = hyper::Uri::from_str(&commit_store_cfg.addr.as_str()).unwrap();
-    // let host: String = addr.host().unwrap().to_string();
-    // let tls_config: ClientTlsConfig = ClientTlsConfig::new()
-    // .ca_certificate(Certificate::from_pem(CA_PEM))
-    // .domain_name(host);
-    // let channel = tonic::transport::Channel::from_shared(addr.to_string())
-    // .unwrap()
-    // .tls_config(tls_config.clone())
-    // .unwrap()
-    // .connect()
-    // .await
-    // .unwrap();
     let grpc_client = Client::new(client);
 
     let commit_store_impl = CastsImpl {
@@ -125,8 +295,6 @@ pub async fn serve() -> Result<()> {
     };
 
     let service = CastsServer::new(commit_store_impl);
-
-    // println!("tls identity is {:?}", tls_config);
 
     info!("Started server at {:?}", server_config.listen);
     let mut builder = Server::builder();
@@ -210,7 +378,17 @@ fn content_to_grpc_content(content: Content) -> GrpcContent {
     }
 }
 
-fn entry_to_grpc_entry(entry: Entry) -> GrpcEntry {
+type PlaytimeByFeedAndGuid = HashMap<(String, String), (i64, i32)>;
+
+fn entry_to_grpc_entry(
+    entry: Entry,
+    feed_id: Uuid,
+    playtimes: &PlaytimeByFeedAndGuid,
+) -> GrpcEntry {
+    let (elapsed_seconds, elapsed_nanos) = playtimes
+        .get(&(feed_id.to_string(), entry.guid.clone()))
+        .copied()
+        .unwrap_or((0, 0));
     GrpcEntry {
         guid: entry.guid,
         title: entry.title.unwrap_or_default(),
@@ -223,6 +401,8 @@ fn entry_to_grpc_entry(entry: Entry) -> GrpcEntry {
             .collect(),
         published: entry.published_at.map(domain_to_grpc_ts),
         content: entry.content.map(content_to_grpc_content),
+        elapsed_seconds,
+        elapsed_nanos,
     }
 }
 
@@ -234,11 +414,11 @@ fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
     GrpcTimestamp { seconds, nanos }
 }
 
-fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
+fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid, playtimes: &PlaytimeByFeedAndGuid) -> GrpcFeed {
     let mut entries: Vec<GrpcEntry> = feed
         .entries
         .into_iter()
-        .map(|entry| entry_to_grpc_entry(entry))
+        .map(|entry| entry_to_grpc_entry(entry, feed_id, playtimes))
         .collect();
     entries.sort_by(|a, b| match (&a.published, &b.published) {
         (Some(a_ts), Some(b_ts)) => b_ts.seconds.cmp(&a_ts.seconds),
@@ -257,10 +437,13 @@ fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
 }
 
 fn aggregate_to_feeds(aggregate: FeedAggregate) -> GrpcFeeds {
-    let mut feeds: Vec<GrpcFeed> = Vec::new();
-    for feed in aggregate.feeds_by_feed_id.values() {
-        let feed_id = uuid::Uuid::new_v4();
-        feeds.push(feed_to_grpc_feed(feed.clone(), feed_id));
-    }
+    // The aggregate's key IS the feed id; inventing one per response gave
+    // clients a different id for the same feed on every call.
+    let playtimes = &aggregate.playtime_by_feed_and_guid;
+    let feeds: Vec<GrpcFeed> = aggregate
+        .feeds_by_feed_id
+        .iter()
+        .map(|(feed_id, feed)| feed_to_grpc_feed(feed.clone(), *feed_id, playtimes))
+        .collect();
     GrpcFeeds { feeds }
 }
