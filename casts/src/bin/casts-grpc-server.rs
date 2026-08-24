@@ -4,8 +4,9 @@
 extern crate log;
 
 use chrono::{DateTime, Utc};
+use commit_store::{commit, store::StreamCursor};
 use prost_types::Timestamp as GrpcTimestamp;
-use std::{str::FromStr, sync::Arc};
+use std::{pin::pin, str::FromStr, sync::Arc};
 use url::Url;
 
 use casts::{
@@ -25,7 +26,7 @@ use commit_store::{grpc_interface::commit_store_client::CommitStoreClient, Clien
 // use futures::Stream;
 // use tokio_stream::{Stream, StreamExt};
 use anyhow::Result;
-use futures::lock::Mutex;
+use futures::{lock::Mutex, StreamExt};
 use immutable_feed::{Content, Entry, Feed, Image, Link, MediaContent, MediaObject};
 use tonic::{transport::Server, Request, Response, Status};
 use uuid::Uuid;
@@ -34,28 +35,28 @@ pub struct CastsImpl {
     backing_store: Arc<Mutex<Grpc2Store>>,
 }
 
-async fn hydrate_aggregate(
-    client: &mut dyn DispatchingAsyncReadWriteStore,
+async fn hydrate_aggregate<S: DispatchingAsyncReadWriteStore>(
+    client: &mut S,
     stream_id: &str,
-) -> FeedAggregate {
+) -> FeedAggregate
+where
+    S: Clone + 'static,
+{
     let stream_id: Uuid = Uuid::parse_str(stream_id).unwrap();
     let mut aggregate = FeedAggregate::new();
-    println!("stream_id {}", stream_id);
-    println!("empty aggregate");
-    let commits = client
-        .get_stream_range(stream_id, 0, i64::MAX)
-        .await
-        .expect("failed to make upstream grpc call");
-    println!("commits in hand");
-    for commit in commits.into_iter() {
+    let cursor = StreamCursor {
+        stream_id,
+        min_version: 0,
+        max_version: None,
+    };
+    let mut commits = pin!(client.stream_commits(cursor));
+    while let Some(commit) = commits.next().await {
         let events: Vec<FeedAggregateEvent> = serde_json::from_value(commit.events)
             .expect("unable to deserialize events to FeedAggregateEvent");
         for event in events.into_iter() {
             aggregate = aggregate.apply(event);
-            println!("applied event");
         }
     }
-    println!("returning aggregate");
     aggregate
 }
 
@@ -67,7 +68,7 @@ impl casts::grpc_interface::casts_server::Casts for CastsImpl {
     ) -> Result<Response<GrpcFeeds>, Status> {
         info!("list_feeds");
         let mut lock = self.backing_store.lock().await;
-        let client = lock.store();
+        let client: &mut Grpc2Store = &mut lock;
 
         println!("inside feed accessor");
         println!("client");

@@ -1,6 +1,6 @@
 use anyhow::Result;
 use casts::{
-    aggregate::FeedAggregate,
+    aggregate::{self, FeedAggregate},
     applicable::EventApplicable,
     commands::{Command, FeedAggregateCommand},
     config::{
@@ -18,9 +18,12 @@ use commit_store::{
 };
 use immutable_feed::fetch_feed;
 use log::info;
+use prost::Message;
 use tonic::transport::Channel;
 use url::Url;
 use uuid::{uuid, Uuid};
+
+use futures::StreamExt;
 
 fn usage() {
     println!("USAGE: casts add FEED_URL");
@@ -90,6 +93,7 @@ async fn poll(stream_id: Uuid) -> Result<()> {
             stream_id: stream_id.to_string(),
             min_version,
             max_version,
+            limit: i64::MAX,
         })
         .await
         .unwrap()
@@ -157,6 +161,7 @@ async fn hydrated_client(
             stream_id: stream_id.to_string(),
             min_version,
             max_version,
+            limit: i64::MAX,
         })
         .await
         .unwrap()
@@ -214,6 +219,68 @@ async fn main() -> Result<()> {
             }
             add(grpc_client, &stream_id, Url::parse(&args[2])?).await?
         }
+        "list-commits-events-json" => {
+            let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
+                CommitStoreClient::connect("http://127.0.0.1:7392")
+                    .await
+                    .expect("Failed to connect to backend commit store")
+                    .max_encoding_message_size(8 * 1024 * 1024);
+
+            println!("[");
+            for version_num in 5..=5 {
+                let response_result = grpc_client
+                    .get_stream_range(StreamCursor {
+                        stream_id: stream_id.to_string(),
+                        min_version: version_num,
+                        max_version: version_num,
+                        limit: i64::MAX,
+                    })
+                    .await;
+
+                let mut response: tonic::Response<Commits> = response_result.unwrap();
+                let commits = response.get_mut().to_owned();
+
+                for commit in commits.commits.iter() {
+                    let domain_commit = grpc_to_domain_commit(commit);
+                    println!("{},", serde_json::to_string(&domain_commit.events).unwrap());
+                }
+            }
+            println!("]");
+        }
+        "list-commits" => {
+            let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
+                CommitStoreClient::connect("http://127.0.0.1:7392")
+                    .await
+                    .expect("Failed to connect to backend commit store");
+
+            println!("Fetching commits");
+            let response_result = grpc_client
+                .stream_stream_range(StreamCursor {
+                    stream_id: stream_id.to_string(),
+                    min_version: 0,
+                    max_version: i64::MAX,
+                    limit: i64::MAX,
+                })
+                .await;
+
+            let mut response = response_result.unwrap();
+            while let Some(rpc_commit_result) = response.get_mut().next().await {
+                let rpc_commit = rpc_commit_result.unwrap();
+                let rpc_commit_as_msg: &dyn Message = &rpc_commit;
+                let domain_commit = grpc_to_domain_commit(&rpc_commit);
+                println!(
+                    "{}\t{}\t{}\t{:-#}",
+                    domain_commit.stream_metadata.stream_version,
+                    domain_commit.commit_metadata.commit_id,
+                    domain_commit.commit_metadata.commit_timestamp,
+                    byte_unit::Byte::from_i64_with_unit(
+                        rpc_commit_as_msg.encoded_len() as i64,
+                        byte_unit::Unit::B
+                    )
+                    .unwrap()
+                );
+            }
+        }
         "poll" => {
             if args.len() == 2 {
                 let min_version = 0;
@@ -222,21 +289,22 @@ async fn main() -> Result<()> {
                 let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
                     CommitStoreClient::connect("http://127.0.0.1:7392")
                         .await
-                        .expect("Failed to connect to backend commit store");
+                        .expect("Failed to connect to backend commit store")
+                        // .max_encoding_message_size(8 * 1024 * 1024);
+                        .max_decoding_message_size(8 * 1024 * 1024);
 
-                let commits: Commits = grpc_client
-                    .get_stream_range(StreamCursor {
+                let mut commit_stream_response = grpc_client
+                    .stream_stream_range(StreamCursor {
                         stream_id: stream_id.to_string(),
                         min_version,
                         max_version,
+                        limit: i64::MAX,
                     })
                     .await
                     .unwrap()
-                    .get_mut()
-                    .to_owned();
-
+                    .into_inner();
                 let mut aggregate = FeedAggregate::default();
-                for commit in commits.commits.iter() {
+                while let Some(Ok(commit)) = commit_stream_response.next().await {
                     aggregate = aggregate
                         .apply_many(serde_json::from_slice(commit.events.as_slice()).unwrap());
                 }

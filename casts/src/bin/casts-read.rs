@@ -1,4 +1,5 @@
 use casts::{aggregate::FeedAggregate, applicable::EventApplicable};
+use commit_store::config::ClientConfigBuilder;
 use commit_store::grpc_interface::{Commits, StreamCursor};
 
 use commit_store::grpc_interface::commit_store_client::CommitStoreClient;
@@ -8,7 +9,7 @@ use uuid::Uuid;
 #[tokio::main]
 async fn main() {
     pretty_env_logger::init();
-    let config = commit_store::ClientConfigBuilder::default();
+    let config = ClientConfigBuilder::default();
     let stream_id = Uuid::parse_str(&std::env::args().nth(1).expect("USAGE: read STREAM_ID"))
         .unwrap()
         .to_string();
@@ -24,6 +25,7 @@ async fn main() {
             stream_id,
             min_version,
             max_version,
+            limit: i64::MAX,
         })
         .await
         .unwrap()

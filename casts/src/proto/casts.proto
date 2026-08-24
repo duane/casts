@@ -8,6 +8,7 @@ package GrpcInterface;
 
 service Casts {
     rpc ListFeeds (ListFeedsRequest) returns (Feeds);
+    rpc ListEntries (ListEntriesRequest) returns (Entries);
     rpc GetFeed (GetFeedRequest) returns (Feed);
 }
 
@@ -17,6 +18,11 @@ message GetFeedRequest {
 }
 
 message ListFeedsRequest {
+    string streamId = 1;
+}
+
+
+message ListEntriesRequest {
     string streamId = 1;
 }
 
@@ -82,4 +88,8 @@ message Link {
 
 message Feeds {
     repeated Feed feeds = 1;
+}
+
+message Entries {
+    repeated Entry entries = 1;
 }
