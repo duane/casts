@@ -11,6 +11,7 @@
 // the signature is fixed by the generated service trait.
 #![allow(clippy::result_large_err)]
 
+use anyhow::Result;
 use chrono::{DateTime, Utc};
 use commit_store::commit::{CommitMetadata, StreamMetadata};
 use commit_store::dispatch::DispatchingAsyncReadWriteStore;
@@ -22,6 +23,7 @@ use log::info;
 use prost_types::Timestamp as GrpcTimestamp;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tonic::transport::ServerTlsConfig;
 use tonic::{Request, Response, Status};
 use uuid::Uuid;
 
@@ -39,6 +41,45 @@ use crate::{
         RecordPlaybackResponse,
     },
 };
+
+/// Build the server's TLS configuration.
+///
+/// Mirrors commit-store's `build_tls_config`, including its refusals: a client
+/// CA without a server identity is a hard error rather than a silent downgrade
+/// to plaintext, because an operator who asked for client certificates must
+/// never be quietly served without them. This service has no authorization of
+/// its own, so with neither set, anything that reaches the port owns the
+/// library -- hence the warning.
+pub fn build_tls_config(
+    identity: Option<(String, String)>,
+    client_ca: Option<String>,
+) -> Result<Option<ServerTlsConfig>> {
+    match (identity, client_ca) {
+        (Some((cert, key)), client_ca) => {
+            let mut cfg =
+                ServerTlsConfig::new().identity(tonic::transport::Identity::from_pem(cert, key));
+            if let Some(ca) = client_ca {
+                cfg = cfg.client_ca_root(tonic::transport::Certificate::from_pem(ca));
+                log::info!("TLS enabled, and client certificates are required (mutual TLS).");
+            } else {
+                log::info!("TLS enabled. Any client that can reach the port is served.");
+            }
+            Ok(Some(cfg))
+        }
+        (None, Some(_)) => anyhow::bail!(
+            "a client CA is configured but the server certificate and key are not: mutual TLS \
+             requires the server to present its own certificate. Configure CASTS_TLS_CERT_PATH \
+             and CASTS_TLS_KEY_PATH, or remove the client CA."
+        ),
+        (None, None) => {
+            log::warn!(
+                "TLS is disabled and no client certificate is required; \
+                 every client that can reach this port has full access to the library"
+            );
+            Ok(None)
+        }
+    }
+}
 
 pub struct CastsImpl {
     backing_store: Arc<Mutex<Grpc2Store>>,

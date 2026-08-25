@@ -10,7 +10,7 @@ autobins = false
 
 [features]
 graphql = ["juniper", "juniper_hyper", "juniper_subscriptions", "hyper-014"]
-grpc = ["tonic", "prost", "prost-types"]
+grpc = ["tonic", "tonic-health", "prost", "prost-types"]
 
 default = ["grpc"]
 
@@ -110,6 +110,9 @@ futures-core = "~0.3.30"
 reqwest = "~0.12.3"
 
 # grpc
+# Serves grpc.health.v1.Health so a load balancer can tell "the port is
+# open" from "this task can actually reach the commit store".
+tonic-health = { version = "~0.11.0", optional = true }
 tonic = { version = "~0.11.0", optional = true }
 prost = { version = "~0.12.4", optional = true }
 prost-types = { version = "~0.12.4", optional = true }
@@ -126,6 +129,9 @@ juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", r
 # instead of a real socket, so the gRPC tests need no port and no startup
 # sleep. Same harness shape as commit-store's `tests/grpc_e2e.rs`.
 tower = "~0.4"
+# Generates a throwaway CA and leaf certs at test time, so the mutual-TLS
+# tests need no committed private key. Same approach as commit-store.
+rcgen = "~0.13"
 tokio-stream = "~0.1.15"
 
 [build-dependencies]
