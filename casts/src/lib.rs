@@ -22,6 +22,7 @@ pub mod grpc_interface {
     tonic::include_proto!("grpc_interface");
 }
 
+pub mod commit_store_client;
 pub mod config;
 
 #[cfg(feature = "graphql")]

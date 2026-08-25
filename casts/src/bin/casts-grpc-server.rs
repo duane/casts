@@ -7,8 +7,7 @@ use casts::grpc::Grpc2Store;
 use casts::grpc_interface::casts_server::CastsServer;
 use casts::service::{build_tls_config, CastsImpl};
 use commit_store::store::ScanCommitsCursor;
-use commit_store::{grpc_interface::commit_store_client::CommitStoreClient, Client};
-use std::str::FromStr;
+use commit_store::Client;
 use std::time::Duration;
 use tonic::transport::Server;
 
@@ -73,14 +72,8 @@ pub async fn serve() -> Result<()> {
     let tls = build_tls_config(server_config.tls_identity, server_config.client_ca)?;
 
     let commit_store_cfg = commit_store::config::ClientConfigBuilder::default().build();
-
     log::info!("Connecting to commit store at {}", commit_store_cfg.addr);
-
-    let endpoint = tonic::transport::Uri::from_str(&commit_store_cfg.addr)?;
-
-    let client: CommitStoreClient<tonic::transport::Channel> =
-        CommitStoreClient::connect(endpoint).await?;
-
+    let client = casts::commit_store_client::connect().await?;
     let grpc_client = Client::new(client);
 
     let store = Grpc2Store::Grpc(grpc_client);

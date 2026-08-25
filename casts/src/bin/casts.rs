@@ -76,12 +76,7 @@ const STREAM_ID: Uuid = uuid!["34c3c08d-0d55-4af4-a126-170c1380f07e"];
 /// Connect to the commit store named by `COMMIT_STORE_ADDR` (default
 /// http://localhost:7392), like every other client binary.
 pub async fn get_client() -> CommitStoreClient<Channel> {
-    let addr = commit_store::config::ClientConfigBuilder::default()
-        .build()
-        .addr;
-    let endpoint =
-        tonic::transport::Uri::try_from(addr).expect("COMMIT_STORE_ADDR is not a valid URI");
-    CommitStoreClient::connect(endpoint)
+    casts::commit_store_client::connect()
         .await
         .expect("Failed to connect to backend commit store")
 }
