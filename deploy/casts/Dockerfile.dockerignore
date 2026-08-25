@@ -1,0 +1,17 @@
+# The build context is the PARENT directory holding both sibling checkouts
+# (see Dockerfile). Exclude everything, then admit only the two source trees,
+# minus their build artifacts -- without this the context uploads every
+# sibling repository and the multi-gigabyte target/ directories.
+*
+!casts
+!commit-store
+casts/target
+casts/casts-ios
+casts/screenshots
+casts/venv
+casts/.git
+casts/.idea
+commit-store/target
+commit-store/deploy
+commit-store/scripts
+commit-store/.git

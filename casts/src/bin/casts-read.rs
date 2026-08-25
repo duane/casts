@@ -14,9 +14,16 @@ async fn main() {
     let min_version = 0;
     let max_version = i64::MAX;
 
-    let mut grpc_client = CommitStoreClient::connect("http://127.0.0.1:7392")
+    // Connect to the commit store named by COMMIT_STORE_ADDR, like every
+    // other client binary.
+    let addr = commit_store::config::ClientConfigBuilder::default()
+        .build()
+        .addr;
+    let endpoint =
+        tonic::transport::Uri::try_from(addr).expect("COMMIT_STORE_ADDR is not a valid URI");
+    let mut grpc_client = CommitStoreClient::connect(endpoint)
         .await
-        .expect("bruh I swear this was working a second ago");
+        .expect("failed to connect to the commit store");
 
     let commits: Commits = grpc_client
         .get_stream_range(StreamCursor {
@@ -24,6 +31,7 @@ async fn main() {
             min_version,
             max_version,
             limit: i64::MAX,
+            reverse: false,
         })
         .await
         .unwrap()

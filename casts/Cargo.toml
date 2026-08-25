@@ -2,13 +2,14 @@
 name = "casts"
 version = "0.1.0"
 edition = "2021"
+license = "GPL-3.0-only"
 # Every binary is declared explicitly below; auto-discovery would also build
 # the parked casts-server, which still uses pre-1.x hyper APIs and does not
 # compile.
 autobins = false
 
 [features]
-graphql = ["juniper", "juniper_hyper", "juniper_subscriptions"]
+graphql = ["juniper", "juniper_hyper", "juniper_subscriptions", "hyper-014"]
 grpc = ["tonic", "prost", "prost-types"]
 
 default = ["grpc"]
@@ -42,12 +43,10 @@ name = "introspect"
 path = "src/bin/introspect.rs"
 required-features = ["graphql"]
 
-# Parked: still written against pre-1.x hyper (`make_service_fn`,
-# `Server::bind`). Re-declare once ported to hyper 1.x (plan.md Phase 1.5).
-# [[bin]]
-# name = "casts-server"
-# path = "src/bin/casts-server.rs"
-# required-features = ["graphql"]
+[[bin]]
+name = "casts-server"
+path = "src/bin/casts-server.rs"
+required-features = ["graphql"]
 
 [[bin]]
 name = "seed"
@@ -86,6 +85,16 @@ commit-store = { path = "../../commit-store" }
 
 # http server and client libs
 hyper = "~1.11"
+# The pinned juniper rev's juniper_hyper is written against hyper 0.14, so
+# casts-server speaks 0.14 under this renamed dep; both hyper major versions
+# coexist in the graph. Retire this when the juniper pin moves to a rev that
+# supports hyper 1.x.
+hyper-014 = { package = "hyper", version = "~0.14.7", optional = true, features = [
+    "server",
+    "runtime",
+    "http1",
+    "tcp",
+] }
 
 # futures stuff
 tokio = { version = "~1.37.0", features = ["full"] }
@@ -111,6 +120,13 @@ juniper = { git = "https://github.com/graphql-rust/juniper.git", rev = "98497365
 juniper_hyper = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161", optional = true }
 juniper_subscriptions = { git = "https://github.com/graphql-rust/juniper.git", rev = "984973658217f73d63608283d18723e11ce65161", optional = true }
 
+
+[dev-dependencies]
+# `tower::service_fn` hands tonic an in-process `tokio::io::duplex` transport
+# instead of a real socket, so the gRPC tests need no port and no startup
+# sleep. Same harness shape as commit-store's `tests/grpc_e2e.rs`.
+tower = "~0.4"
+tokio-stream = "~0.1.15"
 
 [build-dependencies]
 tonic-build = "~0.11.0"

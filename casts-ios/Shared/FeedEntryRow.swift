@@ -17,8 +17,14 @@ struct FeedEntryRow: View {
                 Text(entry.title)
                     .lineLimit(2)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let media = entry.media.first {
-                    Text(casualDuration(elapsed: TimeInterval(media.durationSecs)))
+                HStack(spacing: 4) {
+                    if let media = entry.media.first {
+                        Text(casualDuration(elapsed: TimeInterval(media.durationSecs)))
+                    }
+                    if entry.elapsedSeconds > 0 {
+                        Text("· resumes at \(casualDuration(elapsed: TimeInterval(entry.elapsedSeconds)))")
+                            .foregroundColor(.secondary)
+                    }
                 }
             }.padding(EdgeInsets(top: 0, leading: 10, bottom: 0, trailing: 10))
             Divider()

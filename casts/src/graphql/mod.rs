@@ -191,10 +191,13 @@ pub struct Entry {
     pub links: Vec<Link>,
     pub content: Option<Content>,
     pub media: Vec<MediaObject>,
+    /// Last recorded playback position in whole seconds; absent when the
+    /// entry has never been listened to.
+    pub elapsed_seconds: Option<i32>,
 }
 
-impl From<immutable_feed::Entry> for Entry {
-    fn from(entry: immutable_feed::Entry) -> Self {
+impl Entry {
+    fn with_playtime(entry: immutable_feed::Entry, elapsed: Option<(i64, i32)>) -> Self {
         Entry {
             title: entry.title.unwrap_or_default(),
             guid: entry.guid,
@@ -202,6 +205,8 @@ impl From<immutable_feed::Entry> for Entry {
             links: entry.links.into_iter().map(Link::from).collect(),
             content: entry.content.map(Content::from),
             media: entry.media.into_iter().map(MediaObject::from).collect(),
+            elapsed_seconds: elapsed
+                .map(|(seconds, _nanos)| i32::try_from(seconds).unwrap_or(i32::MAX)),
         }
     }
 }
@@ -235,14 +240,29 @@ pub struct Feed {
     pub logo: Option<Image>,
 }
 
+type PlaytimeByFeedAndGuid = std::collections::HashMap<(String, String), (i64, i32)>;
+
 impl Feed {
-    fn with_feed_id(feed: immutable_feed::Feed, feed_id: Uuid) -> Self {
+    fn with_feed_id(
+        feed: immutable_feed::Feed,
+        feed_id: Uuid,
+        playtimes: &PlaytimeByFeedAndGuid,
+    ) -> Self {
         Feed {
             feed_id,
             title: feed.metadata.title,
             authors: feed.metadata.authors.clone(),
             description: feed.metadata.description.unwrap_or_default(),
-            entries: feed.entries.into_iter().map(Entry::from).collect(),
+            entries: feed
+                .entries
+                .into_iter()
+                .map(|entry| {
+                    let elapsed = playtimes
+                        .get(&(feed_id.to_string(), entry.guid.clone()))
+                        .copied();
+                    Entry::with_playtime(entry, elapsed)
+                })
+                .collect(),
             logo: feed.metadata.logo.map(Image::from),
         }
     }
@@ -347,10 +367,11 @@ impl Query {
         let mut mutable_ctx = context.clone();
         let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();
         let aggregate = hydrate_aggregate(client, stream_id).await;
+        let playtimes = &aggregate.playtime_by_feed_and_guid;
         let feed_result = aggregate
             .feeds_by_feed_id
-            .into_iter()
-            .map(|(feed_id, feed)| Feed::with_feed_id(feed, feed_id))
+            .iter()
+            .map(|(feed_id, feed)| Feed::with_feed_id(feed.clone(), *feed_id, playtimes))
             .collect();
         feed_result
     }
@@ -369,11 +390,14 @@ impl Subscription {
             mutable_ctx.store().subscribe_stream(&stream_id).await,
         );
         let gql_stream = aggregate_stream.map(|commit_result| match commit_result {
-            Ok((_, agg)) => Ok(agg
-                .feeds_by_feed_id
-                .into_iter()
-                .map(|(feed_id, immutable_feed)| Feed::with_feed_id(immutable_feed, feed_id))
-                .collect()),
+            Ok((_, agg)) => {
+                let playtimes = &agg.playtime_by_feed_and_guid;
+                Ok(agg
+                    .feeds_by_feed_id
+                    .iter()
+                    .map(|(feed_id, feed)| Feed::with_feed_id(feed.clone(), *feed_id, playtimes))
+                    .collect())
+            }
             Err(err) => Err(FieldError::from(format!(
                 "subscription stream error: {err}"
             ))),

@@ -3,10 +3,7 @@ use casts::{
     aggregate::FeedAggregate,
     applicable::EventApplicable,
     commands::{Command, FeedAggregateCommand},
-    config::{
-        ClientConfig, ClientConfigBuilder, ServerConfig, ServerConfigBuilder,
-        DEFAULT_COMMIT_STORE_URL,
-    },
+    config::{ClientConfig, ClientConfigBuilder, ServerConfig, ServerConfigBuilder},
     events::FeedAggregateEvent,
 };
 use chrono::Utc;
@@ -17,7 +14,6 @@ use commit_store::{
     grpc_to_domain_commit, CommitAttempt,
 };
 use immutable_feed::fetch_feed;
-use log::info;
 use prost::Message;
 use tonic::transport::Channel;
 use url::Url;
@@ -77,12 +73,17 @@ async fn mark_listened(
 
 const STREAM_ID: Uuid = uuid!["34c3c08d-0d55-4af4-a126-170c1380f07e"];
 
+/// Connect to the commit store named by `COMMIT_STORE_ADDR` (default
+/// http://localhost:7392), like every other client binary.
 pub async fn get_client() -> CommitStoreClient<Channel> {
-    let grpc_client: CommitStoreClient<Channel> =
-        CommitStoreClient::connect("http://127.0.0.1:7392")
-            .await
-            .expect("Failed to connect to backend commit store");
-    grpc_client
+    let addr = commit_store::config::ClientConfigBuilder::default()
+        .build()
+        .addr;
+    let endpoint =
+        tonic::transport::Uri::try_from(addr).expect("COMMIT_STORE_ADDR is not a valid URI");
+    CommitStoreClient::connect(endpoint)
+        .await
+        .expect("Failed to connect to backend commit store")
 }
 
 async fn add(
@@ -125,31 +126,29 @@ async fn add(
     Ok(())
 }
 
+/// Re-fetch every feed in the stream and commit the observed changes.
+///
+/// Hydrates over the server-streaming RPC (with a raised decode limit) so a
+/// large feed history is not capped by the unary message-size limit.
 async fn poll(stream_id: Uuid) -> Result<()> {
-    println!("HALLO");
-    let min_version: i64 = 0;
-    let max_version = i64::MAX;
-
-    let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
-        CommitStoreClient::connect("http://127.0.0.1:7392")
-            .await
-            .expect("Failed to connect to backend commit store");
-
-    let commits: Commits = grpc_client
-        .get_stream_range(StreamCursor {
-            stream_id: stream_id.to_string(),
-            min_version,
-            max_version,
-            limit: i64::MAX,
-        })
+    let mut grpc_client = get_client()
         .await
-        .unwrap()
-        .get_mut()
-        .to_owned();
+        .max_decoding_message_size(8 * 1024 * 1024);
 
+    let mut commit_stream = grpc_client
+        .stream_stream_range(StreamCursor {
+            stream_id: stream_id.to_string(),
+            min_version: 0,
+            max_version: i64::MAX,
+            limit: i64::MAX,
+            reverse: false,
+        })
+        .await?
+        .into_inner();
     let mut aggregate = FeedAggregate::default();
-    for commit in commits.commits.iter() {
-        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice()).unwrap());
+    while let Some(commit) = commit_stream.next().await {
+        let commit = commit?;
+        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice())?);
     }
     for (feed_id, existing_feed) in aggregate.feeds_by_feed_id.clone().into_iter() {
         let observed_feed = fetch_feed(&existing_feed.url.clone().expect("requires url")).await?;
@@ -196,28 +195,27 @@ async fn poll(stream_id: Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Hydrate the stream's aggregate over the server-streaming RPC, so a large
+/// feed history is not capped by the unary message-size limit.
 async fn hydrated_client(
     grpc_client: &mut CommitStoreClient<tonic::transport::Channel>,
     stream_id: &Uuid,
 ) -> Result<FeedAggregate> {
-    let min_version = 0;
-    let max_version = i64::MAX;
-
-    let commits: Commits = grpc_client
-        .get_stream_range(StreamCursor {
+    let mut commit_stream = grpc_client
+        .stream_stream_range(StreamCursor {
             stream_id: stream_id.to_string(),
-            min_version,
-            max_version,
+            min_version: 0,
+            max_version: i64::MAX,
             limit: i64::MAX,
+            reverse: false,
         })
-        .await
-        .unwrap()
-        .get_mut()
-        .to_owned();
+        .await?
+        .into_inner();
 
     let mut aggregate = FeedAggregate::default();
-    for commit in commits.commits.iter() {
-        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice()).unwrap());
+    while let Some(commit) = commit_stream.next().await {
+        let commit = commit?;
+        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice())?);
     }
     Ok(aggregate)
 }
@@ -237,18 +235,7 @@ async fn main() -> Result<()> {
     let stream_id = Uuid::parse_str("34c3c08d-0d55-4af4-a126-170c1380f07e")?;
 
     let args = std::env::args().collect::<Vec<String>>();
-    info!(
-        "connecting to backend server: {:?}",
-        DEFAULT_COMMIT_STORE_URL
-    );
-    info!(
-        "Connecting to backend server: {:?}",
-        DEFAULT_COMMIT_STORE_URL
-    );
-    let grpc_client: CommitStoreClient<tonic::transport::Channel> =
-        CommitStoreClient::connect(DEFAULT_COMMIT_STORE_URL)
-            .await
-            .expect("Failed to connect to backend commit store");
+    let grpc_client = get_client().await;
 
     match args[1].as_str() {
         "server-config" => {
@@ -280,11 +267,9 @@ async fn main() -> Result<()> {
             .await?
         }
         "list-commits-events-json" => {
-            let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
-                CommitStoreClient::connect("http://127.0.0.1:7392")
-                    .await
-                    .expect("Failed to connect to backend commit store")
-                    .max_encoding_message_size(8 * 1024 * 1024);
+            let mut grpc_client = get_client()
+                .await
+                .max_encoding_message_size(8 * 1024 * 1024);
 
             let response_result = grpc_client
                 .get_stream_range(StreamCursor {
@@ -292,6 +277,7 @@ async fn main() -> Result<()> {
                     min_version: 0,
                     max_version: i64::MAX,
                     limit: i64::MAX,
+                    reverse: false,
                 })
                 .await;
 
@@ -306,10 +292,7 @@ async fn main() -> Result<()> {
             println!("]");
         }
         "list-commits" => {
-            let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
-                CommitStoreClient::connect("http://127.0.0.1:7392")
-                    .await
-                    .expect("Failed to connect to backend commit store");
+            let mut grpc_client = get_client().await;
 
             println!("Fetching commits");
             let response_result = grpc_client
@@ -318,6 +301,7 @@ async fn main() -> Result<()> {
                     min_version: 0,
                     max_version: i64::MAX,
                     limit: i64::MAX,
+                    reverse: false,
                 })
                 .await;
 
@@ -340,83 +324,13 @@ async fn main() -> Result<()> {
             }
         }
         "poll" => {
-            if args.len() == 2 {
-                let min_version = 0;
-                let max_version = i64::MAX;
-
-                let mut grpc_client: CommitStoreClient<tonic::transport::Channel> =
-                    CommitStoreClient::connect("http://127.0.0.1:7392")
-                        .await
-                        .expect("Failed to connect to backend commit store")
-                        // .max_encoding_message_size(8 * 1024 * 1024);
-                        .max_decoding_message_size(8 * 1024 * 1024);
-
-                let mut commit_stream_response = grpc_client
-                    .stream_stream_range(StreamCursor {
-                        stream_id: stream_id.to_string(),
-                        min_version,
-                        max_version,
-                        limit: i64::MAX,
-                    })
-                    .await
-                    .unwrap()
-                    .into_inner();
-                let mut aggregate = FeedAggregate::default();
-                while let Some(Ok(commit)) = commit_stream_response.next().await {
-                    aggregate = aggregate
-                        .apply_many(serde_json::from_slice(commit.events.as_slice()).unwrap());
-                }
-                for (feed_id, existing_feed) in aggregate.feeds_by_feed_id.clone().into_iter() {
-                    let observed_feed =
-                        fetch_feed(&existing_feed.url.clone().expect("requires url")).await?;
-                    let diff = existing_feed.diff(&observed_feed);
-                    println!("found {} changes", diff.len());
-                    let observed_feed_cmd = FeedAggregateCommand::ObserveFeed {
-                        stream_id,
-                        feed_id,
-                        feed: observed_feed,
-                    };
-                    let events = observed_feed_cmd
-                        .async_apply(&aggregate)
-                        .await
-                        .expect("Failed to apply feed observation");
-                    let events_count = events.len() as i64;
-                    if events_count == 0 {
-                        continue;
-                    }
-                    let commit_attempt = CommitAttempt {
-                        stream_metadata: StreamMetadata {
-                            stream_id,
-                            stream_version: aggregate.version + 1,
-                        },
-                        commit_metadata: CommitMetadata {
-                            commit_id: Uuid::new_v4(),
-                            commit_sequence: aggregate.version + 1,
-                            commit_timestamp: Utc::now(),
-                        },
-                        metadata: serde_json::to_value(observed_feed_cmd).unwrap(),
-                        events: serde_json::to_value(events.clone()).unwrap(),
-                        events_count,
-                    };
-                    let commit_result = grpc_to_domain_commit(
-                        grpc_client
-                            .append_commit(domain_to_grpc_commit_attempt(&commit_attempt))
-                            .await
-                            .unwrap()
-                            .get_ref(),
-                    );
-                    let committed_events: Vec<FeedAggregateEvent> =
-                        serde_json::from_value(commit_result.events).unwrap();
-                    aggregate = aggregate.apply_many(committed_events);
-                }
+            // `poll [STREAM_ID]` -- defaults to the built-in stream.
+            let poll_stream_id = if args.len() >= 3 {
+                Uuid::parse_str(&args[2])?
             } else {
-                let poll_arg_o = Uuid::parse_str(&args[2]).ok();
-
-                poll(
-                    poll_arg_o.expect("You should pass a valid feed id if you want a nice result"),
-                )
-                .await?;
-            }
+                stream_id
+            };
+            poll(poll_stream_id).await?
         }
         _ => usage(),
     }

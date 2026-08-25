@@ -105,6 +105,12 @@ struct PlayView: View {
                 return
             }
             self.state.prepareToPlay(url: url)
+            // Resume from the last reported playback position.
+            if entry.elapsedSeconds > 0 {
+                let position = Float64(entry.elapsedSeconds)
+                self.state.seek(position)
+                self.state.currentTime = position
+            }
         }.onDisappear {
             if self.state.isPlaying {
                 self.state.togglePlayState()
