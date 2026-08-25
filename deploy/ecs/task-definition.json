@@ -44,15 +44,15 @@
       "secrets": [
         {
           "name": "COMMIT_STORE_CA_PEM",
-          "valueFrom": "REPLACE_WITH_SECRET_ARN/ca"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:commit-store/client-ca-kkTxZ0"
         },
         {
           "name": "COMMIT_STORE_CLIENT_CERT_PEM",
-          "valueFrom": "REPLACE_WITH_SECRET_ARN/casts/commit-store-client-cert"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/commit-store-client-cert-zoHQto"
         },
         {
           "name": "COMMIT_STORE_CLIENT_KEY_PEM",
-          "valueFrom": "REPLACE_WITH_SECRET_ARN/casts/commit-store-client-key"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/commit-store-client-key-sIIBU2"
         }
       ],
       "logConfiguration": {
