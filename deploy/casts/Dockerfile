@@ -17,7 +17,7 @@ COPY commit-store/ commit-store/
 WORKDIR /usr/src/casts
 # Only the gRPC server ships. The graphql feature pulls juniper and a second
 # hyper major version for a binary nothing deployed serves.
-RUN cargo build --release --bin casts-grpc-server
+RUN cargo build --release --bin casts-grpc-server --bin casts-health-probe
 
 FROM debian:bookworm-slim
 # libssl3 named explicitly rather than relied on as a transitive of
@@ -27,6 +27,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /usr/src/casts/target/release/casts-grpc-server /usr/local/bin/
+COPY --from=builder /usr/src/casts/target/release/casts-health-probe /usr/local/bin/
 COPY casts/deploy/casts/docker-entrypoint.sh /usr/local/bin/
 
 RUN useradd --system --create-home --shell /usr/sbin/nologin casts
@@ -34,6 +35,15 @@ USER casts
 
 ENV RUST_LOG=info
 EXPOSE 8243
+
+# NOT routed through docker-entrypoint.sh: Docker execs HEALTHCHECK's own CMD
+# directly, so the entrypoint's *_PEM-to-file conversion never runs for it.
+# casts-health-probe.rs does its own materialization instead, so it stays a
+# single binary HEALTHCHECK can invoke directly -- commit-store confirmed on
+# real Fargate that a multi-element CMD chaining to a wrapper script is never
+# executed at all.
+HEALTHCHECK --interval=15s --timeout=5s --start-period=15s --retries=3 \
+    CMD ["/usr/local/bin/casts-health-probe"]
 
 # The entrypoint converts env-delivered PEM content into files (see the script
 # for why); CMD stays separate so an ECS containerOverride can swap the binary

@@ -75,7 +75,17 @@
           "awslogs-stream-prefix": "casts"
         }
       },
-      "stopTimeout": 10
+      "stopTimeout": 10,
+      "healthCheck": {
+        "command": [
+          "CMD",
+          "/usr/local/bin/casts-health-probe"
+        ],
+        "interval": 15,
+        "timeout": 5,
+        "retries": 3,
+        "startPeriod": 15
+      }
     }
   ]
 }

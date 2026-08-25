@@ -15,6 +15,11 @@ grpc = ["tonic", "tonic-health", "prost", "prost-types"]
 default = ["grpc"]
 
 [[bin]]
+name = "casts-health-probe"
+path = "src/bin/casts-health-probe.rs"
+required-features = ["grpc"]
+
+[[bin]]
 name = "casts-grpc-client"
 path = "src/bin/casts-grpc-client.rs"
 required-features = ["grpc"]
