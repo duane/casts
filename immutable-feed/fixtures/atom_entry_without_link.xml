@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Sparse</title>
+  <id>http://example.com/sparse</id>
+  <updated>2026-01-02T00:00:00Z</updated>
+  <entry>
+    <title>Has a link</title>
+    <id>http://example.com/sparse/1</id>
+    <updated>2026-01-01T00:00:00Z</updated>
+    <link href="http://example.com/sparse/1"/>
+  </entry>
+  <entry>
+    <title>Id is a URL, no link element</title>
+    <id>http://example.com/sparse/2</id>
+    <updated>2026-01-02T00:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>Neither a link nor a URL id</title>
+    <id>12345</id>
+    <updated>2026-01-02T00:00:00Z</updated>
+  </entry>
+</feed>

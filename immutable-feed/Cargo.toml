@@ -29,3 +29,9 @@ htmlescape = "~0.3.1"
 serde = "~1.0.197"
 
 mime = "~0.3.17"
+
+## logging
+log = "~0.4.21"
+
+[dev-dependencies]
+tokio = { version = "~1.37.0", features = ["macros", "rt-multi-thread"] }

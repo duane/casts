@@ -18,11 +18,13 @@ use url::Url;
 // util functions
 // --------------
 
-/// Convert an RSS/Atom link to a URL.
-pub fn convert_link_to_url(link: &RustLink) -> Url {
-    let escaped_href = &link.href;
-    let unescaped_href = htmlescape::decode_html(escaped_href).unwrap();
-    Url::parse(&unescaped_href).unwrap()
+/// Convert an RSS/Atom link to a URL, or `None` if the href is not one.
+///
+/// Feeds are third-party input: an unparseable href is a fact about the
+/// world, not an invariant violation, so this reports rather than panics.
+pub fn convert_link_to_url(link: &RustLink) -> Option<Url> {
+    let unescaped_href = htmlescape::decode_html(&link.href).ok()?;
+    Url::parse(&unescaped_href).ok()
 }
 
 /// The feed itself.
@@ -267,7 +269,11 @@ impl Feed {
     pub fn from_url_and_feed(url: Url, rust_feed: RustFeed) -> Feed {
         let raw_url = url.to_string();
         let metadata = FeedMetadata::from(rust_feed.clone());
-        let entries = rust_feed.entries.into_iter().map(Entry::from).collect();
+        let entries = rust_feed
+            .entries
+            .into_iter()
+            .filter_map(Entry::from_rust_entry)
+            .collect();
         Feed {
             url: Some(url),
             raw_url,
@@ -388,7 +394,11 @@ impl From<RustFeed> for Feed {
             url,
             raw_url,
             metadata: FeedMetadata::from(feed.clone()),
-            entries: feed.entries.into_iter().map(Entry::from).collect(),
+            entries: feed
+                .entries
+                .into_iter()
+                .filter_map(Entry::from_rust_entry)
+                .collect(),
         }
     }
 }
@@ -481,15 +491,35 @@ impl Entry {
     }
 }
 
-impl From<RustEntry> for Entry {
-    fn from(entry: RustEntry) -> Entry {
-        let content_url = convert_link_to_url(
-            entry
-                .links
-                .first()
-                .unwrap_or_else(|| panic!("Entry {:?} has no links", entry)),
-        );
-        Entry {
+impl Entry {
+    /// Convert a parsed entry, or drop it when it carries no usable URL.
+    ///
+    /// An entry needs somewhere to point. Atom permits an entry with only an
+    /// `<id>` and no `<link>`, and a feed can always carry a malformed href;
+    /// this used to panic on the first such entry, taking down whatever was
+    /// fetching the feed. An id that happens to be a URL (the Atom
+    /// convention) serves as the fallback before giving up.
+    fn from_rust_entry(entry: RustEntry) -> Option<Entry> {
+        let content_url = entry
+            .links
+            .first()
+            .and_then(convert_link_to_url)
+            .or_else(|| Url::parse(&entry.id).ok());
+        let Some(content_url) = content_url else {
+            log::warn!(
+                "skipping entry {:?} ({:?}): no link and its id is not a URL",
+                entry.title.as_ref().map(|t| &t.content),
+                entry.id
+            );
+            return None;
+        };
+        let links: Vec<Link> = entry.links.into_iter().map(Link::from).collect();
+        let mut media: Vec<MediaObject> = entry.media.into_iter().map(MediaObject::from).collect();
+        if media.is_empty() {
+            media.extend(enclosure_media(&links));
+        }
+
+        Some(Entry {
             guid: entry.id.clone(),
             url: content_url,
             title: entry.title.map(|t| t.content),
@@ -497,10 +527,44 @@ impl From<RustEntry> for Entry {
             updated_at: entry.updated,
             published_at: entry.published,
             content: entry.content.map(Content::from),
-            links: entry.links.into_iter().map(Link::from).collect(),
-            media: entry.media.into_iter().map(MediaObject::from).collect(),
-        }
+            links,
+            media,
+        })
     }
+}
+
+/// Build media objects from Atom `<link rel="enclosure">` elements.
+///
+/// feed-rs turns an RSS `<enclosure>` into a `MediaObject`, but an Atom
+/// enclosure stays a plain link — so a podcast published as Atom arrived with
+/// no playable media at all, and the player had nothing to open. Normalising
+/// here keeps every consumer (gRPC, GraphQL, the iOS player) free of feed
+/// dialects.
+fn enclosure_media(links: &[Link]) -> Option<MediaObject> {
+    let content: Vec<MediaContent> = links
+        .iter()
+        .filter(|link| link.rel.as_deref() == Some("enclosure"))
+        .filter(|link| {
+            link.media_type
+                .as_deref()
+                .is_some_and(|t| t.starts_with("audio/") || t.starts_with("video/"))
+        })
+        .map(|link| MediaContent {
+            url: Url::parse(&link.href).ok(),
+            content_type: link.media_type.clone(),
+            height: None,
+            width: None,
+            size: link.length,
+        })
+        .collect();
+
+    (!content.is_empty()).then_some(MediaObject {
+        title: None,
+        content,
+        // Filled in by `parse_doc` from <itunes:duration> when present.
+        duration: None,
+        description: None,
+    })
 }
 
 pub async fn fetch_body(url: &Url) -> Result<Vec<u8>> {
@@ -509,9 +573,90 @@ pub async fn fetch_body(url: &Url) -> Result<Vec<u8>> {
     Ok(body.as_bytes().into())
 }
 
+/// Parse an `<itunes:duration>` value into whole seconds.
+///
+/// The tag admits three forms in the wild: bare seconds (`1234`), `MM:SS`,
+/// and `H:MM:SS`. feed-rs (checked through 2.4.0) only recognises the first
+/// and last: its `parse_npt` requires three colon-separated parts, so `55:40`
+/// falls through to the bare-seconds branch, whose regex matches the leading
+/// run of digits and yields 55 seconds for a 55-minute episode. Podcast feeds
+/// use `MM:SS` constantly, so durations came out ~60x too small.
+fn parse_itunes_duration(text: &str) -> Option<u64> {
+    let text = text.trim();
+    let parts: Vec<&str> = text.split(':').collect();
+    let nums: Option<Vec<u64>> = parts.iter().map(|p| p.trim().parse::<u64>().ok()).collect();
+    match nums?[..] {
+        [seconds] => Some(seconds),
+        [minutes, seconds] => Some(minutes * 60 + seconds),
+        [hours, minutes, seconds] => Some(hours * 3600 + minutes * 60 + seconds),
+        _ => None,
+    }
+}
+
+/// Read every `<itunes:duration>` out of the raw document, in item order.
+///
+/// feed-rs has already thrown away the original text by the time it hands
+/// back a `Duration`, so recovering the true value means looking at the
+/// source again. Entries without the tag yield `None`, which keeps this list
+/// aligned with the parsed entries positionally.
+fn itunes_durations(doc: &[u8]) -> Vec<Option<u64>> {
+    use quick_xml::events::Event;
+    use quick_xml::Reader;
+
+    let mut reader = Reader::from_reader(doc);
+    reader.trim_text(true);
+    let mut buf = Vec::new();
+    let mut durations = Vec::new();
+    let mut current: Option<u64> = None;
+    let mut in_item = false;
+    let mut in_duration = false;
+
+    loop {
+        match reader.read_event_into(&mut buf) {
+            Ok(Event::Start(e)) => match e.name().as_ref() {
+                b"item" | b"entry" => {
+                    in_item = true;
+                    current = None;
+                }
+                b"itunes:duration" if in_item => in_duration = true,
+                _ => {}
+            },
+            Ok(Event::Text(e)) if in_duration => {
+                current = e
+                    .unescape()
+                    .ok()
+                    .and_then(|text| parse_itunes_duration(&text));
+            }
+            Ok(Event::End(e)) => match e.name().as_ref() {
+                b"item" | b"entry" => {
+                    durations.push(current.take());
+                    in_item = false;
+                }
+                b"itunes:duration" => in_duration = false,
+                _ => {}
+            },
+            Ok(Event::Eof) | Err(_) => break,
+            _ => {}
+        }
+        buf.clear();
+    }
+    durations
+}
+
 /// Parse the document from a vector of bytes.
 pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
-    Ok(Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?))
+    let mut feed = Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?);
+
+    // Correct the durations feed-rs mis-parsed (see `parse_itunes_duration`).
+    // Entries keep document order, so the two lists line up positionally;
+    // a short list simply leaves the tail untouched.
+    for (entry, itunes) in feed.entries.iter_mut().zip(itunes_durations(doc)) {
+        let Some(seconds) = itunes else { continue };
+        for media in &mut entry.media {
+            media.duration = Some((u32::try_from(seconds).unwrap_or(u32::MAX), 0));
+        }
+    }
+    Ok(feed)
 }
 
 pub async fn fetch_feed(url: &Url) -> Result<Feed> {
@@ -580,4 +725,83 @@ pub enum EntryMutation {
 
     /// Stores the new links.
     ReplacedLinks(Vec<Link>),
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{itunes_durations, parse_doc, parse_itunes_duration};
+    use url::Url;
+
+    #[test]
+    fn itunes_duration_accepts_all_three_forms() {
+        // Bare seconds.
+        assert_eq!(parse_itunes_duration("15"), Some(15));
+        // MM:SS -- the form feed-rs reads as bare seconds.
+        assert_eq!(parse_itunes_duration("55:40"), Some(55 * 60 + 40));
+        assert_eq!(parse_itunes_duration("01:12"), Some(72));
+        // H:MM:SS.
+        assert_eq!(parse_itunes_duration("1:02:03"), Some(3723));
+        assert_eq!(parse_itunes_duration("10:00:00"), Some(36000));
+        // Junk stays junk rather than becoming a plausible-looking number.
+        assert_eq!(parse_itunes_duration("about an hour"), None);
+        assert_eq!(parse_itunes_duration(""), None);
+        assert_eq!(parse_itunes_duration("1:2:3:4"), None);
+    }
+
+    const FEED: &str = r#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Examplecast</title>
+    <link>http://example.com/</link>
+    <description>A test feed.</description>
+    <item>
+      <title>Long episode</title>
+      <guid>guid-1</guid>
+      <link>http://example.com/1</link>
+      <enclosure url="http://example.com/1.mp3" length="1" type="audio/mpeg"/>
+      <itunes:duration>55:40</itunes:duration>
+    </item>
+    <item>
+      <title>Short trailer</title>
+      <guid>guid-2</guid>
+      <link>http://example.com/2</link>
+      <enclosure url="http://example.com/2.mp3" length="1" type="audio/mpeg"/>
+      <itunes:duration>15</itunes:duration>
+    </item>
+    <item>
+      <title>Epic</title>
+      <guid>guid-3</guid>
+      <link>http://example.com/3</link>
+      <enclosure url="http://example.com/3.mp3" length="1" type="audio/mpeg"/>
+      <itunes:duration>4:38:12</itunes:duration>
+    </item>
+  </channel>
+</rss>"#;
+
+    #[test]
+    fn durations_are_read_in_item_order() {
+        assert_eq!(
+            itunes_durations(FEED.as_bytes()),
+            vec![Some(55 * 60 + 40), Some(15), Some(4 * 3600 + 38 * 60 + 12)]
+        );
+    }
+
+    /// The regression this exists for: a 55m40s episode must not come back as
+    /// 55 seconds.
+    #[test]
+    fn parsed_feed_carries_corrected_durations() {
+        let url = Url::parse("http://example.com/feed.xml").unwrap();
+        let feed = parse_doc(&url, FEED.as_bytes()).unwrap();
+        assert_eq!(feed.entries.len(), 3);
+
+        let durations: Vec<Option<(u32, u32)>> = feed
+            .entries
+            .iter()
+            .map(|e| e.media.first().and_then(|m| m.duration))
+            .collect();
+        assert_eq!(
+            durations,
+            vec![Some((3340, 0)), Some((15, 0)), Some((16692, 0))]
+        );
+    }
 }

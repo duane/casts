@@ -1,0 +1,78 @@
+<?xml version='1.0' encoding='utf-8'?>
+<feed xmlns="http://www.w3.org/2005/Atom" xml:lang="en-US">
+	<title type="text">The Verge</title>
+	<subtitle type="text">The Verge is about technology and how it makes us feel. Founded in 2011, we offer our audience everything from breaking news to reviews to award-winning features and investigations, on our site, in video, and in podcasts.</subtitle>
+
+	<updated>2026-08-25T14:25:52+00:00</updated>
+
+	<link rel="alternate" type="text/html" href="https://www.theverge.com" />
+	<id>https://www.theverge.com/rss/index.xml</id>
+	<link rel="self" type="application/atom+xml" href="https://www.theverge.com/rss/index.xml" />
+
+	<icon>https://platform.theverge.com/wp-content/uploads/sites/2/2025/01/verge-rss-large_80b47e.png?w=150&amp;h=150&amp;crop=1</icon>
+		<entry>
+			
+			<author>
+				<name>Emma Roth</name>
+			</author>
+			
+			<title type="html">Apple&amp;#8217;s ‘new’ polishing cloth is the same except $10 cheaper</title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/tech/984353/apple-polishing-cloth-cheaper" />
+			<id>https://www.theverge.com/?p=984353</id>
+			<updated>2026-08-25T10:25:52-04:00</updated>
+			<published>2026-08-25T10:25:52-04:00</published>
+			<category scheme="https://www.theverge.com" term="Apple" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="Tech" />
+							<summary type="html">Apple just dropped a new polishing cloth, and unlike its refreshed Mac Mini models, it comes with a price cut, as spotted earlier by MacRumors. The polishing cloth is still "made with soft, nonabrasive material" but costs $9 instead of $19. It doesn't look like anything else has changed, as the description matches an archived [&amp;#8230;]</summary>
+			
+							<content type="html">
+											
+
+						
+&lt;figure&gt;
+
+&lt;img alt="An image of Apple’s polishing cloth" data-caption="" data-portal-copyright="Image: Apple" data-has-syndication-rights="1" src="https://platform.theverge.com/wp-content/uploads/sites/2/2026/08/polishing-cloth.png?quality=90&amp;#038;strip=all&amp;#038;crop=0,0,100,100" /&gt;
+	&lt;figcaption&gt;
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p class="wp-block-paragraph"&gt;Apple just dropped &lt;a href="https://www.apple.com/shop/product/mlh74am/a/polishing-cloth"&gt;a new polishing cloth&lt;/a&gt;, and &lt;a href="https://www.theverge.com/tech/984190/apple-mac-mini-m6-m5-pro-price-specs"&gt;unlike its refreshed Mac Mini models&lt;/a&gt;, it comes with a price cut, as spotted &lt;a href="https://www.macrumors.com/2026/08/25/apple-releases-new-polishing-cloth/"&gt;earlier by &lt;em&gt;MacRumors&lt;/em&gt;&lt;/a&gt;. The polishing cloth is still "made with soft, nonabrasive material" but costs $9 instead of $19.&lt;/p&gt;
+&lt;p class="wp-block-paragraph"&gt;It doesn't look like anything else has changed, as the description matches &lt;a href="https://web.archive.org/web/20260801025429/https://www.apple.com/shop/product/MW693AM/A/polishing-cloth"&gt;an archived version&lt;/a&gt; of Apple's old polishing cloth, which it no longer lists on its website. The polishing cloth is compatible with what looks like the same massive list of Apple products, including the iPhone 5 and up. It "cleans any Apple display, including nano-texture, safely and effectively."&lt;/p&gt;
+&lt;p class="wp-block-paragraph"&gt;Curiously, the products Apple re …&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.theverge.com/tech/984353/apple-polishing-cloth-cheaper"&gt;Read the full story at The Verge.&lt;/a&gt;&lt;/p&gt;
+						
+									</content>
+			
+					</entry>
+			<entry>
+			
+			<author>
+				<name>Emma Roth</name>
+			</author>
+			
+			<title type="html">OpenAI says its Jalapeño chip can power faster AI responses than the competition</title>
+			<link rel="alternate" type="text/html" href="https://www.theverge.com/ai-artificial-intelligence/984290/openai-jalapeno-ai-chip-benchmarks" />
+			<id>https://www.theverge.com/?p=984290</id>
+			<updated>2026-08-25T10:09:53-04:00</updated>
+			<published>2026-08-25T10:00:00-04:00</published>
+			<category scheme="https://www.theverge.com" term="AI" /><category scheme="https://www.theverge.com" term="News" /><category scheme="https://www.theverge.com" term="OpenAI" />
+							<summary type="html">OpenAI says its new AI chip, Jalape&amp;#241;o, completes tasks more efficiently and returns responses faster than other AI systems, according to a blog post published on Tuesday. During a briefing with reporters, OpenAI hardware vice president Richard Ho said Jalape&amp;#241;o offers the "best of both worlds" with lower latency and higher throughput, as AI systems [&amp;#8230;]</summary>
+			
+							<content type="html">
+											
+
+						
+&lt;figure&gt;
+
+&lt;img alt="An image showing OpenAI’s Jalapeno chip" data-caption="" data-portal-copyright="Image: OpenAI" data-has-syndication-rights="1" src="https://platform.theverge.com/wp-content/uploads/sites/2/2026/08/Jalapeno-chip-final.jpeg?quality=90&amp;#038;strip=all&amp;#038;crop=0,0,100,100" /&gt;
+	&lt;figcaption&gt;
+		&lt;/figcaption&gt;
+&lt;/figure&gt;
+&lt;p class="wp-block-paragraph"&gt;OpenAI says its new AI chip, Jalape&amp;ntilde;o, completes tasks more efficiently and returns responses faster than other AI systems, according to &lt;a href="https://openai.com/index/jalapeno-first-results/"&gt;a blog post published on Tuesday&lt;/a&gt;. During a briefing with reporters, OpenAI hardware vice president Richard Ho said Jalape&amp;ntilde;o offers the "best of both worlds" with lower latency and higher throughput, as AI systems typically "have to make a trade-off between the two."&lt;/p&gt;
+&lt;p class="wp-block-paragraph"&gt;&lt;a href="https://www.theverge.com/ai-artificial-intelligence/955939/openai-reveals-its-first-ai-processor-jalapeno"&gt;First introduced in June&lt;/a&gt;, Jalape&amp;ntilde;o is an Application-Specific Integrated Circuit (ASIC) made in partnership with Broadcom. It's designed for AI inference - the process of running a trained AI model to complete a task or deploy an agent.&lt;/p&gt;
+&lt;img src="https://platform.theverge.com/wp-content/uploads/sites/2/2026/08/tbt-jalapeno.png?quality=90&amp;amp;strip=all&amp;amp;crop=0,0,100,100" alt="" title="" data-has-syndication-rights="1" data-caption="&amp;lt;em&amp;gt;This chart measures Jalapeño&amp;apos;s time between tokens (TBT) - or the&amp;lt;/em&amp;gt; &amp;lt;em&amp;gt;time it takes to deliver a response.&amp;lt;/em&amp;gt; | Image: OpenAI" data-portal-copyright="Image: OpenAI"&gt;
+&lt;p class="wp-block-paragraph"&gt;To mea …&lt;/p&gt;
+&lt;p&gt;&lt;a href="https://www.theverge.com/ai-artificial-intelligence/984290/openai-jalapeno-ai-chip-benchmarks"&gt;Read the full story at The Verge.&lt;/a&gt;&lt;/p&gt;
+						
+									</content>
+			
+					</entry>
+			</feed>
