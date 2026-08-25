@@ -15,7 +15,7 @@
   "containerDefinitions": [
     {
       "name": "casts-grpc-server",
-      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:6c43e88",
+      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:5274913",
       "essential": true,
       "portMappings": [
         {
@@ -42,6 +42,18 @@
         }
       ],
       "secrets": [
+        {
+          "name": "CASTS_TLS_CERT_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/tls-cert-31lQq0"
+        },
+        {
+          "name": "CASTS_TLS_KEY_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/tls-key-NIarHk"
+        },
+        {
+          "name": "CASTS_CLIENT_CA_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:commit-store/client-ca-kkTxZ0"
+        },
         {
           "name": "COMMIT_STORE_CA_PEM",
           "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:commit-store/client-ca-kkTxZ0"
