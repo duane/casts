@@ -112,7 +112,19 @@ futures = { version = "0.3.17", features = [
 futures-core = "~0.3.30"
 
 # reqwest http client
-reqwest = "~0.12.3"
+# "stream" gives `Response::bytes_stream`, so episode audio is written to
+# disk incrementally instead of buffered whole in a 1 GB task.
+reqwest = { version = "~0.12.3", features = ["stream"] }
+
+## Deterministic archive keys: podcast guids are arbitrary text and make
+## hostile S3 keys, so they are hashed.
+sha2 = "~0.10"
+
+## Archival worker: uploads downloaded audio to S3. `behavior-version-latest`
+## pins the SDK's defaults so a minor bump cannot silently change retry or
+## checksum behaviour.
+aws-config = { version = "~1.5", features = ["behavior-version-latest"] }
+aws-sdk-s3 = "~1.42"
 
 # grpc
 # Serves grpc.health.v1.Health so a load balancer can tell "the port is

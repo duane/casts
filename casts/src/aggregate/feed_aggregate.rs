@@ -23,6 +23,20 @@ pub struct FeedAggregate {
 
     /// Playtime
     pub playtime_by_feed_and_guid: HashMap<(String, String), (i64, i32)>,
+
+    /// Where each entry's audio was archived, keyed like
+    /// `playtime_by_feed_and_guid`. Absence means "not archived", which is
+    /// what the archival worker selects on.
+    pub archived_by_feed_and_guid: HashMap<(String, String), ArchivedAudio>,
+}
+
+/// The durable-storage location of one entry's audio.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct ArchivedAudio {
+    pub bucket: String,
+    pub key: String,
+    pub content_type: Option<String>,
+    pub size_bytes: i64,
 }
 
 impl FeedAggregate {
@@ -39,6 +53,7 @@ impl Aggregate for FeedAggregate {
             version: 0,
             feeds_by_feed_id: HashMap::new(),
             playtime_by_feed_and_guid: HashMap::new(),
+            archived_by_feed_and_guid: HashMap::new(),
         }
     }
 
@@ -102,6 +117,25 @@ impl EventApplicable for FeedAggregate {
                         continue;
                     };
                     *feed = feed.clone().apply_diff(changes);
+                }
+                FeedAggregateEvent::EntryArchived {
+                    stream_id: _,
+                    feed_id,
+                    entry_guid,
+                    bucket,
+                    key,
+                    content_type,
+                    size_bytes,
+                } => {
+                    applied.archived_by_feed_and_guid.insert(
+                        (feed_id.to_string(), entry_guid),
+                        ArchivedAudio {
+                            bucket,
+                            key,
+                            content_type,
+                            size_bytes,
+                        },
+                    );
                 }
                 FeedAggregateEvent::FeedEntryListenedTo {
                     stream_id: _,

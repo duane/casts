@@ -47,6 +47,19 @@ pub enum FeedAggregateCommand {
     },
 
     /// Record the playback position reached for one entry. Last write wins.
+    /// Record that an entry's audio has been copied to durable storage.
+    ///
+    /// Issued by the archival worker *after* the upload is confirmed.
+    ArchiveEntry {
+        stream_id: Uuid,
+        feed_id: Uuid,
+        entry_guid: String,
+        bucket: String,
+        key: String,
+        content_type: Option<String>,
+        size_bytes: i64,
+    },
+
     MarkEntryListened {
         /// The stream in which the playback was recorded.
         stream_id: Uuid,
@@ -111,6 +124,7 @@ impl Command for FeedAggregateCommand {
         match self {
             FeedAggregateCommand::AddFeed { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::ObserveFeed { ref stream_id, .. } => stream_id,
+            FeedAggregateCommand::ArchiveEntry { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::MarkEntryListened { ref stream_id, .. } => stream_id,
         }
     }
@@ -172,6 +186,44 @@ impl Command for FeedAggregateCommand {
                 }
                 None => Err(FeedAggregateError::UnknownFeedError),
             },
+            FeedAggregateCommand::ArchiveEntry {
+                stream_id,
+                feed_id,
+                ref entry_guid,
+                ref bucket,
+                ref key,
+                ref content_type,
+                size_bytes,
+            } => {
+                let feed = aggregate
+                    .feeds_by_feed_id
+                    .get(feed_id)
+                    .ok_or(FeedAggregateError::UnknownFeedError)?;
+                if !feed.entries.iter().any(|e| &e.guid == entry_guid) {
+                    return Err(FeedAggregateError::UnknownEntryError);
+                }
+                // Already archived is a no-op, not a conflict. Two workers
+                // can race on the same entry, and a retry after a crash
+                // between upload and commit re-runs this path; emitting no
+                // events makes both cases harmless instead of producing a
+                // second, contradictory record.
+                if aggregate
+                    .archived_by_feed_and_guid
+                    .contains_key(&(feed_id.to_string(), entry_guid.clone()))
+                {
+                    return Ok(vec![]);
+                }
+                Ok(vec![FeedAggregateEvent::EntryArchived {
+                    stream_id: *stream_id,
+                    feed_id: *feed_id,
+                    entry_guid: entry_guid.clone(),
+                    bucket: bucket.clone(),
+                    key: key.clone(),
+                    content_type: content_type.clone(),
+                    size_bytes: *size_bytes,
+                }])
+            }
+
             FeedAggregateCommand::MarkEntryListened {
                 stream_id,
                 feed_id,
@@ -440,5 +492,66 @@ mod tests {
             applied.feeds_by_feed_id[&feed_id].metadata.title,
             "Renamedcast"
         );
+    }
+
+    /// Archiving is recorded only for entries that exist, and only once.
+    #[tokio::test]
+    async fn archive_entry_is_recorded_once_and_ignores_repeats() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "guid-1").await;
+        let stream_id = aggregate.stream_id;
+
+        let cmd = FeedAggregateCommand::ArchiveEntry {
+            stream_id,
+            feed_id,
+            entry_guid: "guid-1".to_string(),
+            bucket: "casts-archive".to_string(),
+            key: "a/b/c.mp3".to_string(),
+            content_type: Some("audio/mpeg".to_string()),
+            size_bytes: 1234,
+        };
+        let events = cmd.async_apply(&aggregate).await.unwrap();
+        assert_eq!(events.len(), 1);
+
+        // Applying it, then re-issuing, must produce nothing: two workers can
+        // race on one entry, and a crash between upload and commit replays
+        // this path.
+        let applied = aggregate.apply_many(events);
+        assert!(applied
+            .archived_by_feed_and_guid
+            .contains_key(&(feed_id.to_string(), "guid-1".to_string())));
+        assert!(
+            cmd.async_apply(&applied).await.unwrap().is_empty(),
+            "re-archiving an already-archived entry must be a no-op"
+        );
+    }
+
+    #[tokio::test]
+    async fn archive_entry_rejects_unknown_feed_and_entry() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "guid-1").await;
+        let stream_id = aggregate.stream_id;
+
+        let unknown_entry = FeedAggregateCommand::ArchiveEntry {
+            stream_id,
+            feed_id,
+            entry_guid: "nope".to_string(),
+            bucket: "b".to_string(),
+            key: "k".to_string(),
+            content_type: None,
+            size_bytes: 1,
+        };
+        assert!(unknown_entry.async_apply(&aggregate).await.is_err());
+
+        let unknown_feed = FeedAggregateCommand::ArchiveEntry {
+            stream_id,
+            feed_id: Uuid::new_v4(),
+            entry_guid: "guid-1".to_string(),
+            bucket: "b".to_string(),
+            key: "k".to_string(),
+            content_type: None,
+            size_bytes: 1,
+        };
+        assert!(unknown_feed.async_apply(&aggregate).await.is_err());
     }
 }

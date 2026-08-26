@@ -63,6 +63,17 @@ async fn run_health_check_loop(
     }
 }
 
+/// The stream the archival worker reconciles.
+///
+/// Defaults to the single stream the clients use (`playApp.swift`'s
+/// STREAM_ID, and what `seed` writes); `CASTS_STREAM_ID` overrides it.
+fn archive_stream_id() -> uuid::Uuid {
+    std::env::var("CASTS_STREAM_ID")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or_else(|| uuid::uuid!("34c3c08d-0d55-4af4-a126-170c1380f07e"))
+}
+
 pub async fn serve() -> Result<()> {
     let server_config = casts::config::ServerConfigBuilder::default().build()?;
 
@@ -94,6 +105,20 @@ pub async fn serve() -> Result<()> {
         health_reporter,
         HEALTH_CHECK_INTERVAL,
     ));
+
+    // The archival worker shares the deployment but not the fate of the gRPC
+    // service: it owns a separate commit-store client, and `run_forever`
+    // logs and retries rather than returning, so a podcast host being down
+    // cannot stop this task from serving. Off unless CASTS_ARCHIVE_BUCKET is
+    // set, which keeps local runs and any deployment that does not want it
+    // unaffected.
+    match casts::archiver::ArchiverConfig::from_env(archive_stream_id()) {
+        Some(config) => {
+            let worker_client = casts::commit_store_client::connect().await?;
+            let _archiver = tokio::spawn(casts::archiver::run_forever(worker_client, config));
+        }
+        None => log::info!("archival worker disabled (CASTS_ARCHIVE_BUCKET unset)"),
+    }
 
     log::info!("Started server at {:?}", server_config.listen);
     let mut builder = Server::builder();

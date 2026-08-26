@@ -4,7 +4,6 @@ use casts::{
     applicable::EventApplicable,
     commands::{Command, FeedAggregateCommand},
     config::{ClientConfig, ClientConfigBuilder, ServerConfig, ServerConfigBuilder},
-    events::FeedAggregateEvent,
 };
 use chrono::Utc;
 use commit_store::{
@@ -123,75 +122,30 @@ async fn add(
 
 /// Re-fetch every feed in the stream and commit the observed changes.
 ///
-/// Hydrates over the server-streaming RPC (with a raised decode limit) so a
-/// large feed history is not capped by the unary message-size limit.
+/// Thin wrapper over `casts::poller::refresh_feeds`, which the background
+/// archival worker runs on a timer. Exits non-zero if any feed failed, so a
+/// scheduled run still reports trouble without losing the feeds that worked.
 async fn poll(stream_id: Uuid) -> Result<()> {
-    let mut grpc_client = get_client()
+    let mut client = get_client()
         .await
         .max_decoding_message_size(8 * 1024 * 1024);
-
-    let mut commit_stream = grpc_client
-        .stream_stream_range(StreamCursor {
-            stream_id: stream_id.to_string(),
-            min_version: 0,
-            max_version: i64::MAX,
-            limit: i64::MAX,
-            reverse: false,
-        })
-        .await?
-        .into_inner();
-    let mut aggregate = FeedAggregate::default();
-    while let Some(commit) = commit_stream.next().await {
-        let commit = commit?;
-        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice())?);
+    let report = casts::poller::refresh_feeds(&mut client, &stream_id).await?;
+    println!(
+        "{} changed, {} unchanged, {} failed",
+        report.changed,
+        report.unchanged,
+        report.failures.len()
+    );
+    for (feed_id, reason) in &report.failures {
+        eprintln!("  {feed_id}: {reason}");
     }
-    for (feed_id, existing_feed) in aggregate.feeds_by_feed_id.clone().into_iter() {
-        let observed_feed = fetch_feed(&existing_feed.url.clone().expect("requires url")).await?;
-        let diff = existing_feed.diff(&observed_feed);
-        println!("found {} changes", diff.len());
-        let observed_feed_cmd = FeedAggregateCommand::ObserveFeed {
-            stream_id,
-            feed_id,
-            feed: observed_feed,
-        };
-        let events = observed_feed_cmd
-            .async_apply(&aggregate)
-            .await
-            .expect("Failed to apply feed observation");
-        let events_count = events.len() as i64;
-        if events_count == 0 {
-            continue;
-        }
-        let commit_attempt = CommitAttempt {
-            stream_metadata: StreamMetadata {
-                stream_id,
-                stream_version: aggregate.version + 1,
-            },
-            commit_metadata: CommitMetadata {
-                commit_id: Uuid::new_v4(),
-                commit_sequence: aggregate.version + 1,
-                commit_timestamp: Utc::now(),
-            },
-            metadata: serde_json::to_value(observed_feed_cmd).unwrap(),
-            events: serde_json::to_value(events.clone()).unwrap(),
-            events_count,
-        };
-        let commit_result = grpc_to_domain_commit(
-            grpc_client
-                .append_commit(domain_to_grpc_commit_attempt(&commit_attempt))
-                .await
-                .unwrap()
-                .get_ref(),
-        );
-        let committed_events: Vec<FeedAggregateEvent> =
-            serde_json::from_value(commit_result.events).unwrap();
-        aggregate = aggregate.apply_many(committed_events);
+    if report.ok() {
+        Ok(())
+    } else {
+        Err(anyhow::anyhow!("{} feed(s) failed", report.failures.len()))
     }
-    Ok(())
 }
 
-/// Hydrate the stream's aggregate over the server-streaming RPC, so a large
-/// feed history is not capped by the unary message-size limit.
 async fn hydrated_client(
     grpc_client: &mut CommitStoreClient<tonic::transport::Channel>,
     stream_id: &Uuid,

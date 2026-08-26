@@ -3,7 +3,6 @@ use chrono::Utc;
 use commit_store::{commit::StreamMetadata, store::Store};
 use commit_store::{
     commit::{CommitAttempt, CommitMetadata},
-    grpc_interface::commit_store_client::CommitStoreClient,
     Client,
 };
 use serde_json::json;
@@ -62,13 +61,13 @@ async fn main() {
     ];
 
     let mut aggregate = FeedAggregate::default();
-    // Honour COMMIT_STORE_ADDR like every other client binary.
-    let addr = commit_store::config::ClientConfigBuilder::default()
-        .build()
-        .addr;
-    let endpoint =
-        tonic::transport::Uri::try_from(addr).expect("COMMIT_STORE_ADDR is not a valid URI");
-    let commit_store_client = CommitStoreClient::connect(endpoint).await.unwrap();
+    // Shared connector, so this honours COMMIT_STORE_ADDR *and* applies
+    // mutual TLS when the address is https. Connecting directly would build
+    // a plain channel and silently drop the client identity, which fails
+    // against any deployment that requires client certificates.
+    let commit_store_client = casts::commit_store_client::connect()
+        .await
+        .expect("failed to connect to commit store");
     let mut client = Client::new(commit_store_client);
     for commit_attempt in commit_attempts {
         let commit_result = client.commit(&commit_attempt).await.unwrap();

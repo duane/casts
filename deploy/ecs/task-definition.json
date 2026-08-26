@@ -15,7 +15,7 @@
   "containerDefinitions": [
     {
       "name": "casts-grpc-server",
-      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:43f5f71",
+      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:16c920c",
       "essential": true,
       "portMappings": [
         {
@@ -39,6 +39,22 @@
         {
           "name": "COMMIT_STORE_ADDR",
           "value": "https://commit-store.internal:7392"
+        },
+        {
+          "name": "CASTS_ARCHIVE_BUCKET",
+          "value": "casts-archive-690591551001"
+        },
+        {
+          "name": "CASTS_POLL_INTERVAL_SECS",
+          "value": "900"
+        },
+        {
+          "name": "CASTS_ARCHIVE_BATCH",
+          "value": "5"
+        },
+        {
+          "name": "CASTS_ARCHIVE_MAX_BYTES",
+          "value": "524288000"
         }
       ],
       "secrets": [

@@ -56,6 +56,36 @@ pub enum FeedAggregateEvent {
         /// Sub-second remainder of the playback position, in nanoseconds.
         elapsed_nanos: i32,
     },
+
+    /// An entry's audio was copied to durable storage.
+    ///
+    /// Emitted by the archival worker only after the upload is confirmed, so
+    /// the presence of this event means the object exists. Records the bucket
+    /// and key rather than a URL: an immutable event should not carry a
+    /// presigned URL that expires, and bucket/key survives the archive later
+    /// being fronted by a CDN or moved.
+    EntryArchived {
+        /// The stream holding the feed.
+        stream_id: Uuid,
+
+        /// The feed holding the entry.
+        feed_id: Uuid,
+
+        /// The entry whose audio was archived.
+        entry_guid: String,
+
+        /// The bucket the object was written to.
+        bucket: String,
+
+        /// The object key within that bucket.
+        key: String,
+
+        /// The content type reported by the origin, when it gave one.
+        content_type: Option<String>,
+
+        /// Size of the stored object in bytes.
+        size_bytes: i64,
+    },
 }
 
 impl Event for FeedAggregateEvent {}
