@@ -15,7 +15,7 @@
   "containerDefinitions": [
     {
       "name": "casts-grpc-server",
-      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:5274913",
+      "image": "690591551001.dkr.ecr.us-east-1.amazonaws.com/casts:43f5f71",
       "essential": true,
       "portMappings": [
         {
