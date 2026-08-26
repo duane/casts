@@ -44,11 +44,14 @@ class AppDelegate: NSObject, UIApplicationDelegate, ObservableObject {
                 let group = PlatformSupport.makeEventLoopGroup(loopCount: 1)
                 var logger = Logger(label: "gRPC", factory: StreamLogHandler.standardOutput(label:))
                 logger.logLevel = .info
-                let channel = ClientConnection
-                    .insecure(group: group)
-                    .withBackgroundActivityLogger(logger)
-                    .connect(host: "127.0.0.1", port: 8243)
-                self._client = GrpcInterface_CastsNIOClient(channel: channel)
+                do {
+                    self._client = try CastsConnection.makeClient(group: group, logger: logger)
+                } catch {
+                    // Fail loudly: without a client the app can do nothing,
+                    // and a silent nil here would surface much later as an
+                    // unexplained empty library.
+                    fatalError("could not connect to casts: \(error)")
+                }
             }
             return self._client!
         }
@@ -64,11 +67,11 @@ class AppDelegate: NSObject, NSApplicationDelegate, ObservableObject {
         let group = PlatformSupport.makeEventLoopGroup(loopCount: 1)
         var logger = Logger(label: "gRPC", factory: StreamLogHandler.standardOutput(label:))
         logger.logLevel = .info
-        let channel = ClientConnection
-            .insecure(group: group)
-            .withBackgroundActivityLogger(logger)
-            .connect(host: "127.0.0.1", port: 8243)
-        AppDelegate.client = GrpcInterface_CastsNIOClient(channel: channel)
+        do {
+            AppDelegate.client = try CastsConnection.makeClient(group: group, logger: logger)
+        } catch {
+            fatalError("could not connect to casts: \(error)")
+        }
     }
 }
 #endif

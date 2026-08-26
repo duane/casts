@@ -47,21 +47,30 @@ fn materialize_pem_if_needed(pem_var: &str, path_var: &str, out_path: &str) -> R
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    // The probe authenticates to casts with casts' own client identity: it is
-    // signed by the same CA casts verifies client certificates against, so no
-    // separate credential is needed.
+    // The probe needs its own identity, from the *casts* intermediate.
+    //
+    // It connects to casts, and casts verifies client certificates against
+    // the casts CA -- so the commit-store client identity this process also
+    // carries (issued by the commit intermediate, for talking to
+    // commit-store) would be rejected. Two intermediates means two
+    // identities, and the probe must use the right one or every task fails
+    // its own health check.
+    //
+    // `ClientConfig` reads the COMMIT_STORE_* names, so the CASTS_HEALTH_*
+    // values are materialized to files and those names pointed at them.
+    // Safe because this is a short-lived process of its own.
     materialize_pem_if_needed(
-        "COMMIT_STORE_CA_PEM",
+        "CASTS_HEALTH_CA_PEM",
         "COMMIT_STORE_CA_PEM_PATH",
         "/tmp/casts-health-tls/ca.pem",
     )?;
     materialize_pem_if_needed(
-        "COMMIT_STORE_CLIENT_CERT_PEM",
+        "CASTS_HEALTH_CLIENT_CERT_PEM",
         "COMMIT_STORE_CLIENT_CERT",
         "/tmp/casts-health-tls/client-cert.pem",
     )?;
     materialize_pem_if_needed(
-        "COMMIT_STORE_CLIENT_KEY_PEM",
+        "CASTS_HEALTH_CLIENT_KEY_PEM",
         "COMMIT_STORE_CLIENT_KEY",
         "/tmp/casts-health-tls/client-key.pem",
     )?;

@@ -52,7 +52,19 @@
         },
         {
           "name": "CASTS_CLIENT_CA_PEM",
-          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:commit-store/client-ca-kkTxZ0"
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/client-ca-4XiTWY"
+        },
+        {
+          "name": "CASTS_HEALTH_CA_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/client-ca-4XiTWY"
+        },
+        {
+          "name": "CASTS_HEALTH_CLIENT_CERT_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/health-probe-cert-vkB5Gv"
+        },
+        {
+          "name": "CASTS_HEALTH_CLIENT_KEY_PEM",
+          "valueFrom": "arn:aws:secretsmanager:us-east-1:690591551001:secret:casts/health-probe-key-LKIjp8"
         },
         {
           "name": "COMMIT_STORE_CA_PEM",
