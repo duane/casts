@@ -52,6 +52,38 @@ pub fn aggregate_from_hydration(hydration: Hydration) -> Result<FeedAggregate> {
     Ok(aggregate)
 }
 
+/// `aggregate_from_hydration`, off the async runtime's worker threads.
+///
+/// The fold is CPU-bound and unbounded in the size of the library: it
+/// deserializes every commit's payload and folds it, which measured 66
+/// seconds at 507 commits. An `async fn` that spends 66 seconds computing
+/// never yields, so it does not merely make itself slow -- it occupies a
+/// runtime worker and starves everything sharing it. That is what took
+/// production down: the archival worker's hydration blocked the gRPC health
+/// endpoint past the 5-second probe timeout, ECS killed the task for failing
+/// its health check, and the replacement did the same thing.
+///
+/// `spawn_blocking` puts the work on the blocking pool, where a thread that
+/// never yields is expected and harmless.
+pub async fn aggregate_from_hydration_off_thread(hydration: Hydration) -> Result<FeedAggregate> {
+    tokio::task::spawn_blocking(move || aggregate_from_hydration(hydration))
+        .await
+        .context("hydration task panicked")?
+}
+
+/// `snapshot_attempt`, off the async runtime's worker threads.
+///
+/// Serializing the whole aggregate is the same class of CPU-bound work as
+/// the fold, and runs on the write path.
+pub async fn snapshot_attempt_off_thread(
+    stream_id: Uuid,
+    aggregate: FeedAggregate,
+) -> Result<CommitAttempt> {
+    tokio::task::spawn_blocking(move || snapshot_attempt(stream_id, &aggregate))
+        .await
+        .context("snapshot task panicked")?
+}
+
 /// Build the commit that snapshots `aggregate` at the next stream version.
 ///
 /// A snapshot takes a version of its own, so it goes through the same
@@ -85,6 +117,50 @@ mod tests {
     use commit_store::Commit;
     use immutable_feed::{Feed, FeedMetadata};
     use url::Url;
+
+    use immutable_feed::Entry;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::sync::Arc;
+
+    fn entry(guid: &str) -> Entry {
+        Entry {
+            guid: String::from(guid),
+            url: Url::parse("http://example.com/e.mp3").unwrap(),
+            // Bulk, so the fold costs what a real one costs: the payload is
+            // dominated by per-entry text, not by the number of commits.
+            title: Some(format!("Episode {guid} with a reasonably long title")),
+            updated_at: None,
+            published_at: None,
+            content_digest: Some("d".repeat(64)),
+            links: vec![],
+            media: vec![],
+        }
+    }
+
+    /// A hydration whose fold takes long enough to observe.
+    fn slow_hydration(stream_id: Uuid, commits: usize, entries_each: usize) -> Hydration {
+        let made: Vec<Commit> = (0..commits)
+            .map(|i| {
+                let events = serde_json::json!([{
+                    "Added": {
+                        "stream_id": stream_id,
+                        "feed_id": Uuid::new_v4(),
+                        "url": format!("http://example.com/{i}.xml"),
+                        "metadata": feed("F").metadata,
+                        "entries": (0..entries_each)
+                            .map(|j| entry(&format!("{i}-{j}")))
+                            .collect::<Vec<_>>(),
+                        "do_not_archive": null,
+                    }
+                }]);
+                commit_with(stream_id, i as i64 + 1, events, false)
+            })
+            .collect();
+        Hydration {
+            snapshot: None,
+            commits: made,
+        }
+    }
 
     fn feed(title: &str) -> Feed {
         let url = Url::parse("http://example.com/f.xml").unwrap();
@@ -262,5 +338,79 @@ mod tests {
             "Round trip"
         );
         assert_eq!(restored.version, 42, "the snapshot occupies version 42");
+    }
+
+    /// The fold must not occupy an async runtime worker.
+    ///
+    /// This is the defect that took production down, so it is asserted
+    /// directly rather than through the behaviour it caused. The runtime has
+    /// exactly one worker thread and BOTH the fold and the heartbeat are
+    /// spawned as tasks onto it -- that pairing is what makes starvation
+    /// observable. Running the fold inside `block_on` instead would prove
+    /// nothing: `block_on` executes on the calling thread, so it would never
+    /// contend with the worker the heartbeat lives on.
+    ///
+    /// The real casualty was the gRPC health endpoint, which ECS polls with
+    /// a 5-second timeout and kills the task after three failures.
+    ///
+    /// Falsifiable: swap `aggregate_from_hydration_off_thread` for the plain
+    /// `aggregate_from_hydration` and the heartbeat count collapses to 1.
+    #[test]
+    fn hydration_does_not_starve_the_runtime() {
+        let stream_id = Uuid::new_v4();
+        let hydration = slow_hydration(stream_id, 120, 120);
+
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .enable_all()
+            .build()
+            .expect("test runtime");
+
+        let (ticks, elapsed, feeds) = runtime.block_on(async move {
+            let ticks = Arc::new(AtomicUsize::new(0));
+            let counter = Arc::clone(&ticks);
+            let beating = Arc::new(AtomicUsize::new(1));
+            let still_beating = Arc::clone(&beating);
+            let heartbeat = tokio::spawn(async move {
+                while still_beating.load(Ordering::Relaxed) == 1 {
+                    counter.fetch_add(1, Ordering::Relaxed);
+                    tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+                }
+            });
+            // Let the heartbeat reach its first await, so the count below
+            // measures the fold's effect and not the order tasks started in.
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            let before = ticks.load(Ordering::Relaxed);
+
+            // Spawned, not awaited inline: the fold has to be a task on the
+            // same single worker as the heartbeat for this to test anything.
+            let start = std::time::Instant::now();
+            let folding =
+                tokio::spawn(async move { aggregate_from_hydration_off_thread(hydration).await });
+            let aggregate = folding.await.expect("fold task").expect("hydration");
+            let elapsed = start.elapsed();
+
+            beating.store(0, Ordering::Relaxed);
+            let _ = heartbeat.await;
+            (
+                ticks.load(Ordering::Relaxed) - before,
+                elapsed,
+                aggregate.feeds_by_feed_id.len(),
+            )
+        });
+
+        assert_eq!(feeds, 120);
+        // The fold must actually have been slow, or this proves nothing.
+        assert!(
+            elapsed >= std::time::Duration::from_millis(50),
+            "fold finished in {elapsed:?}; too fast for this test to mean anything"
+        );
+        // A free worker at 2ms per tick manages far more than this. Starved,
+        // it manages none: the heartbeat cannot run again until the fold ends.
+        assert!(
+            ticks >= 8,
+            "heartbeat ticked {ticks} times during a {elapsed:?} fold; \
+             the fold is occupying the runtime worker"
+        );
     }
 }

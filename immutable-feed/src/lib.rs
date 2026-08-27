@@ -267,19 +267,7 @@ impl From<RustLink> for Link {
 impl Feed {
     /// Create a feed from the feed-rs type and the url from which it originated.
     pub fn from_url_and_feed(url: Url, rust_feed: RustFeed) -> Feed {
-        let raw_url = url.to_string();
-        let metadata = FeedMetadata::from(rust_feed.clone());
-        let entries = rust_feed
-            .entries
-            .into_iter()
-            .filter_map(Entry::from_rust_entry)
-            .collect();
-        Feed {
-            url: Some(url),
-            raw_url,
-            metadata,
-            entries,
-        }
+        FetchedFeed::from_url_and_feed(url, rust_feed).feed
     }
 
     /// Produce an arbitrarily ordered list of changes that move `self`
@@ -382,24 +370,62 @@ impl Feed {
     }
 }
 
-impl From<RustFeed> for Feed {
-    fn from(feed: RustFeed) -> Feed {
+impl FetchedFeed {
+    /// Parse a feed known to live at `url`, keeping its show notes.
+    pub fn from_url_and_feed(url: Url, rust_feed: RustFeed) -> FetchedFeed {
+        let raw_url = url.to_string();
+        let metadata = FeedMetadata::from(rust_feed.clone());
+        let (entries, contents): (Vec<Entry>, Vec<EntryContent>) = rust_feed
+            .entries
+            .into_iter()
+            .filter_map(Entry::from_rust_entry)
+            .unzip();
+        FetchedFeed {
+            feed: Feed {
+                url: Some(url),
+                raw_url,
+                metadata,
+                entries,
+            },
+            contents,
+        }
+    }
+}
+
+impl From<RustFeed> for FetchedFeed {
+    fn from(feed: RustFeed) -> FetchedFeed {
         let raw_url = feed
             .links
             .first()
             .map(|l| l.href.clone())
             .unwrap_or_default();
         let url = Url::parse(&raw_url).ok();
-        Feed {
-            url,
-            raw_url,
-            metadata: FeedMetadata::from(feed.clone()),
-            entries: feed
-                .entries
-                .into_iter()
-                .filter_map(Entry::from_rust_entry)
-                .collect(),
+        let metadata = FeedMetadata::from(feed.clone());
+        let (entries, contents): (Vec<Entry>, Vec<EntryContent>) = feed
+            .entries
+            .into_iter()
+            .filter_map(Entry::from_rust_entry)
+            .unzip();
+        FetchedFeed {
+            feed: Feed {
+                url,
+                raw_url,
+                metadata,
+                entries,
+            },
+            contents,
         }
+    }
+}
+
+impl From<RustFeed> for Feed {
+    /// The feed alone, discarding show notes.
+    ///
+    /// Only for callers that genuinely do not store content -- anything on a
+    /// write path wants [`FetchedFeed`], because notes dropped here cannot
+    /// be recovered from the entries that reference them by digest.
+    fn from(feed: RustFeed) -> Feed {
+        FetchedFeed::from(feed).feed
     }
 }
 
@@ -415,23 +441,99 @@ pub struct Entry {
     /// The title of the feed entry.
     pub title: Option<String>,
 
-    /// A summary of the entry content.
-    pub summary: Option<String>,
-
     /// When the entry was last updated.
     pub updated_at: Option<DateTime<Utc>>,
 
     /// When the entry was first published.
     pub published_at: Option<DateTime<Utc>>,
 
-    /// Content (typically html) associated with media.
-    pub content: Option<Content>,
-
     /// Other links associated with content
     pub links: Vec<Link>,
 
     /// Other media
     pub media: Vec<MediaObject>,
+
+    /// Identifies this entry's show-notes ([`EntryContent`]), which are held
+    /// out of band rather than in the entry itself.
+    ///
+    /// `summary` and `content` used to live here. Measured on one commit,
+    /// they were 86% of every entry (1,920 + 1,841 of 4,398 bytes) and no
+    /// command ever read them -- deduplication is by guid, ordering by
+    /// publication date, archival by media URL. Carrying them made the unit
+    /// that every commit, aggregate, and snapshot is built from roughly
+    /// seven times larger than the decisions needed.
+    ///
+    /// `None` means "no show notes"; it does not mean "not loaded", because
+    /// an entry never holds them either way. A digest is a content address,
+    /// so identical notes across entries store once and a re-upload is a
+    /// no-op.
+    ///
+    /// Defaults when absent so entries written before the split still
+    /// deserialize.
+    #[serde(default)]
+    pub content_digest: Option<String>,
+}
+
+/// The show notes for one entry: the part deliberately kept out of the event
+/// stream. Stored by [`EntryContent::digest`] and fetched only when
+/// something actually renders an episode.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+pub struct EntryContent {
+    /// The entry these notes belong to.
+    pub guid: String,
+
+    /// A summary of the entry content.
+    pub summary: Option<String>,
+
+    /// Content (typically html) associated with media.
+    pub content: Option<Content>,
+}
+
+impl EntryContent {
+    /// Whether there is anything worth storing.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.summary.is_none() && self.content.is_none()
+    }
+
+    /// The content address of these notes: hex SHA-256 over the payload.
+    ///
+    /// Keyed on the notes alone, deliberately not on the guid or feed: two
+    /// entries with identical notes share one stored object, and re-storing
+    /// unchanged notes writes the same bytes to the same key.
+    ///
+    /// `None` when there is nothing to store, so an entry without notes
+    /// carries no digest rather than a digest of emptiness.
+    #[must_use]
+    pub fn digest(&self) -> Option<String> {
+        if self.is_empty() {
+            return None;
+        }
+        use sha2::{Digest, Sha256};
+        let mut hasher = Sha256::new();
+        // Serialized through serde so the hash covers exactly the bytes that
+        // get stored, rather than a separate hand-rolled encoding that could
+        // drift from them.
+        let payload = serde_json::json!({
+            "summary": self.summary,
+            "content": self.content,
+        });
+        hasher.update(serde_json::to_vec(&payload).unwrap_or_default());
+        Some(format!("{:x}", hasher.finalize()))
+    }
+}
+
+/// A parsed feed together with the show notes lifted out of its entries.
+///
+/// Parsing has to surface both halves: the caller stores the notes and
+/// commits the entries, and neither is recoverable from the other.
+#[derive(Clone, Debug)]
+pub struct FetchedFeed {
+    /// The feed, whose entries carry digests rather than notes.
+    pub feed: Feed,
+
+    /// The notes for those entries, in the same order.
+    pub contents: Vec<EntryContent>,
 }
 
 impl Entry {
@@ -449,12 +551,13 @@ impl Entry {
             mutations.push(EntryMutation::ReplacedUrl(Some(other.url.to_owned())));
         }
 
-        if self.summary != other.summary {
-            mutations.push(EntryMutation::ReplacedSummary(other.summary.to_owned()));
-        }
-
-        if self.content != other.content {
-            mutations.push(EntryMutation::ReplacedContent(other.content.to_owned()));
+        // Comparing 32 bytes of digest where this used to compare ~3.8 KB of
+        // HTML. A publisher rewriting show notes still produces a mutation,
+        // because the digest changes with them.
+        if self.content_digest != other.content_digest {
+            mutations.push(EntryMutation::ReplacedContentDigest(
+                other.content_digest.to_owned(),
+            ));
         }
 
         if self.media != other.media {
@@ -474,10 +577,18 @@ impl Entry {
         let mut applied = self.clone();
         for mutation in mutations {
             match mutation {
-                EntryMutation::ReplacedContent(new_content) => applied.content = new_content,
+                EntryMutation::ReplacedContentDigest(new_digest) => {
+                    applied.content_digest = new_digest;
+                }
+                // Two variants that nothing emits any more, kept because the
+                // stream still contains them: an event once written is
+                // history, and dropping the variants would make every commit
+                // holding one fail to deserialize -- taking hydration, and
+                // so every read, down. They apply to fields the entry no
+                // longer has, so replaying one is correctly a no-op.
+                EntryMutation::ReplacedContent(_) | EntryMutation::ReplacedSummary(_) => {}
                 EntryMutation::ReplacedMedia(new_media) => applied.media = new_media,
                 EntryMutation::ReplacedLinks(new_links) => applied.links = new_links,
-                EntryMutation::ReplacedSummary(new_summary) => applied.summary = new_summary,
                 EntryMutation::ReplacedTitle(new_title) => applied.title = new_title,
                 EntryMutation::ReplacedPublished(new_published) => {
                     applied.published_at = new_published
@@ -499,7 +610,7 @@ impl Entry {
     /// this used to panic on the first such entry, taking down whatever was
     /// fetching the feed. An id that happens to be a URL (the Atom
     /// convention) serves as the fallback before giving up.
-    fn from_rust_entry(entry: RustEntry) -> Option<Entry> {
+    fn from_rust_entry(entry: RustEntry) -> Option<(Entry, EntryContent)> {
         let content_url = entry
             .links
             .first()
@@ -519,17 +630,24 @@ impl Entry {
             media.extend(enclosure_media(&links));
         }
 
-        Some(Entry {
+        let content = EntryContent {
             guid: entry.id.clone(),
-            url: content_url,
-            title: entry.title.map(|t| t.content),
             summary: entry.summary.map(|t| t.content),
-            updated_at: entry.updated,
-            published_at: entry.published,
             content: entry.content.map(Content::from),
-            links,
-            media,
-        })
+        };
+        Some((
+            Entry {
+                guid: entry.id.clone(),
+                url: content_url,
+                title: entry.title.map(|t| t.content),
+                updated_at: entry.updated,
+                published_at: entry.published,
+                links,
+                media,
+                content_digest: content.digest(),
+            },
+            content,
+        ))
     }
 }
 
@@ -667,7 +785,13 @@ fn itunes_durations(doc: &[u8]) -> Vec<Option<u64>> {
 
 /// Parse the document from a vector of bytes.
 pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
-    let mut feed = Feed::from_url_and_feed(url.to_owned(), parser::parse(doc)?);
+    Ok(parse_doc_with_content(url, doc)?.feed)
+}
+
+/// [`parse_doc`], keeping the show notes lifted out of the entries.
+pub fn parse_doc_with_content(url: &Url, doc: &[u8]) -> Result<FetchedFeed> {
+    let mut fetched = FetchedFeed::from_url_and_feed(url.to_owned(), parser::parse(doc)?);
+    let feed = &mut fetched.feed;
 
     // Correct the durations feed-rs mis-parsed (see `parse_itunes_duration`).
     // Entries keep document order, so the two lists line up positionally;
@@ -678,12 +802,21 @@ pub fn parse_doc(url: &Url, doc: &[u8]) -> Result<Feed> {
             media.duration = Some((u32::try_from(seconds).unwrap_or(u32::MAX), 0));
         }
     }
-    Ok(feed)
+    Ok(fetched)
 }
 
 pub async fn fetch_feed(url: &Url) -> Result<Feed> {
+    Ok(fetch_feed_with_content(url).await?.feed)
+}
+
+/// Fetch and parse a feed, keeping the show notes alongside it.
+///
+/// Any caller that writes to the store wants this rather than `fetch_feed`:
+/// entries reference their notes by digest, so notes dropped at parse time
+/// leave a dangling reference nothing can resolve.
+pub async fn fetch_feed_with_content(url: &Url) -> Result<FetchedFeed> {
     let body = fetch_body(url).await?;
-    parse_doc(url, body.as_slice())
+    parse_doc_with_content(url, body.as_slice())
 }
 
 // Delta bits
@@ -733,10 +866,18 @@ pub enum EntryMutation {
     /// Stores the new URL.
     ReplacedUrl(Option<Url>),
 
-    /// Stores the new summary.
+    /// Stores the new content digest, identifying show notes held out of
+    /// band. Replaces `ReplacedSummary` and `ReplacedContent`.
+    ReplacedContentDigest(Option<String>),
+
+    /// Legacy: the summary, when entries still carried it inline.
+    ///
+    /// Nothing emits this. It exists so commits written before the content
+    /// split still deserialize -- see `Entry::apply`.
     ReplacedSummary(Option<String>),
 
-    /// Stores the new content.
+    /// Legacy: the content, when entries still carried it inline. See
+    /// `ReplacedSummary`.
     ReplacedContent(Option<Content>),
 
     /// Stores the new media vector
@@ -753,6 +894,218 @@ pub enum EntryMutation {
 mod tests {
     use super::{itunes_durations, parse_doc, parse_itunes_duration};
     use url::Url;
+
+    mod content_split {
+        use super::super::*;
+
+        fn entry(guid: &str, content_digest: Option<&str>) -> Entry {
+            Entry {
+                guid: String::from(guid),
+                url: Url::parse("http://example.com/e.mp3").unwrap(),
+                title: Some(String::from("An episode")),
+                updated_at: None,
+                published_at: None,
+                links: vec![],
+                media: vec![],
+                content_digest: content_digest.map(String::from),
+            }
+        }
+
+        fn feed(entries: Vec<Entry>) -> Feed {
+            Feed {
+                url: Url::parse("http://example.com/feed.xml").ok(),
+                raw_url: String::from("http://example.com/feed.xml"),
+                metadata: FeedMetadata {
+                    title: String::from("A feed"),
+                    authors: vec![],
+                    logo: None,
+                    description: None,
+                },
+                entries,
+            }
+        }
+
+        #[test]
+        fn identical_notes_produce_the_same_digest_regardless_of_guid() {
+            let a = EntryContent {
+                guid: String::from("guid-a"),
+                summary: Some(String::from("shared notes")),
+                content: None,
+            };
+            let mut b = a.clone();
+            b.guid = String::from("guid-b");
+            assert_eq!(a.digest(), b.digest());
+        }
+
+        #[test]
+        fn different_notes_produce_different_digests() {
+            let notes = |s: &str| EntryContent {
+                guid: String::from("guid-1"),
+                summary: Some(String::from(s)),
+                content: None,
+            };
+            assert_ne!(notes("one").digest(), notes("two").digest());
+        }
+
+        #[test]
+        fn empty_notes_have_no_digest() {
+            let empty = EntryContent {
+                guid: String::from("guid-1"),
+                summary: None,
+                content: None,
+            };
+            assert!(empty.is_empty());
+            assert_eq!(empty.digest(), None);
+        }
+
+        /// The whole point of comparing by digest: a publisher rewriting
+        /// show notes without touching anything else must still produce a
+        /// mutation, or a content edit would go unnoticed by a diff that
+        /// only ever sees the slim entry.
+        #[test]
+        fn a_changed_digest_produces_a_replaced_content_digest_mutation() {
+            let before = entry("guid-1", Some("old-digest"));
+            let after = entry("guid-1", Some("new-digest"));
+            let mutations = before.diff(&after);
+            assert!(matches!(
+                mutations.as_slice(),
+                [EntryMutation::ReplacedContentDigest(Some(d))] if d == "new-digest"
+            ));
+        }
+
+        #[test]
+        fn an_unchanged_digest_produces_no_mutation() {
+            let before = entry("guid-1", Some("same"));
+            let after = entry("guid-1", Some("same"));
+            assert!(before.diff(&after).is_empty());
+        }
+
+        /// `Feed::diff` -> `Feed::apply_diff` must round-trip a digest
+        /// change end to end, the same path `refresh_feeds` drives in casts.
+        #[test]
+        fn feed_diff_and_apply_round_trip_a_digest_change() {
+            let existing = feed(vec![entry("guid-1", Some("old"))]);
+            let observed = feed(vec![entry("guid-1", Some("new"))]);
+            let changes = existing.diff(&observed);
+            let applied = existing.apply_diff(changes);
+            assert_eq!(applied.entries[0].content_digest, Some(String::from("new")));
+        }
+
+        /// Commits already written carry `ReplacedSummary`/`ReplacedContent`
+        /// -- nothing emits them any more, but the stream still contains
+        /// them, and replaying a commit must not fail just because the
+        /// field it once touched no longer exists on `Entry`.
+        #[test]
+        fn legacy_content_mutations_replay_as_no_ops_instead_of_failing() {
+            let existing = feed(vec![entry("guid-1", Some("keep-me"))]);
+            let legacy_changes = vec![FeedMutation::EntryChanged(
+                String::from("guid-1"),
+                vec![
+                    EntryMutation::ReplacedSummary(Some(String::from("old inline summary"))),
+                    EntryMutation::ReplacedContent(Some(Content {
+                        body: Some(String::from("<p>old inline content</p>")),
+                        content_type: String::from("text/html"),
+                        length: None,
+                        src: None,
+                    })),
+                ],
+            )];
+            let applied = existing.apply_diff(legacy_changes);
+            // Replaying the legacy mutations must not touch the digest --
+            // they carry no digest information at all.
+            assert_eq!(
+                applied.entries[0].content_digest,
+                Some(String::from("keep-me"))
+            );
+        }
+
+        /// An entry serialized before the split has `summary`/`content`
+        /// inline and no `content_digest` field at all. It must still
+        /// deserialize -- the alternative is every historical commit
+        /// failing to parse, which fails hydration for every stream that
+        /// has one.
+        #[test]
+        fn a_pre_split_entry_deserializes_with_no_digest() {
+            let legacy_json = serde_json::json!({
+                "guid": "guid-1",
+                "url": "http://example.com/e.mp3",
+                "title": "An episode",
+                "summary": "inline notes, the old way",
+                "updated_at": null,
+                "published_at": null,
+                "content": null,
+                "links": [],
+                "media": []
+            });
+            let parsed: Entry = serde_json::from_value(legacy_json)
+                .expect("a pre-split entry must still deserialize");
+            assert_eq!(parsed.guid, "guid-1");
+            assert_eq!(parsed.content_digest, None);
+        }
+
+        /// Parsing a real document must produce a digest for every entry
+        /// that has notes, and the two halves must agree on which entry is
+        /// which -- a content object addressed under the wrong guid is as
+        /// bad as losing it, since nothing would ever resolve it correctly.
+        #[test]
+        fn parsing_pairs_each_entry_with_its_own_content_by_guid() {
+            let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>Test feed</title>
+<item>
+  <title>Episode One</title>
+  <guid>guid-1</guid>
+  <link>http://example.com/one.mp3</link>
+  <description>Summary for episode one</description>
+</item>
+<item>
+  <title>Episode Two</title>
+  <guid>guid-2</guid>
+  <link>http://example.com/two.mp3</link>
+  <description>Summary for episode two</description>
+</item>
+</channel></rss>"#;
+            let url = Url::parse("http://example.com/feed.xml").unwrap();
+            let fetched = parse_doc_with_content(&url, xml).expect("valid rss must parse");
+
+            assert_eq!(fetched.feed.entries.len(), 2);
+            assert_eq!(fetched.contents.len(), 2);
+
+            for entry in &fetched.feed.entries {
+                let digest = entry
+                    .content_digest
+                    .as_ref()
+                    .unwrap_or_else(|| panic!("{} should have notes", entry.guid));
+                let matching = fetched
+                    .contents
+                    .iter()
+                    .find(|c| c.guid == entry.guid)
+                    .unwrap_or_else(|| panic!("no stored content for {}", entry.guid));
+                assert_eq!(matching.digest().as_deref(), Some(digest.as_str()));
+            }
+        }
+
+        /// `fetch_feed`'s caller-facing contract (an entry with a digest but
+        /// no inline notes) must hold even for the plain `parse_doc` that
+        /// discards the content half -- a caller using the wrong function
+        /// still gets consistent entries, just without notes anywhere.
+        #[test]
+        fn parse_doc_discards_content_but_keeps_digests() {
+            let xml = br#"<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"><channel>
+<title>Test feed</title>
+<item>
+  <title>Episode One</title>
+  <guid>guid-1</guid>
+  <link>http://example.com/one.mp3</link>
+  <description>Summary for episode one</description>
+</item>
+</channel></rss>"#;
+            let url = Url::parse("http://example.com/feed.xml").unwrap();
+            let feed = parse_doc(&url, xml).expect("valid rss must parse");
+            assert!(feed.entries[0].content_digest.is_some());
+        }
+    }
 
     #[test]
     fn itunes_duration_accepts_all_three_forms() {

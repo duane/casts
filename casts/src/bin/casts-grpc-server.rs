@@ -88,7 +88,26 @@ pub async fn serve() -> Result<()> {
     let grpc_client = Client::new(client);
 
     let store = Grpc2Store::Grpc(grpc_client);
-    let service = CastsServer::new(CastsImpl::new(store.clone()));
+
+    // Read once and shared: the RPC service and the archival worker both
+    // want a content store backed by the same bucket, and reading the
+    // config twice would risk the two silently disagreeing if the
+    // environment ever named two different buckets.
+    let archiver_config = casts::archiver::ArchiverConfig::from_env(archive_stream_id());
+    let service = match &archiver_config {
+        Some(config) => {
+            let aws = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+            let content_store = casts::content_store::ContentStore::new(
+                aws_sdk_s3::Client::new(&aws),
+                config.bucket.clone(),
+            );
+            CastsServer::new(CastsImpl::with_content_store(store.clone(), content_store))
+        }
+        // No bucket configured: GetEntryContent reports itself unavailable
+        // rather than the service silently answering "no notes" for
+        // everything.
+        None => CastsServer::new(CastsImpl::new(store.clone())),
+    };
 
     let (mut health_reporter, health_service) = tonic_health::server::health_reporter();
     // Start NOT_SERVING rather than tonic-health's default of SERVING: a cold
@@ -112,10 +131,51 @@ pub async fn serve() -> Result<()> {
     // cannot stop this task from serving. Off unless CASTS_ARCHIVE_BUCKET is
     // set, which keeps local runs and any deployment that does not want it
     // unaffected.
-    match casts::archiver::ArchiverConfig::from_env(archive_stream_id()) {
+    match archiver_config {
         Some(config) => {
-            let worker_client = casts::commit_store_client::connect().await?;
-            let _archiver = tokio::spawn(casts::archiver::run_forever(worker_client, config));
+            // The worker gets its own runtime on its own OS threads, not a
+            // `tokio::spawn` onto the server's.
+            //
+            // Sharing the server's runtime means sharing its worker threads,
+            // and a task that computes without awaiting holds one until it
+            // finishes. The archival pass does exactly that -- folding the
+            // aggregate, diffing every feed, cloning both -- so it starved
+            // the gRPC health endpoint past the 5s probe timeout and ECS
+            // killed the task, repeatedly. Separate OS threads make that a
+            // scheduling question the kernel answers by preemption, rather
+            // than one the async runtime answers cooperatively and cannot.
+            //
+            // One worker thread: the pass must never be able to occupy every
+            // core, however much work it finds.
+            std::thread::Builder::new()
+                .name(String::from("archival-worker"))
+                .spawn(move || {
+                    let runtime = match tokio::runtime::Builder::new_multi_thread()
+                        .worker_threads(1)
+                        .enable_all()
+                        .thread_name("archival-worker-rt")
+                        .build()
+                    {
+                        Ok(runtime) => runtime,
+                        Err(err) => {
+                            log::error!("archival worker runtime failed to start: {err}");
+                            return;
+                        }
+                    };
+                    // Connected inside this runtime on purpose: a tonic
+                    // channel drives its connection from background tasks on
+                    // whichever runtime built it, so a client built on the
+                    // server's runtime would pull the worker's traffic right
+                    // back onto the threads this is separating it from.
+                    runtime.block_on(async move {
+                        match casts::commit_store_client::connect().await {
+                            Ok(client) => casts::archiver::run_forever(client, config).await,
+                            Err(err) => {
+                                log::error!("archival worker could not connect: {err:?}");
+                            }
+                        }
+                    });
+                })?;
         }
         None => log::info!("archival worker disabled (CASTS_ARCHIVE_BUCKET unset)"),
     }

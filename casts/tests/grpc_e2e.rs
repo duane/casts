@@ -35,10 +35,9 @@ fn test_entry(guid: &str, title: &str) -> Entry {
         guid: String::from(guid),
         url: Url::parse("http://example.com/episode.mp3").unwrap(),
         title: Some(String::from(title)),
-        summary: None,
         updated_at: None,
         published_at: None,
-        content: None,
+        content_digest: None,
         links: vec![],
         media: vec![],
     }

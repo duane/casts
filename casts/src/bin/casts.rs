@@ -12,7 +12,7 @@ use commit_store::{
     grpc_interface::{commit_store_client::CommitStoreClient, Commits, StreamCursor},
     grpc_to_domain_commit, CommitAttempt,
 };
-use immutable_feed::fetch_feed;
+use immutable_feed::fetch_feed_with_content;
 use prost::Message;
 use tonic::transport::Channel;
 use url::Url;
@@ -134,14 +134,25 @@ async fn import_feeds(
         // Fetch and parse before issuing any command; command application
         // is pure. A dead host or a feed that no longer parses must not
         // abort the rest of a 1000-entry import.
-        let feed = match fetch_feed(&feed_url).await {
-            Ok(feed) => feed,
+        let mut fetched = match fetch_feed_with_content(&feed_url).await {
+            Ok(fetched) => fetched,
             Err(err) => {
                 eprintln!("skipping {title:?}: fetch failed: {err}");
                 skipped += 1;
                 continue;
             }
         };
+        // This tool has no content store wired in, so notes are dropped
+        // rather than committing a digest nothing backs. Not permanent: the
+        // deployed server's regular refresh sees each entry's digest go from
+        // absent to present and backfills it then, the same self-healing
+        // path a bulk import already relies on for everything else.
+        if let Err(err) = casts::content_store::store_or_strip(&mut fetched, None).await {
+            eprintln!("skipping {title:?}: {err:?}");
+            skipped += 1;
+            continue;
+        }
+        let feed = fetched.feed;
 
         let entry_count = feed.entries.len();
         // `add_feed_paginated` splits a large feed's entries across many
@@ -188,7 +199,12 @@ async fn add(
 ) -> Result<()> {
     let aggregate = hydrated_client(&mut client, stream_id).await?;
     // Fetch and parse before issuing any command; command application is pure.
-    let feed = fetch_feed(&feed_url).await?;
+    let mut fetched = fetch_feed_with_content(&feed_url).await?;
+    // See import_feeds: this CLI has no content store, so notes are
+    // stripped rather than committing a dangling digest. The server's own
+    // refresh backfills them later.
+    casts::content_store::store_or_strip(&mut fetched, None).await?;
+    let feed = fetched.feed;
     // Paginated (see poller.rs): a single-commit AddFeed blows commit-store's
     // 2 MB message limit for any feed with a large back-catalog.
     let aggregate = casts::poller::add_feed_paginated(
@@ -215,7 +231,11 @@ async fn poll(stream_id: Uuid) -> Result<()> {
     let mut client = get_client()
         .await
         .max_decoding_message_size(8 * 1024 * 1024);
-    let report = casts::poller::refresh_feeds(&mut client, &stream_id).await?;
+    // No content store wired into this CLI subcommand: entries whose notes
+    // changed have their digest stripped rather than committing one nothing
+    // backs. The deployed server's own poll cycle has a content store and
+    // backfills it -- see `poller::refresh_feeds`'s doc comment.
+    let report = casts::poller::refresh_feeds(&mut client, &stream_id, None).await?;
     println!(
         "{} changed, {} unchanged, {} failed",
         report.changed,

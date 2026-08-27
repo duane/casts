@@ -25,6 +25,7 @@ pub mod grpc_interface {
 pub mod archiver;
 pub mod commit_store_client;
 pub mod config;
+pub mod content_store;
 pub mod entry_page;
 pub mod hydration;
 pub mod poller;

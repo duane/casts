@@ -27,6 +27,11 @@ htmlescape = "~0.3.1"
 
 ## serialization
 serde = "~1.0.197"
+serde_json = "~1.0.115"
+
+## Content-addressing for out-of-band entry content: the digest is what an
+## event carries in place of the show-notes HTML itself.
+sha2 = "~0.10"
 
 mime = "~0.3.17"
 

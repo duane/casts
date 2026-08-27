@@ -123,7 +123,11 @@ pub async fn run_once(
     s3: &S3Client,
     config: &ArchiverConfig,
 ) -> Result<usize> {
-    let report = refresh_feeds(client, &config.stream_id).await?;
+    // Same bucket the archived audio lives in, under its own key prefix
+    // (see `content_store::CONTENT_PREFIX`) -- one bucket for this
+    // deployment's durable, non-event-stream storage.
+    let content_store = crate::content_store::ContentStore::new(s3.clone(), config.bucket.clone());
+    let report = refresh_feeds(client, &config.stream_id, Some(&content_store)).await?;
     if !report.ok() {
         for (feed_id, reason) in &report.failures {
             log::warn!("feed {feed_id} could not be refreshed: {reason}");

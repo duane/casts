@@ -12,7 +12,7 @@ use commit_store::{
     grpc_interface::commit_store_client::CommitStoreClient,
     grpc_to_domain_commit, CommitAttempt,
 };
-use immutable_feed::{fetch_feed, Entry};
+use immutable_feed::{fetch_feed_with_content, Entry, EntryMutation, FeedMutation};
 use tonic::transport::Channel;
 use uuid::Uuid;
 
@@ -61,7 +61,7 @@ pub async fn hydrate(
     )
     .await
     .map_err(|err| anyhow!("commit store read failed: {err}"))?;
-    crate::hydration::aggregate_from_hydration(hydration)
+    crate::hydration::aggregate_from_hydration_off_thread(hydration).await
 }
 
 /// Write a snapshot if enough commits have accumulated above the last one.
@@ -88,8 +88,8 @@ pub async fn snapshot_if_due(
         return Ok(false);
     }
     let tail = hydration.commits.len();
-    let aggregate = crate::hydration::aggregate_from_hydration(hydration)?;
-    let attempt = crate::hydration::snapshot_attempt(*stream_id, &aggregate)?;
+    let aggregate = crate::hydration::aggregate_from_hydration_off_thread(hydration).await?;
+    let attempt = crate::hydration::snapshot_attempt_off_thread(*stream_id, aggregate).await?;
 
     match client
         .append_commit(domain_to_grpc_commit_attempt(&attempt))
@@ -179,16 +179,35 @@ async fn commit_with_rebase(
 }
 
 /// Entries per commit when adding a feed. `Added` and `AppendEntries` each
-/// embed every entry they are given in one commit; commit-store's message
-/// limit is 2 MB, and a large feed's full entry list can exceed that on its
-/// own (Crime Junkie: 7.16 MB, observed live -- this constant exists
-/// because that import failed before it did).
-pub const ADD_FEED_ENTRY_BATCH_SIZE: usize = 100;
+/// embed every entry they are given in one commit, and a large feed's full
+/// entry list runs to megabytes on its own (Crime Junkie: 7.16 MB, observed
+/// live -- this constant exists because that import failed before it did).
+/// The binding limit is now commit-store's 256 KB commit payload budget,
+/// which is stricter than the 2 MB message limit this was first sized for.
+///
+/// Ten, not a hundred. Measured against the real stream: a mean entry is
+/// 3,198 bytes and the largest observed is 4,398, of which `content` and
+/// `summary` -- the show-notes HTML -- are 86%. Ten entries is therefore
+/// ~32 KB of entries typically and ~44 KB at the observed worst.
+///
+/// That has to be doubled, because a commit stores every entry TWICE: once
+/// in the `Added`/`AppendEntries` event, and again inside the originating
+/// command that goes into `metadata`. So ten entries costs ~64 KB typical
+/// and ~88 KB worst against the 256 KB commit budget -- roughly 3x headroom.
+///
+/// This is still a count bounding something with no size bound, which is the
+/// bug class that produced every size failure here. It is a safety margin,
+/// not a guarantee: one entry larger than half the budget cannot be written
+/// at any batch size while the metadata duplication stands.
+pub const ADD_FEED_ENTRY_BATCH_SIZE: usize = 10;
 
-/// Feed mutations per commit when reconciling an existing feed. Same 2 MB
-/// ceiling as `ADD_FEED_ENTRY_BATCH_SIZE`, and a mutation carrying a new
-/// entry is about the size of that entry.
-pub const FEED_CHANGE_BATCH_SIZE: usize = 100;
+/// Feed mutations per commit when reconciling an existing feed.
+///
+/// Matched to `ADD_FEED_ENTRY_BATCH_SIZE` for the same reason and by the
+/// same arithmetic: an `EntryAdded` mutation carries a whole entry, so a
+/// batch of changes costs what a batch of entries costs, and it is
+/// duplicated into `metadata` identically.
+pub const FEED_CHANGE_BATCH_SIZE: usize = 10;
 
 /// Add a feed, paginating its entries into commits of at most
 /// `ADD_FEED_ENTRY_BATCH_SIZE` instead of one commit holding all of them.
@@ -249,9 +268,32 @@ pub async fn add_feed_paginated(
 ///
 /// A feed that cannot be fetched or committed is recorded and skipped; one
 /// unreachable podcast host must not stop the rest from updating.
+/// Which guids in `changes` need their notes stored: newly added entries,
+/// and entries whose content actually changed.
+///
+/// Deliberately narrower than storing everything observed: a full-feed
+/// refresh fetches every entry on every pass, and most of them are
+/// unchanged. Storing is content-addressed and so idempotent, but "harmless
+/// to repeat" is not the same as "worth repeating" against a feed with
+/// hundreds of stable entries every 15 minutes.
+fn guids_needing_content(changes: &[FeedMutation]) -> std::collections::HashSet<String> {
+    changes
+        .iter()
+        .filter_map(|mutation| match mutation {
+            FeedMutation::EntryAdded(entry) => Some(entry.guid.clone()),
+            FeedMutation::EntryChanged(guid, entry_mutations) => entry_mutations
+                .iter()
+                .any(|m| matches!(m, EntryMutation::ReplacedContentDigest(Some(_))))
+                .then(|| guid.clone()),
+            FeedMutation::EntryRemoved(_) | FeedMutation::MetadataChange(_) => None,
+        })
+        .collect()
+}
+
 pub async fn refresh_feeds(
     client: &mut CommitStoreClient<Channel>,
     stream_id: &Uuid,
+    content_store: Option<&crate::content_store::ContentStore>,
 ) -> Result<RefreshReport> {
     let mut aggregate = hydrate(client, stream_id).await?;
     let mut report = RefreshReport::default();
@@ -267,8 +309,8 @@ pub async fn refresh_feeds(
             continue;
         };
 
-        let observed = match fetch_feed(&url).await {
-            Ok(feed) => feed,
+        let mut observed_fetch = match fetch_feed_with_content(&url).await {
+            Ok(fetched) => fetched,
             Err(err) => {
                 report
                     .failures
@@ -276,6 +318,18 @@ pub async fn refresh_feeds(
                 continue;
             }
         };
+        // No content store means nowhere to put notes: strip digests before
+        // the diff runs, so no mutation ever asks to commit one that would
+        // dangle. `refresh_feeds` runs unconfigured only via the `poll` CLI
+        // against a deployment that already has a content store on its
+        // write RPCs -- this keeps it from being the one path that corrupts
+        // what the RPCs keep correct.
+        if content_store.is_none() {
+            for entry in &mut observed_fetch.feed.entries {
+                entry.content_digest = None;
+            }
+        }
+        let observed = observed_fetch.feed;
 
         // The diff is computed here rather than inside `ObserveFeed` so it
         // can be split across commits. `ObserveFeed` emits the whole diff as
@@ -285,6 +339,28 @@ pub async fn refresh_feeds(
         // its first batch. Chunking is safe here and would not be for
         // `ObserveFeed`: see `ApplyFeedChanges`.
         let changes = existing.diff(&observed);
+
+        if let Some(content_store) = content_store {
+            let needed = guids_needing_content(&changes);
+            if !needed.is_empty() {
+                let to_store: Vec<immutable_feed::EntryContent> = observed_fetch
+                    .contents
+                    .into_iter()
+                    .filter(|content| needed.contains(&content.guid))
+                    .collect();
+                // A store failure here must not commit the changes: the
+                // digests in `changes` would then dangle. Recorded the same
+                // way an unreachable host is -- this feed is skipped for the
+                // pass, not the whole run.
+                if let Err(err) = content_store.put_all(&to_store).await {
+                    report
+                        .failures
+                        .push((feed_id, format!("could not store entry content: {err}")));
+                    continue;
+                }
+            }
+        }
+
         let mut result = Ok((aggregate.clone(), false));
         for chunk in changes.chunks(FEED_CHANGE_BATCH_SIZE) {
             let chunk = chunk.to_vec();
@@ -441,10 +517,9 @@ mod tests {
             guid: format!("{title}-episode-1"),
             url: Url::parse("http://example.com/episode-1").unwrap(),
             title: Some(String::from("Episode 1")),
-            summary: None,
             updated_at: None,
             published_at: None,
-            content: None,
+            content_digest: None,
             links: vec![],
             media: vec![MediaObject {
                 title: None,

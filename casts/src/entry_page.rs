@@ -207,10 +207,9 @@ mod tests {
             guid: String::from(guid),
             url: Url::parse("http://example.com/episode.mp3").unwrap(),
             title: Some(String::from(guid)),
-            summary: None,
             updated_at: None,
             published_at: published,
-            content: None,
+            content_digest: None,
             links: vec![],
             media: vec![],
         }

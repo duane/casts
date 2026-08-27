@@ -187,9 +187,12 @@ impl From<immutable_feed::MediaObject> for MediaObject {
 pub struct Entry {
     pub title: String,
     pub guid: String,
-    pub summary: String,
+    // `summary`/`content` used to live inline here. They now live out of
+    // band, addressed by `content_digest` -- see immutable_feed::Entry's
+    // doc comment. This API predates that split and has no equivalent to
+    // the gRPC service's GetEntryContent; it is not wired up to fetch them.
+    pub content_digest: Option<String>,
     pub links: Vec<Link>,
-    pub content: Option<Content>,
     pub media: Vec<MediaObject>,
     /// Last recorded playback position in whole seconds; absent when the
     /// entry has never been listened to.
@@ -201,9 +204,8 @@ impl Entry {
         Entry {
             title: entry.title.unwrap_or_default(),
             guid: entry.guid,
-            summary: entry.summary.unwrap_or_default(),
+            content_digest: entry.content_digest,
             links: entry.links.into_iter().map(Link::from).collect(),
-            content: entry.content.map(Content::from),
             media: entry.media.into_iter().map(MediaObject::from).collect(),
             elapsed_seconds: elapsed
                 .map(|(seconds, _nanos)| i32::try_from(seconds).unwrap_or(i32::MAX)),
@@ -358,6 +360,7 @@ impl Mutation {
                 .expect("could not serialize command to metadata"),
             events,
             events_count,
+            snapshot: false,
         };
 
         let committed = client

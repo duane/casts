@@ -34,10 +34,10 @@ use crate::{
     grpc::Grpc2Store,
     grpc_interface::{
         AddFeedRequest, AddFeedResponse, Content as GrpcContent, Entries as GrpcEntries,
-        Entry as GrpcEntry, Feed as GrpcFeed, Feeds as GrpcFeeds, GetFeedRequest,
-        Image as GrpcImage, Link as GrpcLink, ListEntriesRequest, ListFeedsRequest,
-        MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject, RecordPlaybackRequest,
-        RecordPlaybackResponse,
+        Entry as GrpcEntry, EntryContent as GrpcEntryContent, Feed as GrpcFeed, Feeds as GrpcFeeds,
+        GetEntryContentRequest, GetFeedRequest, Image as GrpcImage, Link as GrpcLink,
+        ListEntriesRequest, ListFeedsRequest, MediaContent as GrpcMediaContent,
+        MediaObject as GrpcMediaObject, RecordPlaybackRequest, RecordPlaybackResponse,
     },
     poller,
 };
@@ -83,14 +83,32 @@ pub fn build_tls_config(
 
 pub struct CastsImpl {
     backing_store: Arc<Mutex<Grpc2Store>>,
+    /// Where entry show notes live. `None` when the deployment has no
+    /// content storage configured, which makes `GetEntryContent` report
+    /// itself unavailable rather than answer "this entry has no notes".
+    content_store: Option<crate::content_store::ContentStore>,
 }
 
 impl CastsImpl {
-    /// Serve the `Casts` API from the given backing commit store.
+    /// Serve the `Casts` API from the given backing commit store, with no
+    /// content storage. `GetEntryContent` is unavailable in this mode.
     #[must_use]
     pub fn new(backing_store: Grpc2Store) -> Self {
         CastsImpl {
             backing_store: Arc::new(Mutex::new(backing_store)),
+            content_store: None,
+        }
+    }
+
+    /// Serve the API with show notes available.
+    #[must_use]
+    pub fn with_content_store(
+        backing_store: Grpc2Store,
+        content_store: crate::content_store::ContentStore,
+    ) -> Self {
+        CastsImpl {
+            backing_store: Arc::new(Mutex::new(backing_store)),
+            content_store: Some(content_store),
         }
     }
 }
@@ -114,7 +132,8 @@ async fn hydrate_aggregate(
     let hydration = commit_store::store::hydrate(client, stream_id, HYDRATE_PAGE_SIZE)
         .await
         .map_err(|err| Status::unavailable(format!("commit store read failed: {err}")))?;
-    crate::hydration::aggregate_from_hydration(hydration)
+    crate::hydration::aggregate_from_hydration_off_thread(hydration)
+        .await
         .map_err(|err| Status::internal(format!("could not rebuild the aggregate: {err}")))
 }
 
@@ -220,6 +239,71 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
         Ok(Response::new(feed_to_grpc_feed(feed.clone(), feed_id)))
     }
 
+    /// The show notes for one entry.
+    ///
+    /// A separate call because they are stored outside the event stream:
+    /// carrying them on every `Entry` is what made list responses unbounded.
+    /// Only something rendering a single episode needs them.
+    async fn get_entry_content(
+        &self,
+        request: Request<GetEntryContentRequest>,
+    ) -> Result<Response<GrpcEntryContent>, Status> {
+        info!("get_entry_content");
+        let req = request.get_ref();
+        let feed_id: Uuid = Uuid::parse_str(&req.feed_id)
+            .map_err(|err| Status::invalid_argument(format!("feed_id is not a UUID: {err}")))?;
+        let Some(content_store) = self.content_store.as_ref() else {
+            return Err(Status::unavailable(
+                "this deployment has no content storage configured",
+            ));
+        };
+
+        let digest = {
+            let mut lock = self.backing_store.lock().await;
+            let aggregate = hydrate_aggregate(lock.store(), &req.stream_id).await?;
+            let feed = aggregate
+                .feeds_by_feed_id
+                .get(&feed_id)
+                .ok_or_else(|| Status::not_found(format!("no feed with id {feed_id}")))?;
+            let entry = feed
+                .entries
+                .iter()
+                .find(|entry| entry.guid == req.entry_guid)
+                .ok_or_else(|| {
+                    Status::not_found(format!("no entry {:?} in feed {feed_id}", req.entry_guid))
+                })?;
+            entry.content_digest.clone()
+        };
+
+        // No digest means the entry genuinely has no notes -- an empty
+        // response, not an error, and distinguishable from a failure by the
+        // empty digest travelling with it.
+        let Some(digest) = digest else {
+            return Ok(Response::new(GrpcEntryContent::default()));
+        };
+
+        let content = content_store
+            .get(&digest)
+            .await
+            .map_err(|err| Status::unavailable(format!("could not read entry content: {err}")))?;
+
+        Ok(Response::new(match content {
+            Some(content) => GrpcEntryContent {
+                summary: content.summary.unwrap_or_default(),
+                content: content.content.map(content_to_grpc_content),
+                content_digest: digest,
+            },
+            // The entry references notes that are not in storage: either the
+            // backfill has not reached it or the object is gone. Reported as
+            // the digest with no body, so a client can tell this from an
+            // entry that never had notes.
+            None => GrpcEntryContent {
+                content_digest: digest,
+                ..GrpcEntryContent::default()
+            },
+        }))
+    }
+
     async fn add_feed(
         &self,
         request: Request<AddFeedRequest>,
@@ -233,9 +317,18 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
 
         // Fetch before taking the store lock; the fetch is the slow part and
         // needs nothing from the store.
-        let feed = immutable_feed::fetch_feed(&url)
+        let mut fetched = immutable_feed::fetch_feed_with_content(&url)
             .await
             .map_err(|err| Status::failed_precondition(format!("could not fetch feed: {err}")))?;
+        // Store the show notes before anything is committed: a digest
+        // committed before its notes exist can never be resolved, and a
+        // commit cannot be taken back. No content store configured strips
+        // the digests instead, so the feed still commits -- just without
+        // notes until a later refresh, which has one, backfills them.
+        crate::content_store::store_or_strip(&mut fetched, self.content_store.as_ref())
+            .await
+            .map_err(|err| Status::unavailable(format!("could not store entry content: {err}")))?;
+        let feed = fetched.feed;
 
         let mut lock = self.backing_store.lock().await;
         let store = lock.store();
@@ -505,7 +598,6 @@ fn entry_to_grpc_entry(
         feed_id: feed_id.to_string(),
         guid: entry.guid,
         title: entry.title.unwrap_or_default(),
-        summary: entry.summary.unwrap_or_default(),
         links: entry.links.into_iter().map(link_to_grpc_link).collect(),
         media: entry
             .media
@@ -513,7 +605,7 @@ fn entry_to_grpc_entry(
             .map(media_object_to_grpc_media_object)
             .collect(),
         published: entry.published_at.map(domain_to_grpc_ts),
-        content: entry.content.map(content_to_grpc_content),
+        content_digest: entry.content_digest.unwrap_or_default(),
         elapsed_seconds,
         elapsed_nanos,
     }

@@ -10,6 +10,9 @@ service Casts {
     rpc ListFeeds (ListFeedsRequest) returns (Feeds);
     rpc ListEntries (ListEntriesRequest) returns (Entries);
     rpc GetFeed (GetFeedRequest) returns (Feed);
+    // Show notes for one entry. Held outside the event stream and fetched
+    // only when something renders an episode -- see EntryContent.
+    rpc GetEntryContent (GetEntryContentRequest) returns (EntryContent);
     // Record the playback position reached for one entry. Last write wins.
     rpc RecordPlayback (RecordPlaybackRequest) returns (RecordPlaybackResponse);
     // Fetch the feed at a url and add it to the stream.
@@ -92,8 +95,11 @@ message Image {
 message Entry {
     string title = 1;
     string guid = 2;
-    string summary = 3;
-    Content content = 4;
+    // Fields 3 and 4 held `summary` and `content`. Together they were 86% of
+    // every entry and nothing on the write path ever read them, so they now
+    // live outside the event stream and come from GetEntryContent. Reserved
+    // so no later field reuses the numbers and misparses an old client.
+    reserved 3, 4;
     repeated Link links = 5;
     repeated MediaObject media = 6;
     google.protobuf.Timestamp published = 7;
@@ -103,6 +109,24 @@ message Entry {
     // The feed this entry belongs to. Required to act on an entry returned
     // by a ListEntries that spans feeds -- RecordPlayback needs both ids.
     string feedId = 10;
+    // Identifies this entry's show notes. Empty when it has none, which is
+    // distinct from having notes that are not stored yet.
+    string contentDigest = 11;
+}
+
+message GetEntryContentRequest {
+    string streamId = 1;
+    string feedId = 2;
+    string entryGuid = 3;
+}
+
+// One entry's show notes. Empty fields mean the entry genuinely has none;
+// a caller that wants to tell that from "not stored" compares contentDigest
+// against the one on the Entry.
+message EntryContent {
+    string summary = 1;
+    Content content = 2;
+    string contentDigest = 3;
 }
 
 message MediaObject {
