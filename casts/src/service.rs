@@ -15,7 +15,7 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use commit_store::commit::{CommitMetadata, StreamMetadata};
 use commit_store::dispatch::DispatchingAsyncReadWriteStore;
-use commit_store::store::{ScanStreamCursor, StoreError};
+use commit_store::store::StoreError;
 use commit_store::CommitAttempt;
 use futures::lock::Mutex;
 use immutable_feed::{Content, Entry, Feed, Image, Link, MediaContent, MediaObject};
@@ -29,9 +29,7 @@ use uuid::Uuid;
 
 use crate::{
     aggregate::FeedAggregate,
-    applicable::EventApplicable,
     commands::{Command, FeedAggregateCommand, FeedAggregateError},
-    events::FeedAggregateEvent,
     grpc::Grpc2Store,
     grpc_interface::{
         AddFeedRequest, AddFeedResponse, Content as GrpcContent, Entries as GrpcEntries,
@@ -100,34 +98,23 @@ impl CastsImpl {
 /// `MAX_PAGE_SIZE` anyway, so this only bounds client-side memory.
 const HYDRATE_PAGE_SIZE: i64 = 1000;
 
+/// Rebuild the aggregate for one stream.
+///
+/// Goes through commit-store's snapshot-aware `hydrate`: it finds the newest
+/// snapshot and reads only the commits above it, instead of replaying from
+/// version zero. Replaying everything measured 66 seconds cold at 507
+/// commits, which is past this service's own client deadline.
 async fn hydrate_aggregate(
     client: &mut dyn DispatchingAsyncReadWriteStore,
     stream_id: &str,
 ) -> Result<FeedAggregate, Status> {
     let stream_id: Uuid = Uuid::parse_str(stream_id)
         .map_err(|err| Status::invalid_argument(format!("stream_id is not a UUID: {err}")))?;
-    let mut aggregate = FeedAggregate::new();
-    let mut cursor = Some(ScanStreamCursor {
-        stream_id,
-        min_version: 0,
-        max_version: None,
-        reverse: false,
-    });
-    while let Some(current) = cursor {
-        let (commits, next) = client
-            .get_stream_range(current, HYDRATE_PAGE_SIZE)
-            .await
-            .map_err(|err| Status::unavailable(format!("commit store read failed: {err}")))?;
-        for commit in commits {
-            let events: Vec<FeedAggregateEvent> =
-                serde_json::from_value(commit.events).map_err(|err| {
-                    Status::internal(format!("stored events failed to deserialize: {err}"))
-                })?;
-            aggregate = aggregate.apply_many(events);
-        }
-        cursor = next;
-    }
-    Ok(aggregate)
+    let hydration = commit_store::store::hydrate(client, stream_id, HYDRATE_PAGE_SIZE)
+        .await
+        .map_err(|err| Status::unavailable(format!("commit store read failed: {err}")))?;
+    crate::hydration::aggregate_from_hydration(hydration)
+        .map_err(|err| Status::internal(format!("could not rebuild the aggregate: {err}")))
 }
 
 #[tonic::async_trait]
@@ -186,6 +173,8 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
             feed.clone(),
             feed_id,
             &aggregate.playtime_by_feed_and_guid,
+            // The detail endpoint: this is where entries belong.
+            true,
         )))
     }
 
@@ -259,6 +248,7 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
             events: serde_json::to_value(events)
                 .map_err(|err| Status::internal(format!("could not serialize events: {err}")))?,
             events_count,
+            snapshot: false,
         };
         let mut committed = store
             .commit(&commit_attempt)
@@ -303,6 +293,7 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
                     Status::internal(format!("could not serialize events: {err}"))
                 })?,
                 events_count,
+                snapshot: false,
             };
             committed = store
                 .commit(&commit_attempt)
@@ -376,6 +367,7 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
             events: serde_json::to_value(events)
                 .map_err(|err| Status::internal(format!("could not serialize events: {err}")))?,
             events_count,
+            snapshot: false,
         };
         let committed = store
             .commit(&commit_attempt)
@@ -492,9 +484,28 @@ fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
     GrpcTimestamp { seconds, nanos }
 }
 
-fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid, playtimes: &PlaytimeByFeedAndGuid) -> GrpcFeed {
-    let mut entries: Vec<GrpcEntry> = feed
-        .entries
+/// Convert one feed for the wire.
+///
+/// `include_entries` exists because `Feed` embeds `repeated Entry`, so a
+/// *list* endpoint that populated it returned every episode of every feed in
+/// one message. With a handful of seeded feeds that was invisible; after a
+/// bulk import it produced a 78 MB `ListFeeds` response that no client would
+/// accept (grpcurl and grpc-swift both cap received messages in the low
+/// megabytes), which took the whole service down. Lists now return feed
+/// summaries and `GetFeed` returns the detail -- which is what having a
+/// separate single-feed RPC was for.
+fn feed_to_grpc_feed(
+    feed: Feed,
+    feed_id: Uuid,
+    playtimes: &PlaytimeByFeedAndGuid,
+    include_entries: bool,
+) -> GrpcFeed {
+    let source_entries = if include_entries {
+        feed.entries
+    } else {
+        Vec::new()
+    };
+    let mut entries: Vec<GrpcEntry> = source_entries
         .into_iter()
         .map(|entry| entry_to_grpc_entry(entry, feed_id, playtimes))
         .collect();
@@ -521,7 +532,8 @@ fn aggregate_to_feeds(aggregate: FeedAggregate) -> GrpcFeeds {
     let feeds: Vec<GrpcFeed> = aggregate
         .feeds_by_feed_id
         .iter()
-        .map(|(feed_id, feed)| feed_to_grpc_feed(feed.clone(), *feed_id, playtimes))
+        // Summaries only: see feed_to_grpc_feed's doc comment.
+        .map(|(feed_id, feed)| feed_to_grpc_feed(feed.clone(), *feed_id, playtimes, false))
         .collect();
     GrpcFeeds { feeds }
 }

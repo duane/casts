@@ -136,6 +136,16 @@ pub async fn run_once(
         report.failures.len()
     );
 
+    // The worker is the natural snapshotter: it already runs on a timer, and
+    // it is the main source of the commits that make hydration expensive.
+    // A failure here is logged, not propagated -- a missing snapshot only
+    // makes reads slower, and must not stop the archival pass.
+    match crate::poller::snapshot_if_due(client, &config.stream_id).await {
+        Ok(true) => log::info!("snapshot written"),
+        Ok(false) => log::debug!("no snapshot needed this pass"),
+        Err(err) => log::warn!("could not write a snapshot: {err}"),
+    }
+
     tokio::fs::create_dir_all(&config.tmpdir).await.ok();
     let aggregate = hydrate(client, &config.stream_id).await?;
     let pending = pending_archives(&aggregate, config.batch);

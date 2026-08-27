@@ -65,6 +65,7 @@ async fn mark_listened(
         metadata: serde_json::to_value(&command)?,
         events: serde_json::to_value(events)?,
         events_count,
+        snapshot: false,
     };
     let commit_result = client
         .append_commit(domain_to_grpc_commit_attempt(&commit_attempt))

@@ -89,6 +89,7 @@ async fn harness(entries: Vec<Entry>) -> (CastsClient<Channel>, Uuid, Uuid) {
             metadata: serde_json::Value::Null,
             events: serde_json::to_value(vec![event]).unwrap(),
             events_count: 1,
+            snapshot: false,
         })
         .await
         .expect("seed commit");

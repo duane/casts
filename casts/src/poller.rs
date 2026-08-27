@@ -9,10 +9,9 @@ use anyhow::{anyhow, Context, Result};
 use commit_store::{
     commit::{CommitMetadata, StreamMetadata},
     domain_to_grpc_commit_attempt,
-    grpc_interface::{commit_store_client::CommitStoreClient, StreamCursor},
+    grpc_interface::commit_store_client::CommitStoreClient,
     grpc_to_domain_commit, CommitAttempt,
 };
-use futures::StreamExt;
 use immutable_feed::{fetch_feed, Entry};
 use tonic::transport::Channel;
 use uuid::Uuid;
@@ -44,32 +43,71 @@ impl RefreshReport {
     }
 }
 
-/// Rebuild the aggregate from the stream's whole history.
+/// Rebuild the aggregate for one stream, starting from its newest snapshot.
 ///
-/// `limit: i64::MAX` is the *page* size, which the server clamps to its own
-/// maximum and then pages through with a cursor -- so this reads everything,
-/// not the first page.
+/// Wraps the raw client in commit-store's `Client` because snapshot-aware
+/// hydration is defined over the `Store` trait, which the generated gRPC
+/// client does not implement on its own. The clone is cheap -- a tonic
+/// client is a `Channel` handle.
 pub async fn hydrate(
     client: &mut CommitStoreClient<Channel>,
     stream_id: &Uuid,
 ) -> Result<FeedAggregate> {
-    let mut commits = client
-        .stream_stream_range(StreamCursor {
-            stream_id: stream_id.to_string(),
-            min_version: 0,
-            max_version: i64::MAX,
-            limit: i64::MAX,
-            reverse: false,
-        })
-        .await?
-        .into_inner();
+    let mut store = commit_store::Client::new(client.clone());
+    let hydration = commit_store::store::hydrate(
+        &mut store,
+        *stream_id,
+        commit_store::store::HYDRATE_PAGE_SIZE,
+    )
+    .await
+    .map_err(|err| anyhow!("commit store read failed: {err}"))?;
+    crate::hydration::aggregate_from_hydration(hydration)
+}
 
-    let mut aggregate = FeedAggregate::default();
-    while let Some(commit) = commits.next().await {
-        let commit = commit?;
-        aggregate = aggregate.apply_many(serde_json::from_slice(commit.events.as_slice())?);
+/// Write a snapshot if enough commits have accumulated above the last one.
+///
+/// Returns whether one was written. A conflict here is not an error worth
+/// propagating: another writer moved the stream on, the snapshot this would
+/// have written is already stale, and the next pass will take a fresher one.
+pub async fn snapshot_if_due(
+    client: &mut CommitStoreClient<Channel>,
+    stream_id: &Uuid,
+) -> Result<bool> {
+    let mut store = commit_store::Client::new(client.clone());
+    let hydration = commit_store::store::hydrate(
+        &mut store,
+        *stream_id,
+        commit_store::store::HYDRATE_PAGE_SIZE,
+    )
+    .await
+    .map_err(|err| anyhow!("commit store read failed: {err}"))?;
+
+    // Only the tail counts: `commits` excludes whatever the snapshot itself
+    // stands in for.
+    if hydration.commits.len() < crate::hydration::SNAPSHOT_AFTER_COMMITS {
+        return Ok(false);
     }
-    Ok(aggregate)
+    let tail = hydration.commits.len();
+    let aggregate = crate::hydration::aggregate_from_hydration(hydration)?;
+    let attempt = crate::hydration::snapshot_attempt(*stream_id, &aggregate)?;
+
+    match client
+        .append_commit(domain_to_grpc_commit_attempt(&attempt))
+        .await
+    {
+        Ok(_) => {
+            log::info!(
+                "wrote a snapshot at version {} ({tail} commits above the previous one)",
+                attempt.stream_metadata.stream_version
+            );
+            Ok(true)
+        }
+        Err(status) if status.code() == tonic::Code::AlreadyExists => {
+            log::info!("snapshot lost a race; the next pass will take a fresher one");
+            Ok(false)
+        }
+        Err(status) => Err(anyhow!("snapshot commit failed: {status}")),
+    }
 }
 
 /// Commit `command`'s events, re-hydrating and recomputing if the stream has
@@ -110,6 +148,8 @@ async fn commit_with_rebase(
             metadata: serde_json::to_value(&command)?,
             events: serde_json::to_value(&events)?,
             events_count: events.len() as i64,
+            // An ordinary event commit, not a materialized aggregate.
+            snapshot: false,
         };
 
         match client
@@ -144,6 +184,11 @@ async fn commit_with_rebase(
 /// own (Crime Junkie: 7.16 MB, observed live -- this constant exists
 /// because that import failed before it did).
 pub const ADD_FEED_ENTRY_BATCH_SIZE: usize = 100;
+
+/// Feed mutations per commit when reconciling an existing feed. Same 2 MB
+/// ceiling as `ADD_FEED_ENTRY_BATCH_SIZE`, and a mutation carrying a new
+/// entry is about the size of that entry.
+pub const FEED_CHANGE_BATCH_SIZE: usize = 100;
 
 /// Add a feed, paginating its entries into commits of at most
 /// `ADD_FEED_ENTRY_BATCH_SIZE` instead of one commit holding all of them.
@@ -232,24 +277,40 @@ pub async fn refresh_feeds(
             }
         };
 
-        // No pre-diff here: `ObserveFeed` computes exactly this comparison to
-        // build its event, and doing it twice both wasted the work and
-        // reported a number that came from a different computation than the
-        // one committed.
-        let result = commit_with_rebase(client, stream_id, aggregate.clone(), |current| {
-            // After a rebase the feed may be gone from the stream; building
-            // no command tells `commit_with_rebase` to stop rather than
-            // committing against state that no longer holds.
-            if !current.feeds_by_feed_id.contains_key(&feed_id) {
-                return None;
-            }
-            Some(FeedAggregateCommand::ObserveFeed {
-                stream_id: *stream_id,
-                feed_id,
-                feed: observed.clone(),
+        // The diff is computed here rather than inside `ObserveFeed` so it
+        // can be split across commits. `ObserveFeed` emits the whole diff as
+        // one `ObservedChanges` event, which exceeds commit-store's 2 MB
+        // message limit whenever a feed has drifted far from what is stored
+        // -- observed live at 7.97 MB for a feed whose import stopped after
+        // its first batch. Chunking is safe here and would not be for
+        // `ObserveFeed`: see `ApplyFeedChanges`.
+        let changes = existing.diff(&observed);
+        let mut result = Ok((aggregate.clone(), false));
+        for chunk in changes.chunks(FEED_CHANGE_BATCH_SIZE) {
+            let chunk = chunk.to_vec();
+            let current_aggregate = match result {
+                Ok((ref agg, _)) => agg.clone(),
+                Err(_) => break,
+            };
+            let committed_so_far = matches!(result, Ok((_, true)));
+            result = commit_with_rebase(client, stream_id, current_aggregate, |current| {
+                // After a rebase the feed may be gone from the stream;
+                // building no command tells `commit_with_rebase` to stop
+                // rather than committing against state that no longer holds.
+                if !current.feeds_by_feed_id.contains_key(&feed_id) {
+                    return None;
+                }
+                Some(FeedAggregateCommand::ApplyFeedChanges {
+                    stream_id: *stream_id,
+                    feed_id,
+                    changes: chunk.clone(),
+                })
             })
-        })
-        .await;
+            .await
+            // Once any chunk has committed the feed counts as changed, even
+            // if a later chunk is a no-op.
+            .map(|(agg, committed)| (agg, committed || committed_so_far));
+        }
 
         match result {
             Ok((next, committed)) => {

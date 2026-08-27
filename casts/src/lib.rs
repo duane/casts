@@ -25,6 +25,7 @@ pub mod grpc_interface {
 pub mod archiver;
 pub mod commit_store_client;
 pub mod config;
+pub mod hydration;
 pub mod poller;
 
 #[cfg(feature = "graphql")]

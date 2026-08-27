@@ -5,12 +5,14 @@ use immutable_feed::Feed;
 use super::Aggregate;
 use crate::applicable::EventApplicable;
 use crate::events::FeedAggregateEvent;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// The feed aggregate, representing the total result of events in-memory.
-#[derive(Default, Serialize, Clone, Debug)]
+// Deserialize is required, not decorative: a snapshot commit stores the
+// materialized aggregate and hydration reads it straight back.
+#[derive(Default, Serialize, Deserialize, Clone, Debug)]
 pub struct FeedAggregate {
     /// The id of the aggregate
     pub stream_id: Uuid,
@@ -36,7 +38,7 @@ pub struct FeedAggregate {
 }
 
 /// The durable-storage location of one entry's audio.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ArchivedAudio {
     pub bucket: String,
     pub key: String,

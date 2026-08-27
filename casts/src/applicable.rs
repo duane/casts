@@ -124,6 +124,7 @@ mod tests {
             metadata: serde_json::Value::Null,
             events: serde_json::json!([]),
             events_count: 0,
+            snapshot: false,
         }
         .into_commit(version + 1)
         .unwrap()

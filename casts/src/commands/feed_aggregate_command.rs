@@ -92,6 +92,25 @@ pub enum FeedAggregateCommand {
         entries: Vec<Entry>,
     },
 
+    /// Apply a pre-computed batch of feed changes.
+    ///
+    /// `ObserveFeed` computes a whole-feed diff and emits it as one
+    /// `ObservedChanges` event, which blows commit-store's 2 MB message
+    /// limit when a feed has drifted far from what is stored (observed
+    /// live: a 7.97 MB diff for a feed whose import stopped after its first
+    /// batch). This takes the mutations already computed by the caller, so
+    /// they can be split across commits.
+    ///
+    /// Safe to chunk because `FeedMutation`s are independent per-entry
+    /// operations -- unlike `ObserveFeed`, nothing here is derived from
+    /// comparing against the feed's complete state, so a partial batch
+    /// cannot make un-included entries look removed.
+    ApplyFeedChanges {
+        stream_id: Uuid,
+        feed_id: Uuid,
+        changes: Vec<FeedMutation>,
+    },
+
     /// Set or clear a feed's "do not archive" preference. Errors if the
     /// feed is unknown; otherwise always produces an event, even if the
     /// value is unchanged -- unlike `ArchiveEntry`'s no-op-when-redundant
@@ -170,6 +189,7 @@ impl Command for FeedAggregateCommand {
             FeedAggregateCommand::ObserveFeed { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::ArchiveEntry { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::AppendEntries { ref stream_id, .. } => stream_id,
+            FeedAggregateCommand::ApplyFeedChanges { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::SetArchivePreference { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::MarkEntryListened { ref stream_id, .. } => stream_id,
         }
@@ -295,6 +315,23 @@ impl Command for FeedAggregateCommand {
                     stream_id: *stream_id,
                     feed_id: *feed_id,
                     changes,
+                }])
+            }
+            FeedAggregateCommand::ApplyFeedChanges {
+                stream_id,
+                feed_id,
+                changes,
+            } => {
+                if !aggregate.feeds_by_feed_id.contains_key(feed_id) {
+                    return Err(FeedAggregateError::UnknownFeedError);
+                }
+                if changes.is_empty() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![FeedAggregateEvent::ObservedChanges {
+                    stream_id: *stream_id,
+                    feed_id: *feed_id,
+                    changes: changes.clone(),
                 }])
             }
             FeedAggregateCommand::SetArchivePreference {
