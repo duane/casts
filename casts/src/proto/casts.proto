@@ -53,6 +53,16 @@ message ListFeedsRequest {
 
 message ListEntriesRequest {
     string streamId = 1;
+    // Optional: restrict the page to one feed. Empty lists every feed in
+    // the stream.
+    string feedId = 2;
+    // Maximum entries in the response. Zero asks for the server default.
+    // A larger value than the server allows is clamped, not refused: the
+    // caller still receives everything, across more pages.
+    int32 limit = 3;
+    // The `nextPageToken` from the previous response. Opaque: it encodes an
+    // ordering that is the server's to change.
+    string pageToken = 4;
 }
 
 message Feed {
@@ -61,7 +71,13 @@ message Feed {
     repeated string authors = 3;
     string description = 4;
     Image logo = 5;
-    repeated Entry entries = 6;
+    // Field 6 held `repeated Entry entries`. A feed embedding its whole
+    // back-catalog made every response unbounded in the size of the feed
+    // (7.16 MB for one long-running show, and 78 MB for a ListFeeds over an
+    // imported library), which is past what clients accept. Entries now come
+    // from ListEntries, which pages. Reserved so no later field silently
+    // reuses the number and misparses an old client's message.
+    reserved 6;
 }
 
 message Image {
@@ -84,6 +100,9 @@ message Entry {
     // Last recorded playback position (zero when never listened to).
     int64 elapsedSeconds = 8;
     int32 elapsedNanos = 9;
+    // The feed this entry belongs to. Required to act on an entry returned
+    // by a ListEntries that spans feeds -- RecordPlayback needs both ids.
+    string feedId = 10;
 }
 
 message MediaObject {
@@ -124,4 +143,7 @@ message Feeds {
 
 message Entries {
     repeated Entry entries = 1;
+    // Empty exactly when this is the last page. A full page does not by
+    // itself mean more remain.
+    string nextPageToken = 2;
 }

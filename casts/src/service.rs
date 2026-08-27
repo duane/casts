@@ -30,6 +30,7 @@ use uuid::Uuid;
 use crate::{
     aggregate::FeedAggregate,
     commands::{Command, FeedAggregateCommand, FeedAggregateError},
+    entry_page,
     grpc::Grpc2Store,
     grpc_interface::{
         AddFeedRequest, AddFeedResponse, Content as GrpcContent, Entries as GrpcEntries,
@@ -132,26 +133,73 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
         Ok(Response::new(feed_result))
     }
 
+    /// One page of the stream's entries, newest first.
+    ///
+    /// This used to return every entry of every feed in a single message,
+    /// which is unbounded in the size of the library and took the service
+    /// down once a real library was imported. The page is bounded and the
+    /// response says whether more remain; nothing is silently dropped.
     async fn list_entries(
         &self,
         request: Request<ListEntriesRequest>,
     ) -> Result<Response<GrpcEntries>, Status> {
         info!("list_entries");
-        let mut lock = self.backing_store.lock().await;
+        let req = request.get_ref();
+        // Validate the request before doing the expensive hydration: a
+        // malformed token or limit cannot become valid by reading the store.
+        let limit = entry_page::page_size(req.limit)
+            .map_err(|err| Status::invalid_argument(err.to_string()))?;
+        let cursor = if req.page_token.is_empty() {
+            None
+        } else {
+            Some(
+                entry_page::EntryCursor::decode(&req.page_token)
+                    .map_err(|err| Status::invalid_argument(format!("page_token: {err}")))?,
+            )
+        };
+        let only_feed: Option<Uuid> =
+            if req.feed_id.is_empty() {
+                None
+            } else {
+                Some(Uuid::parse_str(&req.feed_id).map_err(|err| {
+                    Status::invalid_argument(format!("feed_id is not a UUID: {err}"))
+                })?)
+            };
 
-        let aggregate = hydrate_aggregate(lock.store(), &request.get_ref().stream_id).await?;
-        let playtimes = &aggregate.playtime_by_feed_and_guid;
-        let entries: Vec<GrpcEntry> = aggregate
+        let mut lock = self.backing_store.lock().await;
+        let aggregate = hydrate_aggregate(lock.store(), &req.stream_id).await?;
+
+        // An explicit feed that does not exist is a client error, not an
+        // empty page: silently returning nothing hides a stale feed id.
+        if let Some(feed_id) = only_feed {
+            if !aggregate.feeds_by_feed_id.contains_key(&feed_id) {
+                return Err(Status::not_found(format!("no feed with id {feed_id}")));
+            }
+        }
+
+        let candidates: Vec<(Uuid, Entry)> = aggregate
             .feeds_by_feed_id
             .iter()
+            .filter(|(feed_id, _)| only_feed.is_none_or(|only| only == **feed_id))
             .flat_map(|(feed_id, feed)| {
                 feed.entries
                     .iter()
-                    .map(|entry| entry_to_grpc_entry(entry.clone(), *feed_id, playtimes))
+                    .map(move |entry| (*feed_id, entry.clone()))
             })
             .collect();
 
-        Ok(Response::new(GrpcEntries { entries }))
+        let page = entry_page::select_page(candidates, cursor.as_ref(), limit);
+        let playtimes = &aggregate.playtime_by_feed_and_guid;
+        let entries: Vec<GrpcEntry> = page
+            .entries
+            .into_iter()
+            .map(|(feed_id, entry)| entry_to_grpc_entry(entry, feed_id, playtimes))
+            .collect();
+
+        Ok(Response::new(GrpcEntries {
+            entries,
+            next_page_token: page.next_page_token.unwrap_or_default(),
+        }))
     }
 
     async fn get_feed(
@@ -169,13 +217,7 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
             .get(&feed_id)
             .ok_or_else(|| Status::not_found(format!("no feed with id {feed_id}")))?;
 
-        Ok(Response::new(feed_to_grpc_feed(
-            feed.clone(),
-            feed_id,
-            &aggregate.playtime_by_feed_and_guid,
-            // The detail endpoint: this is where entries belong.
-            true,
-        )))
+        Ok(Response::new(feed_to_grpc_feed(feed.clone(), feed_id)))
     }
 
     async fn add_feed(
@@ -460,6 +502,7 @@ fn entry_to_grpc_entry(
         .copied()
         .unwrap_or((0, 0));
     GrpcEntry {
+        feed_id: feed_id.to_string(),
         guid: entry.guid,
         title: entry.title.unwrap_or_default(),
         summary: entry.summary.unwrap_or_default(),
@@ -486,54 +529,29 @@ fn domain_to_grpc_ts(datetime: DateTime<Utc>) -> GrpcTimestamp {
 
 /// Convert one feed for the wire.
 ///
-/// `include_entries` exists because `Feed` embeds `repeated Entry`, so a
-/// *list* endpoint that populated it returned every episode of every feed in
-/// one message. With a handful of seeded feeds that was invisible; after a
-/// bulk import it produced a 78 MB `ListFeeds` response that no client would
-/// accept (grpcurl and grpc-swift both cap received messages in the low
-/// megabytes), which took the whole service down. Lists now return feed
-/// summaries and `GetFeed` returns the detail -- which is what having a
-/// separate single-feed RPC was for.
-fn feed_to_grpc_feed(
-    feed: Feed,
-    feed_id: Uuid,
-    playtimes: &PlaytimeByFeedAndGuid,
-    include_entries: bool,
-) -> GrpcFeed {
-    let source_entries = if include_entries {
-        feed.entries
-    } else {
-        Vec::new()
-    };
-    let mut entries: Vec<GrpcEntry> = source_entries
-        .into_iter()
-        .map(|entry| entry_to_grpc_entry(entry, feed_id, playtimes))
-        .collect();
-    entries.sort_by(|a, b| match (&a.published, &b.published) {
-        (Some(a_ts), Some(b_ts)) => b_ts.seconds.cmp(&a_ts.seconds),
-        (None, Some(_)) => std::cmp::Ordering::Less,
-        (Some(_), None) => std::cmp::Ordering::Greater,
-        (None, None) => std::cmp::Ordering::Equal,
-    });
+/// Metadata only. `Feed` used to embed `repeated Entry`, so any response
+/// carrying a feed also carried its whole back-catalog: 7.16 MB for one
+/// long-running show, and a 78 MB `ListFeeds` over an imported library,
+/// which no client would accept and which took the service down. Entries now
+/// have exactly one route to a client -- `ListEntries`, which pages -- so
+/// there is no size here that the caller cannot bound.
+fn feed_to_grpc_feed(feed: Feed, feed_id: Uuid) -> GrpcFeed {
     GrpcFeed {
         feed_id: feed_id.to_string(),
         title: feed.metadata.title,
         authors: feed.metadata.authors,
         description: feed.metadata.description.unwrap_or_default(),
         logo: feed.metadata.logo.map(image_to_grpc_image),
-        entries,
     }
 }
 
 fn aggregate_to_feeds(aggregate: FeedAggregate) -> GrpcFeeds {
     // The aggregate's key IS the feed id; inventing one per response gave
     // clients a different id for the same feed on every call.
-    let playtimes = &aggregate.playtime_by_feed_and_guid;
     let feeds: Vec<GrpcFeed> = aggregate
         .feeds_by_feed_id
         .iter()
-        // Summaries only: see feed_to_grpc_feed's doc comment.
-        .map(|(feed_id, feed)| feed_to_grpc_feed(feed.clone(), *feed_id, playtimes, false))
+        .map(|(feed_id, feed)| feed_to_grpc_feed(feed.clone(), *feed_id))
         .collect();
     GrpcFeeds { feeds }
 }

@@ -44,6 +44,16 @@ fn test_entry(guid: &str, title: &str) -> Entry {
     }
 }
 
+/// A whole-stream listing with the server's default page size.
+fn list_entries(stream_id: &Uuid) -> ListEntriesRequest {
+    ListEntriesRequest {
+        stream_id: stream_id.to_string(),
+        feed_id: String::new(),
+        limit: 0,
+        page_token: String::new(),
+    }
+}
+
 fn test_feed(title: &str, entries: Vec<Entry>) -> Feed {
     let url = Url::parse(FEED_URL).unwrap();
     Feed {
@@ -145,19 +155,123 @@ async fn list_entries_returns_every_entry_in_the_stream() {
         test_entry("guid-1", "Episode 1"),
         test_entry("guid-2", "Episode 2"),
     ];
-    let (mut client, stream_id, _feed_id) = harness(entries).await;
+    let (mut client, stream_id, feed_id) = harness(entries).await;
 
     let listed = client
-        .list_entries(ListEntriesRequest {
-            stream_id: stream_id.to_string(),
-        })
+        .list_entries(list_entries(&stream_id))
         .await
         .unwrap()
         .into_inner();
 
-    let mut guids: Vec<String> = listed.entries.into_iter().map(|e| e.guid).collect();
+    let mut guids: Vec<String> = listed.entries.iter().map(|e| e.guid.clone()).collect();
     guids.sort();
     assert_eq!(guids, vec!["guid-1", "guid-2"]);
+    // Both fit in one page, so there is nothing to resume from.
+    assert!(listed.next_page_token.is_empty());
+    // A cross-feed listing is useless if a client cannot tell which feed an
+    // entry came from: RecordPlayback needs the feed id too.
+    assert!(listed
+        .entries
+        .iter()
+        .all(|e| e.feed_id == feed_id.to_string()));
+}
+
+/// The whole point of paging: a client walking the pages sees every entry
+/// once, and learns from the token alone when to stop.
+#[tokio::test]
+async fn list_entries_pages_through_the_whole_stream() {
+    let entries: Vec<Entry> = (0..7)
+        .map(|i| test_entry(&format!("guid-{i}"), &format!("Episode {i}")))
+        .collect();
+    let (mut client, stream_id, _feed_id) = harness(entries).await;
+
+    let mut seen = vec![];
+    let mut token = String::new();
+    let mut pages = 0;
+    loop {
+        let listed = client
+            .list_entries(ListEntriesRequest {
+                stream_id: stream_id.to_string(),
+                feed_id: String::new(),
+                limit: 3,
+                page_token: token.clone(),
+            })
+            .await
+            .unwrap()
+            .into_inner();
+        pages += 1;
+        assert!(listed.entries.len() <= 3, "the server exceeded the limit");
+        seen.extend(listed.entries.into_iter().map(|e| e.guid));
+        if listed.next_page_token.is_empty() {
+            break;
+        }
+        token = listed.next_page_token;
+        assert!(pages < 10, "paging failed to terminate");
+    }
+
+    seen.sort();
+    let expected: Vec<String> = (0..7).map(|i| format!("guid-{i}")).collect();
+    assert_eq!(seen, expected);
+    assert_eq!(pages, 3);
+}
+
+/// A bad token must be refused rather than quietly restarting from the
+/// beginning, which would make a client loop forever over page one.
+#[tokio::test]
+async fn list_entries_rejects_a_malformed_page_token_and_limit() {
+    let (mut client, stream_id, _feed_id) = harness(vec![test_entry("guid-1", "Episode 1")]).await;
+
+    let bad_token = client
+        .list_entries(ListEntriesRequest {
+            stream_id: stream_id.to_string(),
+            feed_id: String::new(),
+            limit: 0,
+            page_token: String::from("not-a-token"),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(bad_token.code(), Code::InvalidArgument);
+
+    let bad_limit = client
+        .list_entries(ListEntriesRequest {
+            stream_id: stream_id.to_string(),
+            feed_id: String::new(),
+            limit: -1,
+            page_token: String::new(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(bad_limit.code(), Code::InvalidArgument);
+}
+
+/// Scoping to a feed is what replaces the entries that GetFeed used to
+/// embed, so an unknown feed must 404 there exactly as it does on GetFeed.
+#[tokio::test]
+async fn list_entries_scopes_to_one_feed() {
+    let (mut client, stream_id, feed_id) = harness(vec![test_entry("guid-1", "Episode 1")]).await;
+
+    let listed = client
+        .list_entries(ListEntriesRequest {
+            stream_id: stream_id.to_string(),
+            feed_id: feed_id.to_string(),
+            limit: 0,
+            page_token: String::new(),
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(listed.entries.len(), 1);
+
+    let missing = client
+        .list_entries(ListEntriesRequest {
+            stream_id: stream_id.to_string(),
+            feed_id: Uuid::new_v4().to_string(),
+            limit: 0,
+            page_token: String::new(),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(missing.code(), Code::NotFound);
 }
 
 #[tokio::test]
@@ -173,7 +287,7 @@ async fn get_feed_returns_the_named_feed_and_404s_otherwise() {
         .unwrap()
         .into_inner();
     assert_eq!(feed.feed_id, feed_id.to_string());
-    assert_eq!(feed.entries.len(), 1);
+    assert_eq!(feed.title, "Examplecast");
 
     let missing = client
         .get_feed(GetFeedRequest {
@@ -207,9 +321,7 @@ async fn record_playback_is_visible_to_the_next_read() {
     );
 
     let listed = client
-        .list_entries(ListEntriesRequest {
-            stream_id: stream_id.to_string(),
-        })
+        .list_entries(list_entries(&stream_id))
         .await
         .unwrap()
         .into_inner();
@@ -229,9 +341,7 @@ async fn record_playback_is_visible_to_the_next_read() {
     // A later position wins.
     let _ = client.record_playback(playback(120)).await.unwrap();
     let listed = client
-        .list_entries(ListEntriesRequest {
-            stream_id: stream_id.to_string(),
-        })
+        .list_entries(list_entries(&stream_id))
         .await
         .unwrap()
         .into_inner();

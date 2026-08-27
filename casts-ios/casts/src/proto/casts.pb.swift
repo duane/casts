@@ -118,6 +118,19 @@ struct GrpcInterface_ListEntriesRequest {
 
   var streamID: String = String()
 
+  /// Optional: restrict the page to one feed. Empty lists every feed in
+  /// the stream.
+  var feedID: String = String()
+
+  /// Maximum entries in the response. Zero asks for the server default.
+  /// A larger value than the server allows is clamped, not refused: the
+  /// caller still receives everything, across more pages.
+  var limit: Int32 = 0
+
+  /// The `nextPageToken` from the previous response. Opaque: it encodes an
+  /// ordering that is the server's to change.
+  var pageToken: String = String()
+
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
   init() {}
@@ -144,8 +157,6 @@ struct GrpcInterface_Feed {
   var hasLogo: Bool {return self._logo != nil}
   /// Clears the value of `logo`. Subsequent reads from it will return its default value.
   mutating func clearLogo() {self._logo = nil}
-
-  var entries: [GrpcInterface_Entry] = []
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -242,6 +253,13 @@ struct GrpcInterface_Entry {
   var elapsedNanos: Int32 {
     get {return _storage._elapsedNanos}
     set {_uniqueStorage()._elapsedNanos = newValue}
+  }
+
+  /// The feed this entry belongs to. Required to act on an entry returned
+  /// by a ListEntries that spans feeds -- RecordPlayback needs both ids.
+  var feedID: String {
+    get {return _storage._feedID}
+    set {_uniqueStorage()._feedID = newValue}
   }
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
@@ -358,6 +376,10 @@ struct GrpcInterface_Entries {
   // methods supported on all messages.
 
   var entries: [GrpcInterface_Entry] = []
+
+  /// Empty exactly when this is the last page. A full page does not by
+  /// itself mean more remain.
+  var nextPageToken: String = String()
 
   var unknownFields = SwiftProtobuf.UnknownStorage()
 
@@ -625,6 +647,9 @@ extension GrpcInterface_ListEntriesRequest: SwiftProtobuf.Message, SwiftProtobuf
   static let protoMessageName: String = _protobuf_package + ".ListEntriesRequest"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "streamId"),
+    2: .same(proto: "feedId"),
+    3: .same(proto: "limit"),
+    4: .same(proto: "pageToken"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -634,6 +659,9 @@ extension GrpcInterface_ListEntriesRequest: SwiftProtobuf.Message, SwiftProtobuf
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeSingularStringField(value: &self.streamID) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.feedID) }()
+      case 3: try { try decoder.decodeSingularInt32Field(value: &self.limit) }()
+      case 4: try { try decoder.decodeSingularStringField(value: &self.pageToken) }()
       default: break
       }
     }
@@ -643,11 +671,23 @@ extension GrpcInterface_ListEntriesRequest: SwiftProtobuf.Message, SwiftProtobuf
     if !self.streamID.isEmpty {
       try visitor.visitSingularStringField(value: self.streamID, fieldNumber: 1)
     }
+    if !self.feedID.isEmpty {
+      try visitor.visitSingularStringField(value: self.feedID, fieldNumber: 2)
+    }
+    if self.limit != 0 {
+      try visitor.visitSingularInt32Field(value: self.limit, fieldNumber: 3)
+    }
+    if !self.pageToken.isEmpty {
+      try visitor.visitSingularStringField(value: self.pageToken, fieldNumber: 4)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: GrpcInterface_ListEntriesRequest, rhs: GrpcInterface_ListEntriesRequest) -> Bool {
     if lhs.streamID != rhs.streamID {return false}
+    if lhs.feedID != rhs.feedID {return false}
+    if lhs.limit != rhs.limit {return false}
+    if lhs.pageToken != rhs.pageToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -661,7 +701,6 @@ extension GrpcInterface_Feed: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     3: .same(proto: "authors"),
     4: .same(proto: "description"),
     5: .same(proto: "logo"),
-    6: .same(proto: "entries"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -675,7 +714,6 @@ extension GrpcInterface_Feed: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
       case 3: try { try decoder.decodeRepeatedStringField(value: &self.authors) }()
       case 4: try { try decoder.decodeSingularStringField(value: &self.description_p) }()
       case 5: try { try decoder.decodeSingularMessageField(value: &self._logo) }()
-      case 6: try { try decoder.decodeRepeatedMessageField(value: &self.entries) }()
       default: break
       }
     }
@@ -701,9 +739,6 @@ extension GrpcInterface_Feed: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     try { if let v = self._logo {
       try visitor.visitSingularMessageField(value: v, fieldNumber: 5)
     } }()
-    if !self.entries.isEmpty {
-      try visitor.visitRepeatedMessageField(value: self.entries, fieldNumber: 6)
-    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
@@ -713,7 +748,6 @@ extension GrpcInterface_Feed: SwiftProtobuf.Message, SwiftProtobuf._MessageImple
     if lhs.authors != rhs.authors {return false}
     if lhs.description_p != rhs.description_p {return false}
     if lhs._logo != rhs._logo {return false}
-    if lhs.entries != rhs.entries {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
@@ -797,6 +831,7 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     7: .same(proto: "published"),
     8: .same(proto: "elapsedSeconds"),
     9: .same(proto: "elapsedNanos"),
+    10: .same(proto: "feedId"),
   ]
 
   fileprivate class _StorageClass {
@@ -809,6 +844,7 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
     var _published: SwiftProtobuf.Google_Protobuf_Timestamp? = nil
     var _elapsedSeconds: Int64 = 0
     var _elapsedNanos: Int32 = 0
+    var _feedID: String = String()
 
     #if swift(>=5.10)
       // This property is used as the initial default value for new instances of the type.
@@ -832,6 +868,7 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       _published = source._published
       _elapsedSeconds = source._elapsedSeconds
       _elapsedNanos = source._elapsedNanos
+      _feedID = source._feedID
     }
   }
 
@@ -859,6 +896,7 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         case 7: try { try decoder.decodeSingularMessageField(value: &_storage._published) }()
         case 8: try { try decoder.decodeSingularInt64Field(value: &_storage._elapsedSeconds) }()
         case 9: try { try decoder.decodeSingularInt32Field(value: &_storage._elapsedNanos) }()
+        case 10: try { try decoder.decodeSingularStringField(value: &_storage._feedID) }()
         default: break
         }
       }
@@ -898,6 +936,9 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
       if _storage._elapsedNanos != 0 {
         try visitor.visitSingularInt32Field(value: _storage._elapsedNanos, fieldNumber: 9)
       }
+      if !_storage._feedID.isEmpty {
+        try visitor.visitSingularStringField(value: _storage._feedID, fieldNumber: 10)
+      }
     }
     try unknownFields.traverse(visitor: &visitor)
   }
@@ -916,6 +957,7 @@ extension GrpcInterface_Entry: SwiftProtobuf.Message, SwiftProtobuf._MessageImpl
         if _storage._published != rhs_storage._published {return false}
         if _storage._elapsedSeconds != rhs_storage._elapsedSeconds {return false}
         if _storage._elapsedNanos != rhs_storage._elapsedNanos {return false}
+        if _storage._feedID != rhs_storage._feedID {return false}
         return true
       }
       if !storagesAreEqual {return false}
@@ -1189,6 +1231,7 @@ extension GrpcInterface_Entries: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
   static let protoMessageName: String = _protobuf_package + ".Entries"
   static let _protobuf_nameMap: SwiftProtobuf._NameMap = [
     1: .same(proto: "entries"),
+    2: .same(proto: "nextPageToken"),
   ]
 
   mutating func decodeMessage<D: SwiftProtobuf.Decoder>(decoder: inout D) throws {
@@ -1198,6 +1241,7 @@ extension GrpcInterface_Entries: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
       // enabled. https://github.com/apple/swift-protobuf/issues/1034
       switch fieldNumber {
       case 1: try { try decoder.decodeRepeatedMessageField(value: &self.entries) }()
+      case 2: try { try decoder.decodeSingularStringField(value: &self.nextPageToken) }()
       default: break
       }
     }
@@ -1207,11 +1251,15 @@ extension GrpcInterface_Entries: SwiftProtobuf.Message, SwiftProtobuf._MessageIm
     if !self.entries.isEmpty {
       try visitor.visitRepeatedMessageField(value: self.entries, fieldNumber: 1)
     }
+    if !self.nextPageToken.isEmpty {
+      try visitor.visitSingularStringField(value: self.nextPageToken, fieldNumber: 2)
+    }
     try unknownFields.traverse(visitor: &visitor)
   }
 
   static func ==(lhs: GrpcInterface_Entries, rhs: GrpcInterface_Entries) -> Bool {
     if lhs.entries != rhs.entries {return false}
+    if lhs.nextPageToken != rhs.nextPageToken {return false}
     if lhs.unknownFields != rhs.unknownFields {return false}
     return true
   }
