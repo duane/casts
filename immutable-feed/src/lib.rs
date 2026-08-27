@@ -567,8 +567,30 @@ fn enclosure_media(links: &[Link]) -> Option<MediaObject> {
     })
 }
 
+// A bare User-Agent-less GET is rejected outright (HTTP 400) by at least one
+// widely-used podcast redirector (podtrac.com) -- confirmed live against a
+// real feed, not a guess, while diagnosing why the archival worker's
+// downloads were failing. `reqwest::get` sends no default User-Agent, and
+// fetching a *feed* through the same kind of redirector is exactly as
+// exposed as fetching an *episode* through one, so this shares the fix.
+static HTTP_CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+
+fn http_client() -> &'static reqwest::Client {
+    HTTP_CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(concat!("casts-feed-fetcher/", env!("CARGO_PKG_VERSION")))
+            // Unset by default, meaning one dead or slow host could hang a
+            // fetch indefinitely -- fatal for a sequential batch import
+            // (e.g. `casts import-feeds`) over many feeds, where a single
+            // stuck request would stall everything behind it.
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .expect("failed to build the feed-fetching HTTP client")
+    })
+}
+
 pub async fn fetch_body(url: &Url) -> Result<Vec<u8>> {
-    let response = reqwest::get(url.as_str()).await?;
+    let response = http_client().get(url.as_str()).send().await?;
     let body = response.text().await?;
     Ok(body.as_bytes().into())
 }

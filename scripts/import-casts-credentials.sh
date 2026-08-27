@@ -6,7 +6,14 @@
 # .app where anyone with a copy could read it.
 #
 # Usage:
-#   scripts/import-casts-credentials.sh <ca.pem> <client-cert.pem> <client-key.pem>
+#   scripts/import-casts-credentials.sh <ca-chain.pem> <client-cert.pem> <client-key.pem>
+#
+# <ca-chain.pem> must be the casts intermediate CONCATENATED WITH the root
+# (pki/dist/casts-ca-chain.cert.pem), not the bare intermediate
+# (casts-ca.cert.pem). The server accepts the bare intermediate fine, and so
+# does grpcurl -- but swift-nio-ssl's BoringSSL backend requires a path to a
+# self-signed root to complete verification, and fails with
+# CERTIFICATE_VERIFY_FAILED against an intermediate-only trust store.
 set -eu
 
 if [ $# -ne 3 ]; then

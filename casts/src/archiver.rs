@@ -62,11 +62,28 @@ impl ArchiverConfig {
 /// megabytes and holding one in memory inside a 1 GB task is how the worker
 /// would take the server down with it.
 async fn download_to(url: &url::Url, dest: &Path, max_bytes: u64) -> Result<u64> {
-    let response = reqwest::get(url.clone())
+    // A bare User-Agent-less GET is rejected outright (400) by at least one
+    // widely-used podcast redirector (podtrac.com, fronting History of
+    // Rome's audio among others) -- confirmed live, not a guess. `reqwest`
+    // sends no default User-Agent, so every entry behind such a redirector
+    // failed every pass until this was added.
+    static CLIENT: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    let client = CLIENT.get_or_init(|| {
+        reqwest::Client::builder()
+            .user_agent(concat!("casts-archiver/", env!("CARGO_PKG_VERSION")))
+            .build()
+            .expect("failed to build the download HTTP client")
+    });
+
+    let response = client
+        .get(url.clone())
+        .send()
         .await
-        .with_context(|| format!("fetching {url}"))?
-        .error_for_status()
         .with_context(|| format!("fetching {url}"))?;
+    let status = response.status();
+    let response = response
+        .error_for_status()
+        .with_context(|| format!("fetching {url}: server returned {status}"))?;
 
     // Trust Content-Length only to reject early; it can lie, so the running
     // total below is what actually enforces the cap.
@@ -139,7 +156,12 @@ pub async fn run_once(
         let size = match download_to(&item.audio_url, &dest, config.max_bytes).await {
             Ok(size) => size,
             Err(err) => {
-                log::warn!("skipping {}: {err}", item.entry_guid);
+                // {err:?} walks the anyhow context chain (server status,
+                // then the URL); {err} alone prints only the outermost
+                // context and silently drops the actual cause -- which is
+                // exactly what made the podtrac 400s above look like an
+                // unexplained transient failure instead of an obvious one.
+                log::warn!("skipping {}: {err:?}", item.entry_guid);
                 let _ = tokio::fs::remove_file(&dest).await;
                 continue;
             }

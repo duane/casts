@@ -16,7 +16,7 @@ use immutable_feed::fetch_feed;
 use prost::Message;
 use tonic::transport::Channel;
 use url::Url;
-use uuid::{uuid, Uuid};
+use uuid::Uuid;
 
 use futures::StreamExt;
 
@@ -24,6 +24,10 @@ fn usage() {
     println!("USAGE: casts add FEED_URL");
     println!("USAGE: casts show FEED_ID");
     println!("USAGE: casts mark-listened FEED_ID ENTRY_GUID ELAPSED_SECONDS");
+    println!("USAGE: casts import-feeds FILE [LIMIT]");
+    println!("    FILE: lines of \"<title>\\t<feed url>\"; '#'-prefixed lines are comments.");
+    println!("    Each feed is added with do_not_archive set. LIMIT caps how many");
+    println!("    lines are imported (for trying it against one entry first).");
     std::process::exit(1);
 }
 
@@ -70,8 +74,6 @@ async fn mark_listened(
     Ok(())
 }
 
-const STREAM_ID: Uuid = uuid!["34c3c08d-0d55-4af4-a126-170c1380f07e"];
-
 /// Connect to the commit store named by `COMMIT_STORE_ADDR` (default
 /// http://localhost:7392), like every other client binary.
 pub async fn get_client() -> CommitStoreClient<Channel> {
@@ -80,43 +82,126 @@ pub async fn get_client() -> CommitStoreClient<Channel> {
         .expect("Failed to connect to backend commit store")
 }
 
+/// Bulk-import feeds from a `<title>\t<feed url>` file (see `feed_urls.txt`
+/// and `scripts/`), each with `do_not_archive: Some(true)` -- for loading a
+/// large batch of feeds to browse without also queuing the archival worker
+/// to start downloading all their audio.
+///
+/// Sequential, not concurrent: each iteration folds the previous commit's
+/// events into `aggregate` before the next, the same way `poll`/`refresh_feeds`
+/// thread state forward. That is enough for a standalone import run;
+/// unlike `poller::commit_with_rebase`, there is no retry-on-conflict, since
+/// this is not meant to run alongside another concurrent writer to the same
+/// stream. One bad line (malformed, unreachable, already added) is skipped
+/// with a message rather than aborting the whole import.
+async fn import_feeds(
+    mut client: CommitStoreClient<tonic::transport::Channel>,
+    stream_id: &Uuid,
+    path: &str,
+    limit: Option<usize>,
+) -> Result<()> {
+    let mut aggregate = hydrated_client(&mut client, stream_id).await?;
+    let contents = std::fs::read_to_string(path)?;
+
+    let mut imported = 0usize;
+    let mut skipped = 0usize;
+    for line in contents.lines() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        if limit.is_some_and(|limit| imported >= limit) {
+            println!("reached limit of {}; stopping", limit.unwrap());
+            break;
+        }
+
+        let Some((title, url_str)) = line.split_once('\t') else {
+            eprintln!("skipping malformed line (expected <title>\\t<url>): {line}");
+            skipped += 1;
+            continue;
+        };
+
+        let feed_url = match Url::parse(url_str.trim()) {
+            Ok(url) => url,
+            Err(err) => {
+                eprintln!("skipping {title:?}: invalid url {url_str:?}: {err}");
+                skipped += 1;
+                continue;
+            }
+        };
+
+        // Fetch and parse before issuing any command; command application
+        // is pure. A dead host or a feed that no longer parses must not
+        // abort the rest of a 1000-entry import.
+        let feed = match fetch_feed(&feed_url).await {
+            Ok(feed) => feed,
+            Err(err) => {
+                eprintln!("skipping {title:?}: fetch failed: {err}");
+                skipped += 1;
+                continue;
+            }
+        };
+
+        let entry_count = feed.entries.len();
+        // `add_feed_paginated` splits a large feed's entries across many
+        // commits (see poller.rs) -- a single-commit AddFeed blew
+        // commit-store's 2 MB message limit for any long-running show
+        // (Crime Junkie: 7.16 MB), which is exactly what this import first
+        // surfaced.
+        match casts::poller::add_feed_paginated(
+            &mut client,
+            stream_id,
+            aggregate.clone(),
+            Uuid::new_v4(),
+            feed_url,
+            feed,
+            // The entire point of this tool: importing a large batch to
+            // browse must not also queue all of it for the archival worker.
+            Some(true),
+        )
+        .await
+        {
+            Ok(next) => {
+                aggregate = next;
+                imported += 1;
+                println!("imported ({imported}): {title} ({entry_count} entries)");
+            }
+            Err(err) => {
+                // Most commonly a rejected AddFeed (duplicate) -- expected
+                // and fine on a second run over the same file, or after
+                // `seed`.
+                eprintln!("skipping {title:?}: {err:?}");
+                skipped += 1;
+            }
+        }
+    }
+
+    println!("done: {imported} imported, {skipped} skipped");
+    Ok(())
+}
+
 async fn add(
     mut client: CommitStoreClient<tonic::transport::Channel>,
     stream_id: &Uuid,
     feed_url: Url,
 ) -> Result<()> {
     let aggregate = hydrated_client(&mut client, stream_id).await?;
-    // Fetch and parse before issuing the command; command application is pure.
+    // Fetch and parse before issuing any command; command application is pure.
     let feed = fetch_feed(&feed_url).await?;
-    let add_feed_cmd: FeedAggregateCommand = FeedAggregateCommand::AddFeed {
-        stream_id: STREAM_ID,
-        feed_id: Uuid::new_v4(),
-        url: feed_url,
+    // Paginated (see poller.rs): a single-commit AddFeed blows commit-store's
+    // 2 MB message limit for any feed with a large back-catalog.
+    let aggregate = casts::poller::add_feed_paginated(
+        &mut client,
+        stream_id,
+        aggregate,
+        Uuid::new_v4(),
+        feed_url,
         feed,
-    };
-
-    let events = add_feed_cmd.async_apply(&aggregate).await?;
-    let events_count = events.len() as i64;
-    let commit_attempt = CommitAttempt {
-        stream_metadata: StreamMetadata {
-            stream_id: STREAM_ID,
-            stream_version: aggregate.version + 1,
-        },
-        commit_metadata: CommitMetadata {
-            commit_id: Uuid::new_v4(),
-            commit_sequence: aggregate.version + 1,
-            commit_timestamp: chrono::Utc::now(),
-        },
-        metadata: serde_json::to_value(&add_feed_cmd)?,
-        events: serde_json::to_value(events)?,
-        events_count,
-    };
-
-    let commit_result = client
-        .append_commit(domain_to_grpc_commit_attempt(&commit_attempt))
-        .await?;
-    let commit = grpc_to_domain_commit(commit_result.get_ref());
-    println!("commit: {:?}", commit);
+        // No CLI flag sets this yet -- always start archiving normally.
+        None,
+    )
+    .await?;
+    println!("added; stream now at version {}", aggregate.version);
     Ok(())
 }
 
@@ -271,6 +356,16 @@ async fn main() -> Result<()> {
                     .unwrap()
                 );
             }
+        }
+        "import-feeds" => {
+            if args.len() < 3 || args.len() > 4 {
+                usage();
+            }
+            let limit = match args.get(3) {
+                Some(s) => Some(s.parse::<usize>()?),
+                None => None,
+            };
+            import_feeds(grpc_client, &stream_id, &args[2], limit).await?
         }
         "poll" => {
             // `poll [STREAM_ID]` -- defaults to the built-in stream.

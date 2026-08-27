@@ -4,8 +4,9 @@ use super::Command;
 use crate::aggregate::FeedAggregate;
 use crate::events::FeedAggregateEvent;
 use async_trait::async_trait;
-use immutable_feed::Feed;
+use immutable_feed::{Entry, Feed, FeedMutation};
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter, Result as FmtResult};
 use url::Url;
@@ -32,6 +33,11 @@ pub enum FeedAggregateCommand {
 
         /// The feed as fetched from `url` by the caller.
         feed: Feed,
+
+        /// Skip this feed in the archival worker from the moment it is
+        /// added. `None`/`Some(false)` archive normally; only `Some(true)`
+        /// opts out.
+        do_not_archive: Option<bool>,
     },
 
     /// The first event for each feed. Used to initialize entries and metadata attributes.
@@ -58,6 +64,44 @@ pub enum FeedAggregateCommand {
         key: String,
         content_type: Option<String>,
         size_bytes: i64,
+    },
+
+    /// Add a batch of entries to an existing feed directly, without diffing
+    /// against the feed's full current state.
+    ///
+    /// Exists because `AddFeed`'s `Added` event embeds every entry it is
+    /// given in one commit -- fine for a small feed, but a large one (Crime
+    /// Junkie: 7.16 MB of entries, observed live) blows commit-store's 2 MB
+    /// message limit in a single commit. `ObserveFeed` cannot be paginated
+    /// instead: `Feed::diff` computes a full comparison between two
+    /// complete feed snapshots, so handing it a partial slice would make
+    /// every entry from an earlier, un-included batch look removed
+    /// (`(Some(existing), None) => EntryRemoved`). This command sidesteps
+    /// diffing: it reuses `ObservedChanges`/`FeedMutation::EntryAdded`,
+    /// whose `apply_diff` handling only ever inserts by guid and needs no
+    /// full-feed context, so a caller (see `poller::add_feed_paginated`)
+    /// can add a large feed's entries across many commits with no risk of
+    /// an earlier batch being read as deleted.
+    ///
+    /// Idempotent per entry: a guid already on the feed is silently
+    /// skipped rather than duplicated, so retrying a batch after a partial
+    /// failure is safe.
+    AppendEntries {
+        stream_id: Uuid,
+        feed_id: Uuid,
+        entries: Vec<Entry>,
+    },
+
+    /// Set or clear a feed's "do not archive" preference. Errors if the
+    /// feed is unknown; otherwise always produces an event, even if the
+    /// value is unchanged -- unlike `ArchiveEntry`'s no-op-when-redundant
+    /// rule, there is no retry/race this needs to protect against, and a
+    /// caller re-asserting the same preference is ordinary use, not a
+    /// symptom of a crash to recover from.
+    SetArchivePreference {
+        stream_id: Uuid,
+        feed_id: Uuid,
+        do_not_archive: bool,
     },
 
     MarkEntryListened {
@@ -125,6 +169,8 @@ impl Command for FeedAggregateCommand {
             FeedAggregateCommand::AddFeed { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::ObserveFeed { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::ArchiveEntry { ref stream_id, .. } => stream_id,
+            FeedAggregateCommand::AppendEntries { ref stream_id, .. } => stream_id,
+            FeedAggregateCommand::SetArchivePreference { ref stream_id, .. } => stream_id,
             FeedAggregateCommand::MarkEntryListened { ref stream_id, .. } => stream_id,
         }
     }
@@ -139,6 +185,7 @@ impl Command for FeedAggregateCommand {
                 ref feed_id,
                 ref url,
                 ref feed,
+                do_not_archive,
             } => {
                 if aggregate.feeds_by_feed_id.contains_key(feed_id) {
                     return Err(FeedAggregateError::DuplicateFeedError);
@@ -159,6 +206,7 @@ impl Command for FeedAggregateCommand {
                     feed_id: feed_id.to_owned(),
                     metadata: feed.metadata.clone(),
                     entries: feed.entries.clone(),
+                    do_not_archive: *do_not_archive,
                 }])
             }
             FeedAggregateCommand::ObserveFeed {
@@ -224,6 +272,45 @@ impl Command for FeedAggregateCommand {
                 }])
             }
 
+            FeedAggregateCommand::AppendEntries {
+                stream_id,
+                feed_id,
+                entries,
+            } => {
+                let Some(existing) = aggregate.feeds_by_feed_id.get(feed_id) else {
+                    return Err(FeedAggregateError::UnknownFeedError);
+                };
+                let existing_guids: HashSet<&str> =
+                    existing.entries.iter().map(|e| e.guid.as_str()).collect();
+                let changes: Vec<FeedMutation> = entries
+                    .iter()
+                    .filter(|e| !existing_guids.contains(e.guid.as_str()))
+                    .cloned()
+                    .map(FeedMutation::EntryAdded)
+                    .collect();
+                if changes.is_empty() {
+                    return Ok(vec![]);
+                }
+                Ok(vec![FeedAggregateEvent::ObservedChanges {
+                    stream_id: *stream_id,
+                    feed_id: *feed_id,
+                    changes,
+                }])
+            }
+            FeedAggregateCommand::SetArchivePreference {
+                stream_id,
+                feed_id,
+                do_not_archive,
+            } => {
+                if !aggregate.feeds_by_feed_id.contains_key(feed_id) {
+                    return Err(FeedAggregateError::UnknownFeedError);
+                }
+                Ok(vec![FeedAggregateEvent::ArchivePreferenceSet {
+                    stream_id: *stream_id,
+                    feed_id: *feed_id,
+                    do_not_archive: *do_not_archive,
+                }])
+            }
             FeedAggregateCommand::MarkEntryListened {
                 stream_id,
                 feed_id,
@@ -285,6 +372,7 @@ mod tests {
             feed_id,
             url: Url::parse(url).unwrap(),
             feed: test_feed(url, "Examplecast"),
+            do_not_archive: None,
         }
     }
 
@@ -394,6 +482,7 @@ mod tests {
             feed_id,
             url: Url::parse("http://example.com/a.xml").unwrap(),
             feed,
+            do_not_archive: None,
         };
         let events = add.async_apply(&aggregate).await.unwrap();
         aggregate.apply_many(events)
@@ -553,5 +642,123 @@ mod tests {
             size_bytes: 1,
         };
         assert!(unknown_feed.async_apply(&aggregate).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn set_archive_preference_rejects_unknown_feed() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "guid-1").await;
+        let cmd = FeedAggregateCommand::SetArchivePreference {
+            stream_id: aggregate.stream_id,
+            feed_id: Uuid::new_v4(),
+            do_not_archive: true,
+        };
+        assert!(cmd.async_apply(&aggregate).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn set_archive_preference_emits_for_a_known_feed_either_direction() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "guid-1").await;
+        let stream_id = aggregate.stream_id;
+
+        let opt_out = FeedAggregateCommand::SetArchivePreference {
+            stream_id,
+            feed_id,
+            do_not_archive: true,
+        };
+        let events = opt_out.async_apply(&aggregate).await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            FeedAggregateEvent::ArchivePreferenceSet {
+                do_not_archive: true,
+                ..
+            }
+        ));
+
+        // Re-enabling is not treated as a redundant no-op the way an
+        // already-archived ArchiveEntry is: this command has no retry/race
+        // to protect against, so re-asserting -- or reversing -- the
+        // preference always produces an event.
+        let opt_in = FeedAggregateCommand::SetArchivePreference {
+            stream_id,
+            feed_id,
+            do_not_archive: false,
+        };
+        let events = opt_in.async_apply(&aggregate).await.unwrap();
+        assert_eq!(events.len(), 1);
+        assert!(matches!(
+            events[0],
+            FeedAggregateEvent::ArchivePreferenceSet {
+                do_not_archive: false,
+                ..
+            }
+        ));
+    }
+
+    #[tokio::test]
+    async fn append_entries_rejects_unknown_feed() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "existing").await;
+        let cmd = FeedAggregateCommand::AppendEntries {
+            stream_id: aggregate.stream_id,
+            feed_id: Uuid::new_v4(),
+            entries: vec![test_entry("new")],
+        };
+        assert!(cmd.async_apply(&aggregate).await.is_err());
+    }
+
+    /// The whole reason this command exists: a batch must add only what is
+    /// genuinely new, and must never look at (or touch) entries outside the
+    /// batch -- unlike `ObserveFeed`'s full-feed diff, which would flag a
+    /// prior batch as removed.
+    #[tokio::test]
+    async fn append_entries_adds_new_and_skips_existing_by_guid() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "already-here").await;
+        let stream_id = aggregate.stream_id;
+
+        let cmd = FeedAggregateCommand::AppendEntries {
+            stream_id,
+            feed_id,
+            // One duplicate (must be skipped), one genuinely new.
+            entries: vec![test_entry("already-here"), test_entry("brand-new")],
+        };
+        let events = cmd.async_apply(&aggregate).await.unwrap();
+        assert_eq!(events.len(), 1);
+        let FeedAggregateEvent::ObservedChanges { ref changes, .. } = events[0] else {
+            panic!("expected ObservedChanges");
+        };
+        assert_eq!(changes.len(), 1, "the duplicate guid must not reappear");
+        assert!(matches!(
+            changes[0],
+            immutable_feed::FeedMutation::EntryAdded(ref e) if e.guid == "brand-new"
+        ));
+
+        let applied = aggregate.apply_many(events);
+        let guids: Vec<&str> = applied.feeds_by_feed_id[&feed_id]
+            .entries
+            .iter()
+            .map(|e| e.guid.as_str())
+            .collect();
+        assert!(guids.contains(&"already-here"));
+        assert!(guids.contains(&"brand-new"));
+        assert_eq!(guids.len(), 2, "no duplicate entry, and nothing lost");
+    }
+
+    /// A batch that adds nothing new (a retried duplicate batch) must be a
+    /// no-op, not an empty-but-real commit -- same idiom as `ArchiveEntry`.
+    #[tokio::test]
+    async fn append_entries_with_only_duplicates_is_a_noop() {
+        let feed_id = Uuid::new_v4();
+        let aggregate = aggregate_with_entry(feed_id, "already-here").await;
+        let cmd = FeedAggregateCommand::AppendEntries {
+            stream_id: aggregate.stream_id,
+            feed_id,
+            entries: vec![test_entry("already-here")],
+        };
+        let events = cmd.async_apply(&aggregate).await.unwrap();
+        assert!(events.is_empty());
     }
 }

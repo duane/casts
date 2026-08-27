@@ -316,11 +316,21 @@ impl Mutation {
         let feed = immutable_feed::fetch_feed(&url)
             .await
             .map_err(|err| FieldError::from(format!("failed to fetch feed: {err}")))?;
+        // KNOWN GAP, deliberately not fixed here: unlike service.rs's
+        // add_feed (the deployed gRPC RPC) and poller::add_feed_paginated
+        // (the CLI), this single-commit AddFeed still embeds every entry in
+        // one commit and will blow commit-store's 2 MB message limit for a
+        // large feed (Crime Junkie: 7.16 MB, observed live). Left as-is
+        // because `casts-server`, the only binary that serves this GraphQL
+        // API, is not deployed by any ECS service -- confirmed, not
+        // assumed. Apply the same pagination here if that ever changes.
         let command = FeedAggregateCommand::AddFeed {
             stream_id,
             feed_id,
             url,
             feed,
+            // No mutation argument sets this yet -- always start archiving normally.
+            do_not_archive: None,
         };
         let mut mutable_ctx = context.clone();
         let client: &mut dyn DispatchingAsyncReadWriteStore = mutable_ctx.store();

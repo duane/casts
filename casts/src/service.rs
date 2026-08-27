@@ -40,6 +40,7 @@ use crate::{
         MediaContent as GrpcMediaContent, MediaObject as GrpcMediaObject, RecordPlaybackRequest,
         RecordPlaybackResponse,
     },
+    poller,
 };
 
 /// Build the server's TLS configuration.
@@ -210,11 +211,29 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
         let aggregate = hydrate_aggregate(store, &req.stream_id).await?;
 
         let feed_id = Uuid::new_v4();
+        // Paginated into commits of at most ADD_FEED_ENTRY_BATCH_SIZE
+        // entries: a single-commit AddFeed blows commit-store's 2 MB
+        // message limit for a feed with a large back-catalog (Crime
+        // Junkie: 7.16 MB, observed live). The first commit is AddFeed
+        // (metadata + first batch); AppendEntries carries every batch
+        // after that -- not another AddFeed or ObserveFeed, since
+        // ObserveFeed's full-feed diff would read an earlier batch as
+        // removed. See poller.rs's `add_feed_paginated`, which this
+        // mirrors for the trait-object `Store` this RPC talks to, rather
+        // than the concrete gRPC client that CLI path uses.
+        let mut remaining = feed.entries.clone();
+        let first_batch_len = remaining.len().min(poller::ADD_FEED_ENTRY_BATCH_SIZE);
+        let first_batch: Vec<_> = remaining.drain(..first_batch_len).collect();
+        let mut first_feed = feed;
+        first_feed.entries = first_batch;
+
         let command = FeedAggregateCommand::AddFeed {
             stream_id,
             feed_id,
             url,
-            feed,
+            feed: first_feed,
+            // No RPC surface sets this yet -- always start archiving normally.
+            do_not_archive: None,
         };
         let events = command
             .async_apply(&aggregate)
@@ -241,7 +260,7 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
                 .map_err(|err| Status::internal(format!("could not serialize events: {err}")))?,
             events_count,
         };
-        let committed = store
+        let mut committed = store
             .commit(&commit_attempt)
             .await
             .map_err(|err| match err {
@@ -250,6 +269,52 @@ impl crate::grpc_interface::casts_server::Casts for CastsImpl {
                 }
                 other => Status::unavailable(format!("commit store write failed: {other}")),
             })?;
+        let mut version = committed.stream_metadata.stream_version;
+
+        for chunk in remaining.chunks(poller::ADD_FEED_ENTRY_BATCH_SIZE) {
+            let command = FeedAggregateCommand::AppendEntries {
+                stream_id,
+                feed_id,
+                entries: chunk.to_vec(),
+            };
+            // Every entry in a fresh AddFeed's own remaining batches is new
+            // by construction, so this can never legitimately return no
+            // events the way a retried batch could -- if it does, treat it
+            // as the same class of internal error as a serialization
+            // failure rather than silently dropping entries.
+            let events = command.async_apply(&aggregate).await.map_err(|err| {
+                Status::internal(format!("append_entries rejected mid-import: {err}"))
+            })?;
+            let events_count = events.len() as i64;
+            let commit_attempt = CommitAttempt {
+                stream_metadata: StreamMetadata {
+                    stream_id,
+                    stream_version: version + 1,
+                },
+                commit_metadata: CommitMetadata {
+                    commit_id: Uuid::new_v4(),
+                    commit_sequence: version + 1,
+                    commit_timestamp: Utc::now(),
+                },
+                metadata: serde_json::to_value(&command).map_err(|err| {
+                    Status::internal(format!("could not serialize command: {err}"))
+                })?,
+                events: serde_json::to_value(events).map_err(|err| {
+                    Status::internal(format!("could not serialize events: {err}"))
+                })?,
+                events_count,
+            };
+            committed = store
+                .commit(&commit_attempt)
+                .await
+                .map_err(|err| match err {
+                    StoreError::DuplicateWriteError(conflict) => Status::aborted(format!(
+                        "conflicting concurrent write mid-import, retry the whole add: {conflict}"
+                    )),
+                    other => Status::unavailable(format!("commit store write failed: {other}")),
+                })?;
+            version = committed.stream_metadata.stream_version;
+        }
 
         Ok(Response::new(AddFeedResponse {
             feed_id: feed_id.to_string(),

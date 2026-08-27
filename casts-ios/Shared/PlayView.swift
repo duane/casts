@@ -131,6 +131,15 @@ struct PlayView: View {
         request.entryGuid = self.entry.guid
         request.elapsedSeconds = Int64(seconds)
         request.elapsedNanos = Int32((seconds - seconds.rounded(.down)) * 1_000_000_000)
-        _ = AppDelegate.client.recordPlayback(request)
+        // Fire-and-forget by design (this is a best-effort progress marker,
+        // not something the UI blocks on), but still bounded and logged: an
+        // unbounded call here would otherwise be invisible if it ever got
+        // stuck, since nothing reads its result.
+        let call = AppDelegate.client.recordPlayback(request, callOptions: CastsConnection.callOptions(timeout: .seconds(10)))
+        call.response.whenComplete { result in
+            if case let .failure(err) = result {
+                CastsLog.rpc.error("RecordPlayback: failed: \(String(describing: err), privacy: .public)")
+            }
+        }
     }
 }

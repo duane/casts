@@ -4,3 +4,8 @@ xcuserdata/
 .DS_Store
 casts-ios/casts-swift/.build/
 .idea/
+
+# Xcode build products -- casts-ios/play.app landed in git once already from
+# a manual xcodebuild + broad `git add`. scripts/build-app.sh writes here.
+*.app/
+casts-ios/build/

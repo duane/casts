@@ -73,6 +73,7 @@ async fn harness(entries: Vec<Entry>) -> (CastsClient<Channel>, Uuid, Uuid) {
         url: Url::parse(FEED_URL).unwrap(),
         metadata: test_feed("Examplecast", vec![]).metadata,
         entries,
+        do_not_archive: None,
     };
     store
         .commit(&CommitAttempt {

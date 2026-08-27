@@ -26,6 +26,14 @@ pub enum FeedAggregateEvent {
 
         /// initial entries found by the command.
         entries: Vec<Entry>,
+
+        /// Whether the archival worker should skip this feed's entries from
+        /// the moment it is added. `#[serde(default)]` so events already
+        /// committed before this field existed -- every `Added` event in
+        /// the deployed store predates it -- still deserialize, as `None`
+        /// (archive normally, the prior behavior).
+        #[serde(default)]
+        do_not_archive: Option<bool>,
     },
 
     /// An event noting changes from a previously observed (or just added) feed.
@@ -85,6 +93,22 @@ pub enum FeedAggregateEvent {
 
         /// Size of the stored object in bytes.
         size_bytes: i64,
+    },
+
+    /// The archive-or-not preference for a feed was set.
+    ///
+    /// Reversible: `do_not_archive: false` re-enables archiving. Separate
+    /// from `Added`'s own `do_not_archive` field, which only sets the
+    /// starting value -- this is how it changes afterward.
+    ArchivePreferenceSet {
+        /// The stream holding the feed.
+        stream_id: Uuid,
+
+        /// The feed whose preference changed.
+        feed_id: Uuid,
+
+        /// `true` skips this feed's entries in the archival worker.
+        do_not_archive: bool,
     },
 }
 

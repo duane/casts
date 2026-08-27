@@ -138,6 +138,68 @@ async fn commit_with_rebase(
     ))
 }
 
+/// Entries per commit when adding a feed. `Added` and `AppendEntries` each
+/// embed every entry they are given in one commit; commit-store's message
+/// limit is 2 MB, and a large feed's full entry list can exceed that on its
+/// own (Crime Junkie: 7.16 MB, observed live -- this constant exists
+/// because that import failed before it did).
+pub const ADD_FEED_ENTRY_BATCH_SIZE: usize = 100;
+
+/// Add a feed, paginating its entries into commits of at most
+/// `ADD_FEED_ENTRY_BATCH_SIZE` instead of one commit holding all of them.
+///
+/// The first commit (`AddFeed`) carries the feed's metadata and its first
+/// batch of entries; every subsequent batch is a separate `AppendEntries`
+/// commit. `AppendEntries`, not another `AddFeed` or `ObserveFeed`, is what
+/// makes this safe: see its doc comment for why paginating through
+/// `ObserveFeed`'s full-feed diff would have made every earlier batch look
+/// deleted.
+///
+/// Takes and returns `aggregate` rather than hydrating internally, like
+/// `commit_with_rebase`: a caller adding many feeds in one run (bulk
+/// import) threads state forward across all of them instead of re-reading
+/// the whole stream from scratch before every single feed.
+pub async fn add_feed_paginated(
+    client: &mut CommitStoreClient<Channel>,
+    stream_id: &Uuid,
+    aggregate: FeedAggregate,
+    feed_id: Uuid,
+    url: url::Url,
+    feed: immutable_feed::Feed,
+    do_not_archive: Option<bool>,
+) -> Result<FeedAggregate> {
+    let mut remaining = feed.entries.clone();
+    let first_batch_len = remaining.len().min(ADD_FEED_ENTRY_BATCH_SIZE);
+    let first_batch: Vec<_> = remaining.drain(..first_batch_len).collect();
+    let mut first_feed = feed;
+    first_feed.entries = first_batch;
+
+    let (mut aggregate, _) = commit_with_rebase(client, stream_id, aggregate, |_| {
+        Some(FeedAggregateCommand::AddFeed {
+            stream_id: *stream_id,
+            feed_id,
+            url: url.clone(),
+            feed: first_feed.clone(),
+            do_not_archive,
+        })
+    })
+    .await?;
+
+    for chunk in remaining.chunks(ADD_FEED_ENTRY_BATCH_SIZE) {
+        let chunk = chunk.to_vec();
+        let (next, _) = commit_with_rebase(client, stream_id, aggregate, |_| {
+            Some(FeedAggregateCommand::AppendEntries {
+                stream_id: *stream_id,
+                feed_id,
+                entries: chunk.clone(),
+            })
+        })
+        .await?;
+        aggregate = next;
+    }
+    Ok(aggregate)
+}
+
 /// Fetch every feed in the stream and commit whatever changed.
 ///
 /// A feed that cannot be fetched or committed is recorded and skipped; one
@@ -238,6 +300,12 @@ fn audio_source(entry: &Entry) -> Option<(url::Url, Option<String>)> {
 pub fn pending_archives(aggregate: &FeedAggregate, limit: usize) -> Vec<PendingArchive> {
     let mut pending = Vec::new();
     for (feed_id, feed) in &aggregate.feeds_by_feed_id {
+        // Checked once per feed, not per entry: cheaper, and it is the
+        // feed-level preference from `ArchivePreferenceSet`/`Added` being
+        // respected, not a per-entry one.
+        if aggregate.do_not_archive_feed_ids.contains(feed_id) {
+            continue;
+        }
         for entry in &feed.entries {
             if pending.len() >= limit {
                 return pending;
@@ -298,4 +366,126 @@ pub async fn record_archived(
     .await
     .with_context(|| format!("recording archive for {}", pending.entry_guid))?;
     Ok(committed)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::applicable::EventApplicable;
+    use immutable_feed::{Entry, Feed, FeedMetadata, MediaContent, MediaObject};
+    use url::Url;
+
+    fn feed_with_audio_entry(title: &str) -> Feed {
+        let entry = Entry {
+            guid: format!("{title}-episode-1"),
+            url: Url::parse("http://example.com/episode-1").unwrap(),
+            title: Some(String::from("Episode 1")),
+            summary: None,
+            updated_at: None,
+            published_at: None,
+            content: None,
+            links: vec![],
+            media: vec![MediaObject {
+                title: None,
+                content: vec![MediaContent {
+                    url: Url::parse("http://example.com/episode-1.mp3").ok(),
+                    content_type: Some(String::from("audio/mpeg")),
+                    height: None,
+                    width: None,
+                    size: None,
+                }],
+                duration: None,
+                description: None,
+            }],
+        };
+        Feed {
+            url: Url::parse("http://example.com/feed.xml").ok(),
+            raw_url: String::from("http://example.com/feed.xml"),
+            metadata: FeedMetadata {
+                title: String::from(title),
+                authors: vec![],
+                logo: None,
+                description: None,
+            },
+            entries: vec![entry],
+        }
+    }
+
+    /// The archiver must never touch a feed's audio once it is marked "do
+    /// not archive" -- checked here at the selection step (`pending_archives`)
+    /// rather than only trusting the aggregate flag exists, since a bug in
+    /// the filter would silently archive opted-out feeds with no error
+    /// anywhere.
+    #[test]
+    fn pending_archives_skips_do_not_archive_feeds() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let opted_out = Uuid::new_v4();
+        let normal = Uuid::new_v4();
+
+        let opted_out_feed = feed_with_audio_entry("Opted out");
+        let normal_feed = feed_with_audio_entry("Normal");
+
+        let aggregate = aggregate.apply_many(vec![
+            FeedAggregateEvent::Added {
+                stream_id,
+                feed_id: opted_out,
+                url: opted_out_feed.url.clone().unwrap(),
+                metadata: opted_out_feed.metadata.clone(),
+                entries: opted_out_feed.entries.clone(),
+                do_not_archive: Some(true),
+            },
+            FeedAggregateEvent::Added {
+                stream_id,
+                feed_id: normal,
+                url: normal_feed.url.clone().unwrap(),
+                metadata: normal_feed.metadata.clone(),
+                entries: normal_feed.entries.clone(),
+                do_not_archive: None,
+            },
+        ]);
+
+        let pending = pending_archives(&aggregate, 10);
+        let pending_feed_ids: Vec<Uuid> = pending.iter().map(|p| p.feed_id).collect();
+
+        assert!(
+            !pending_feed_ids.contains(&opted_out),
+            "an opted-out feed's audio must never be selected for archiving"
+        );
+        assert!(
+            pending_feed_ids.contains(&normal),
+            "a feed with no preference set must still be archived normally"
+        );
+    }
+
+    /// Reversing the preference (`ArchivePreferenceSet { do_not_archive:
+    /// false, .. }`) must make the feed's entries archivable again -- not
+    /// leave it stuck opted out.
+    #[test]
+    fn pending_archives_resumes_after_the_preference_is_cleared() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let feed_id = Uuid::new_v4();
+        let feed = feed_with_audio_entry("Resumed");
+
+        let aggregate = aggregate.apply_many(vec![
+            FeedAggregateEvent::Added {
+                stream_id,
+                feed_id,
+                url: feed.url.clone().unwrap(),
+                metadata: feed.metadata.clone(),
+                entries: feed.entries.clone(),
+                do_not_archive: Some(true),
+            },
+            FeedAggregateEvent::ArchivePreferenceSet {
+                stream_id,
+                feed_id,
+                do_not_archive: false,
+            },
+        ]);
+
+        let pending = pending_archives(&aggregate, 10);
+        assert_eq!(pending.len(), 1);
+        assert_eq!(pending[0].feed_id, feed_id);
+    }
 }

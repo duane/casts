@@ -6,7 +6,7 @@ use super::Aggregate;
 use crate::applicable::EventApplicable;
 use crate::events::FeedAggregateEvent;
 use serde::Serialize;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
 /// The feed aggregate, representing the total result of events in-memory.
@@ -28,6 +28,11 @@ pub struct FeedAggregate {
     /// `playtime_by_feed_and_guid`. Absence means "not archived", which is
     /// what the archival worker selects on.
     pub archived_by_feed_and_guid: HashMap<(String, String), ArchivedAudio>,
+
+    /// Feeds the archival worker must skip. Presence means "do not
+    /// archive"; there is no separate `false` state to represent, since
+    /// absence already means "archive normally".
+    pub do_not_archive_feed_ids: HashSet<Uuid>,
 }
 
 /// The durable-storage location of one entry's audio.
@@ -54,6 +59,7 @@ impl Aggregate for FeedAggregate {
             feeds_by_feed_id: HashMap::new(),
             playtime_by_feed_and_guid: HashMap::new(),
             archived_by_feed_and_guid: HashMap::new(),
+            do_not_archive_feed_ids: HashSet::new(),
         }
     }
 
@@ -83,6 +89,7 @@ impl EventApplicable for FeedAggregate {
                     url,
                     metadata,
                     entries,
+                    do_not_archive,
                 } => {
                     // A duplicate Added is a defect in the history, not in
                     // this fold: skip the one event and keep going. The old
@@ -101,6 +108,9 @@ impl EventApplicable for FeedAggregate {
                     };
 
                     let _ = applied.feeds_by_feed_id.insert(feed_id, new_feed);
+                    if do_not_archive == Some(true) {
+                        applied.do_not_archive_feed_ids.insert(feed_id);
+                    }
                 }
                 FeedAggregateEvent::ObservedChanges {
                     stream_id: _,
@@ -136,6 +146,17 @@ impl EventApplicable for FeedAggregate {
                             size_bytes,
                         },
                     );
+                }
+                FeedAggregateEvent::ArchivePreferenceSet {
+                    stream_id: _,
+                    feed_id,
+                    do_not_archive,
+                } => {
+                    if do_not_archive {
+                        applied.do_not_archive_feed_ids.insert(feed_id);
+                    } else {
+                        applied.do_not_archive_feed_ids.remove(&feed_id);
+                    }
                 }
                 FeedAggregateEvent::FeedEntryListenedTo {
                     stream_id: _,
@@ -190,6 +211,7 @@ mod tests {
                 description: None,
             },
             entries: vec![],
+            do_not_archive: None,
         }
     }
 
@@ -283,6 +305,7 @@ mod tests {
                 // published_at: None,
             },
             entries: vec![],
+            do_not_archive: None,
         };
         let aggregate_after_application = aggregate.apply(event);
         assert_eq!(aggregate_after_application.feeds_by_feed_id.len(), 1);
@@ -293,5 +316,60 @@ mod tests {
                 .title,
             String::from("Examplecast")
         );
+    }
+
+    /// `Added { do_not_archive: Some(true), .. }` must mark the feed from
+    /// the moment it exists, and a plain `Added` (the shape of every event
+    /// already committed before this field existed) must not.
+    #[test]
+    fn added_do_not_archive_sets_the_initial_preference() {
+        let aggregate = FeedAggregate::new();
+        let stream_id = aggregate.stream_id;
+        let opted_out = Uuid::new_v4();
+        let normal = Uuid::new_v4();
+
+        let mut opted_out_event = added_event(stream_id, opted_out, "Opted out");
+        if let FeedAggregateEvent::Added {
+            ref mut do_not_archive,
+            ..
+        } = opted_out_event
+        {
+            *do_not_archive = Some(true);
+        }
+
+        let applied = aggregate.apply_many(vec![
+            opted_out_event,
+            added_event(stream_id, normal, "Normal"),
+        ]);
+
+        assert!(applied.do_not_archive_feed_ids.contains(&opted_out));
+        assert!(!applied.do_not_archive_feed_ids.contains(&normal));
+    }
+
+    /// The preference must be reversible: setting it, then clearing it,
+    /// must leave the feed archivable again -- not stuck in whatever the
+    /// first event said.
+    #[test]
+    fn archive_preference_set_toggles_in_both_directions() {
+        let aggregate = FeedAggregate::new();
+        let feed_id = Uuid::new_v4();
+        let stream_id = aggregate.stream_id;
+
+        let applied = aggregate.apply_many(vec![
+            added_event(stream_id, feed_id, "A"),
+            FeedAggregateEvent::ArchivePreferenceSet {
+                stream_id,
+                feed_id,
+                do_not_archive: true,
+            },
+        ]);
+        assert!(applied.do_not_archive_feed_ids.contains(&feed_id));
+
+        let applied = applied.apply(FeedAggregateEvent::ArchivePreferenceSet {
+            stream_id,
+            feed_id,
+            do_not_archive: false,
+        });
+        assert!(!applied.do_not_archive_feed_ids.contains(&feed_id));
     }
 }
